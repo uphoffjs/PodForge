@@ -1,7 +1,7 @@
 # Requirements: Commander Pod Pairer
 
 **Defined:** 2026-02-20
-**Core Value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone — who they're playing with, what seat they're in, and how much time they have.
+**Core Value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone -- who they're playing with, what seat they're in, and how much time they have.
 
 ## v1 Requirements
 
@@ -75,12 +75,12 @@ Explicitly excluded. Documented to prevent scope creep.
 
 | Feature | Reason |
 |---------|--------|
-| User accounts / authentication | Unnecessary for casual playgroup use — passphrase model is simpler |
+| User accounts / authentication | Unnecessary for casual playgroup use -- passphrase model is simpler |
 | Deck registration | Out of scope for a pairing utility |
 | Point tracking / standings | Not needed for casual play |
 | Spectator chat / messaging | This is a utility, not a social app |
 | Sound alerts on timer expiry | Visual + browser notification is sufficient |
-| Swiss pairings / tournament brackets | Competitive tournament feature — this is for casual Commander |
+| Swiss pairings / tournament brackets | Competitive tournament feature -- this is for casual Commander |
 | In-app QR scanner | Camera API is unreliable on mobile. OS camera app handles QR scanning natively |
 
 ## Traceability
@@ -89,40 +89,40 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EVNT-01 | — | Pending |
-| EVNT-02 | — | Pending |
-| EVNT-03 | — | Pending |
-| EVNT-04 | — | Pending |
-| EVNT-05 | — | Pending |
-| PLYR-01 | — | Pending |
-| PLYR-02 | — | Pending |
-| PLYR-03 | — | Pending |
-| PLYR-04 | — | Pending |
-| PLYR-05 | — | Pending |
-| PODG-01 | — | Pending |
-| PODG-02 | — | Pending |
-| PODG-03 | — | Pending |
-| PODG-04 | — | Pending |
-| PODG-05 | — | Pending |
-| PODG-06 | — | Pending |
-| PODG-07 | — | Pending |
-| TIMR-01 | — | Pending |
-| TIMR-02 | — | Pending |
-| TIMR-03 | — | Pending |
-| TIMR-04 | — | Pending |
-| TIMR-05 | — | Pending |
-| TIMR-06 | — | Pending |
-| INFR-01 | — | Pending |
-| INFR-02 | — | Pending |
-| INFR-03 | — | Pending |
-| INFR-04 | — | Pending |
-| INFR-05 | — | Pending |
+| EVNT-01 | Phase 1 | Pending |
+| EVNT-02 | Phase 1 | Pending |
+| EVNT-03 | Phase 1 | Pending |
+| EVNT-04 | Phase 2 | Pending |
+| EVNT-05 | Phase 4 | Pending |
+| PLYR-01 | Phase 1 | Pending |
+| PLYR-02 | Phase 1 | Pending |
+| PLYR-03 | Phase 2 | Pending |
+| PLYR-04 | Phase 2 | Pending |
+| PLYR-05 | Phase 1 | Pending |
+| PODG-01 | Phase 2 | Pending |
+| PODG-02 | Phase 2 | Pending |
+| PODG-03 | Phase 2 | Pending |
+| PODG-04 | Phase 2 | Pending |
+| PODG-05 | Phase 2 | Pending |
+| PODG-06 | Phase 2 | Pending |
+| PODG-07 | Phase 2 | Pending |
+| TIMR-01 | Phase 3 | Pending |
+| TIMR-02 | Phase 3 | Pending |
+| TIMR-03 | Phase 3 | Pending |
+| TIMR-04 | Phase 3 | Pending |
+| TIMR-05 | Phase 3 | Pending |
+| TIMR-06 | Phase 3 | Pending |
+| INFR-01 | Phase 1 | Pending |
+| INFR-02 | Phase 1 | Pending |
+| INFR-03 | Phase 1 | Pending |
+| INFR-04 | Phase 4 | Pending |
+| INFR-05 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 28 total
-- Mapped to phases: 0
-- Unmapped: 28 ⚠️
+- Mapped to phases: 28
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-20*
-*Last updated: 2026-02-20 after initial definition*
+*Last updated: 2026-02-20 after roadmap creation*
