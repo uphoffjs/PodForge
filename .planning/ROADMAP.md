@@ -87,9 +87,11 @@ Plans:
   4. VERIFICATION.md exists for Phase 01 with all 9 requirements verified
   5. VERIFICATION.md exists for Phase 01.1 with INFR-04 verified
 
+**Plans:** 2 plans
+
 Plans:
-- [ ] 01.3-01-PLAN.md -- TBD
-- [ ] 01.3-02-PLAN.md -- TBD
+- [ ] 01.3-01-PLAN.md -- AddPlayerForm E2E tests + skip-btn click test + admin view visual baseline
+- [ ] 01.3-02-PLAN.md -- Full suite verification + VERIFICATION.md for Phase 01 and Phase 01.1
 
 ### Phase 2: Pod Generation and Admin Controls
 **Goal**: Admin can generate rounds of pods that minimize repeat opponents, manage players, and end events -- all gated behind the event passphrase
