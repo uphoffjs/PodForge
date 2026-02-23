@@ -1,4 +1,4 @@
-import { addCompareSnapshotCommand } from 'cypress-visual-regression/dist/command.js'
+import { addCompareSnapshotCommand } from 'cypress-visual-regression/dist/command'
 import './commands.js'
 
 addCompareSnapshotCommand()
