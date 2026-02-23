@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ## Current Position
 
 Phase: 1.2 of 4 (Audit Bug Fixes -- Production and Test Infrastructure)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: Executing
-Last activity: 2026-02-23 -- Completed 01.2-01-PLAN.md (Cypress test infrastructure bug fixes)
+Last activity: 2026-02-23 -- Completed 01.2-02-PLAN.md (Player join race condition and testid fixes)
 
-Progress: [███████░░░] 64%
+Progress: [████████░░] 73%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
+- Total plans completed: 8
 - Average duration: 5 min
-- Total execution time: 0.60 hours
+- Total execution time: 0.65 hours
 
 **By Phase:**
 
@@ -29,11 +29,11 @@ Progress: [███████░░░] 64%
 |-------|-------|-------|----------|
 | 1 | 4/5 | 13 min | 3 min |
 | 1.1 | 2/3 | 21 min | 10 min |
-| 1.2 | 1/3 | 2 min | 2 min |
+| 1.2 | 2/3 | 5 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-03 (2 min), 01-04 (2 min), 01.1-01 (4 min), 01.1-02 (17 min), 01.2-01 (2 min)
-- Trend: Quick fix plan, back to fast execution
+- Last 5 plans: 01-04 (2 min), 01.1-01 (4 min), 01.1-02 (17 min), 01.2-01 (2 min), 01.2-02 (3 min)
+- Trend: Consistent fast execution on audit fixes
 
 *Updated after each plan completion*
 | Phase 01 P02 | 2min | 2 tasks | 4 files |
@@ -41,6 +41,7 @@ Progress: [███████░░░] 64%
 | Phase 01.1 P01 | 4min | 2 tasks | 18 files |
 | Phase 01.1 P02 | 17min | 2 tasks | 5 files |
 | Phase 01.2 P01 | 2min | 2 tasks | 3 files |
+| Phase 01.2 P02 | 3min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,8 @@ Recent decisions affecting current work:
 - [Phase 01.1]: [01.1-02]: Player join test pre-populates player in mock list to work around validation effect race condition
 - [Phase 01.1]: [01.1-02]: Self-drop tests use onBeforeLoad to set localStorage before React mounts
 - [Phase 01.2]: [01.2-01]: Empty-state visual test uses skip button pattern instead of fake player ID (avoids validation effect clearing it)
+- [Phase 01.2]: [01.2-02]: Used eslint-disable with justification for set-state-in-effect (useRef approach blocked by react-hooks/refs rule)
+- [Phase 01.2]: [01.2-02]: justJoinedRef guard pattern defers validation effect after join until player appears in refetched list
 
 ### Roadmap Evolution
 
@@ -87,5 +90,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 01.2-01-PLAN.md
+Stopped at: Completed 01.2-02-PLAN.md
 Resume file: None
