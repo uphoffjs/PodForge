@@ -8,8 +8,10 @@ import { useEventChannel } from '@/hooks/useEventChannel'
 import { useVisibilityRefetch } from '@/hooks/useVisibilityRefetch'
 import { useDropPlayer } from '@/hooks/useDropPlayer'
 import { getStoredPlayerId, clearPlayerId, storePlayerId } from '@/lib/player-identity'
+import { useAdminAuth } from '@/hooks/useAdminAuth'
 import { JoinEventForm } from '@/components/JoinEventForm'
 import { PlayerList } from '@/components/PlayerList'
+import { AddPlayerForm } from '@/components/AddPlayerForm'
 import { QRCodeDisplay } from '@/components/QRCodeDisplay'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 
@@ -29,17 +31,24 @@ export function EventPage() {
   // Wire up tab restore refetch
   useVisibilityRefetch(eventId ?? '')
 
+  // Admin auth (sessionStorage-based)
+  const { isAdmin } = useAdminAuth(eventId ?? '')
+
   // Self-drop mutation
   const dropPlayer = useDropPlayer(eventId ?? '')
 
   // Track previous player IDs for detecting new joins
   const prevPlayerIdsRef = useRef<Set<string>>(new Set())
 
+  // Gate validation effect to prevent race condition after fresh join
+  const justJoinedRef = useRef(false)
+
   // Check localStorage for existing player identity
   useEffect(() => {
     if (!eventId) return
     const storedId = getStoredPlayerId(eventId)
     if (storedId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Sync from localStorage on mount is inherently an effect
       setCurrentPlayerId(storedId)
     }
   }, [eventId])
@@ -48,9 +57,21 @@ export function EventPage() {
   useEffect(() => {
     if (!eventId || !players || !currentPlayerId) return
 
+    // Skip validation right after joining — players list hasn't refetched yet
+    if (justJoinedRef.current) {
+      const playerExists = players.some((p) => p.id === currentPlayerId)
+      if (playerExists) {
+        // Player appeared in the list — join is confirmed, resume normal validation
+        justJoinedRef.current = false
+      }
+      // Either way, don't clear identity while join is pending
+      return
+    }
+
     const playerExists = players.some((p) => p.id === currentPlayerId)
     if (!playerExists) {
       clearPlayerId(eventId)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Clearing stale identity when player dropped is an inherent side effect
       setCurrentPlayerId(null)
     }
   }, [eventId, players, currentPlayerId])
@@ -71,6 +92,7 @@ export function EventPage() {
         }
       }
       if (added.size > 0) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: highlight animation requires re-render when new players detected
         setNewPlayerIds(added)
         // Clear the highlight after the animation completes
         const timer = setTimeout(() => setNewPlayerIds(new Set()), 400)
@@ -86,6 +108,7 @@ export function EventPage() {
       if (eventId) {
         storePlayerId(eventId, playerId)
       }
+      justJoinedRef.current = true
       setCurrentPlayerId(playerId)
     },
     [eventId],
@@ -184,6 +207,9 @@ export function EventPage() {
           newPlayerIds={newPlayerIds}
         />
       </div>
+
+      {/* Admin: Add Player card */}
+      {isAdmin && <AddPlayerForm eventId={eventId} />}
 
       {/* Leave Event button -- separate from player list, deliberate action */}
       {isActivePlayer && (

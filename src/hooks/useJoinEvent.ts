@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
-import { storePlayerId } from '@/lib/player-identity'
 
 export function useJoinEvent(eventId: string) {
   const queryClient = useQueryClient()
@@ -17,8 +16,7 @@ export function useJoinEvent(eventId: string) {
       if (error) throw error
       return data
     },
-    onSuccess: (data) => {
-      storePlayerId(eventId, data.id)
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['players', eventId] })
       toast.success('Joined the event!')
     },
