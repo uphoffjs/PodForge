@@ -13,6 +13,8 @@ Commander Pod Pairer goes from zero to deployed in four phases following the har
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Foundation and Player Flow** - Supabase schema, Realtime subscriptions, player join/drop, mobile-first dark theme
+- [ ] **Phase 1.2: Audit Bug Fixes — Production and Test Infrastructure** - Fix race condition, duplicate testid, 3 critical Cypress infrastructure bugs (GAP CLOSURE)
+- [ ] **Phase 1.3: Missing E2E Coverage, Baselines, and Phase Verification** - AddPlayerForm E2E tests, skip-btn click test, visual regression baselines, VERIFICATION.md (GAP CLOSURE)
 - [ ] **Phase 2: Pod Generation and Admin Controls** - Pod algorithm with repeat-opponent avoidance, admin passphrase flow, round display, admin player management
 - [ ] **Phase 3: Timer System** - Server-authoritative countdown timer with admin controls, visual alerts, and browser notifications
 - [ ] **Phase 4: Event Polish, Testing, and Deployment** - Event info bar with QR/share, full test coverage, Vercel + Supabase deployment
@@ -49,6 +51,42 @@ Plans:
 - [ ] 01.1-01-PLAN.md -- Cypress infrastructure + data-testid attributes (deps, config, commands, fixtures, ESLint, GitHub Actions, component test IDs)
 - [ ] 01.1-02-PLAN.md -- Core E2E test specs (event creation, player join, duplicate name, self-drop, QR code)
 - [ ] 01.1-03-PLAN.md -- Visual regression tests + baseline generation (3 breakpoints, 4 page states)
+
+### Phase 01.2: Audit Bug Fixes — Production and Test Infrastructure (GAP CLOSURE)
+
+**Goal:** Fix all production bugs and Cypress test infrastructure issues identified by the v1.0 milestone audit, so that existing tests are accurate and the codebase is clean for continued development
+**Depends on:** Phase 1, Phase 1.1
+**Requirements**: EVNT-02, PLYR-05, INFR-04
+**Gap Closure:** Closes audit Findings 1-4, 9 and ESLint tech debt
+**Success Criteria** (what must be TRUE):
+  1. Player join flow no longer has a race condition — identity persists reliably after join without flash-back to join form
+  2. `createRealEvent` Cypress command uses correct RPC parameter names (`p_name`, `p_passphrase`)
+  3. `mockEventPage` returns correct PostgREST `.single()` response format (plain object with `application/vnd.pgrst.object+json` header)
+  4. `visual-regression.cy.js` stores plain UUID string in localStorage (matching `player-identity.ts` format)
+  5. `data-testid="join-error"` is unique per error type in `JoinEventForm.tsx`
+  6. All 24 existing E2E tests still pass after fixes
+  7. ESLint passes with zero errors
+
+Plans:
+- [ ] 01.2-01-PLAN.md -- TBD
+- [ ] 01.2-02-PLAN.md -- TBD
+
+### Phase 01.3: Missing E2E Coverage, Baselines, and Phase Verification (GAP CLOSURE)
+
+**Goal:** Fill E2E test coverage gaps (AddPlayerForm, skip-btn click), complete visual regression baselines at 3 breakpoints, and produce VERIFICATION.md for Phases 1 and 1.1 — closing the milestone audit
+**Depends on:** Phase 1.2
+**Requirements**: INFR-04
+**Gap Closure:** Closes audit Findings 5-6, unexecuted plans 01-05 and 01.1-03, and missing VERIFICATION.md
+**Success Criteria** (what must be TRUE):
+  1. AddPlayerForm has E2E tests covering admin add-player flow (form display, submit, error handling)
+  2. Skip-btn click test verifies full state transition (join form hides, player list visible)
+  3. Visual regression baselines generated and committed for 3 breakpoints x 4 page states
+  4. VERIFICATION.md exists for Phase 01 with all 9 requirements verified
+  5. VERIFICATION.md exists for Phase 01.1 with INFR-04 verified
+
+Plans:
+- [ ] 01.3-01-PLAN.md -- TBD
+- [ ] 01.3-02-PLAN.md -- TBD
 
 ### Phase 2: Pod Generation and Admin Controls
 **Goal**: Admin can generate rounds of pods that minimize repeat opponents, manage players, and end events -- all gated behind the event passphrase
@@ -101,12 +139,14 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4
+Phases execute in numeric order: 1 -> 1.1 -> 1.2 -> 1.3 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and Player Flow | 0/5 | Planned | - |
-| 1.1 Cypress E2E Tests (INSERTED) | 2/3 | In Progress | - |
+| 1. Foundation and Player Flow | 4/5 | In Progress (01-05 unexecuted) | - |
+| 1.1 Cypress E2E Tests (INSERTED) | 2/3 | In Progress (01.1-03 unexecuted) | - |
+| 1.2 Audit Bug Fixes (GAP CLOSURE) | 0/2 | Not started | - |
+| 1.3 Missing Coverage + Verification (GAP CLOSURE) | 0/2 | Not started | - |
 | 2. Pod Generation and Admin Controls | 0/3 | Not started | - |
 | 3. Timer System | 0/2 | Not started | - |
 | 4. Event Polish, Testing, and Deployment | 0/2 | Not started | - |

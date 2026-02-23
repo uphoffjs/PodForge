@@ -87,36 +87,36 @@ Explicitly excluded. Documented to prevent scope creep.
 
 Which phases cover which requirements. Updated during roadmap creation.
 
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| EVNT-01 | Phase 1 | Complete |
-| EVNT-02 | Phase 1 | Complete |
-| EVNT-03 | Phase 1 | Complete |
-| EVNT-04 | Phase 2 | Pending |
-| EVNT-05 | Phase 4 | Pending |
-| PLYR-01 | Phase 1 | Complete |
-| PLYR-02 | Phase 1 | Complete |
-| PLYR-03 | Phase 2 | Pending |
-| PLYR-04 | Phase 2 | Pending |
-| PLYR-05 | Phase 1 | Complete |
-| PODG-01 | Phase 2 | Pending |
-| PODG-02 | Phase 2 | Pending |
-| PODG-03 | Phase 2 | Pending |
-| PODG-04 | Phase 2 | Pending |
-| PODG-05 | Phase 2 | Pending |
-| PODG-06 | Phase 2 | Pending |
-| PODG-07 | Phase 2 | Pending |
-| TIMR-01 | Phase 3 | Pending |
-| TIMR-02 | Phase 3 | Pending |
-| TIMR-03 | Phase 3 | Pending |
-| TIMR-04 | Phase 3 | Pending |
-| TIMR-05 | Phase 3 | Pending |
-| TIMR-06 | Phase 3 | Pending |
-| INFR-01 | Phase 1 | Complete |
-| INFR-02 | Phase 1 | Complete |
-| INFR-03 | Phase 1 | Complete |
-| INFR-04 | Phase 4 | Complete |
-| INFR-05 | Phase 4 | Pending |
+| Requirement | Phase | Status | Notes |
+|-------------|-------|--------|-------|
+| EVNT-01 | Phase 1 | Complete | Audit: partial (test cmd uses wrong params, fixed in 1.2) |
+| EVNT-02 | Phase 1, 1.2 | Complete | Audit: partial (race condition fixed in 1.2, verified in 1.3) |
+| EVNT-03 | Phase 1 | Complete | Audit: partial (visual baselines fixed in 1.2, verified in 1.3) |
+| EVNT-04 | Phase 2 | Pending | |
+| EVNT-05 | Phase 4 | Pending | |
+| PLYR-01 | Phase 1 | Complete | Audit: partial (Realtime not E2E testable, verified in 1.3) |
+| PLYR-02 | Phase 1 | Complete | Audit: partial (verified in 1.3) |
+| PLYR-03 | Phase 2 | Pending | |
+| PLYR-04 | Phase 2 | Pending | |
+| PLYR-05 | Phase 1, 1.2 | Complete | Audit: partial (duplicate testid fixed in 1.2, verified in 1.3) |
+| PODG-01 | Phase 2 | Pending | |
+| PODG-02 | Phase 2 | Pending | |
+| PODG-03 | Phase 2 | Pending | |
+| PODG-04 | Phase 2 | Pending | |
+| PODG-05 | Phase 2 | Pending | |
+| PODG-06 | Phase 2 | Pending | |
+| PODG-07 | Phase 2 | Pending | |
+| TIMR-01 | Phase 3 | Pending | |
+| TIMR-02 | Phase 3 | Pending | |
+| TIMR-03 | Phase 3 | Pending | |
+| TIMR-04 | Phase 3 | Pending | |
+| TIMR-05 | Phase 3 | Pending | |
+| TIMR-06 | Phase 3 | Pending | |
+| INFR-01 | Phase 1 | Complete | Audit: partial (unit coverage only, verified in 1.3) |
+| INFR-02 | Phase 1, 1.2 | Complete | Audit: partial (createRealEvent fixed in 1.2, verified in 1.3) |
+| INFR-03 | Phase 1 | Complete | Audit: partial (visual baselines fixed in 1.2, verified in 1.3) |
+| INFR-04 | Phase 1.1, 1.2, 1.3 | Partial | Audit: test gaps filled in 1.2/1.3, pod unit tests in Phase 4 |
+| INFR-05 | Phase 4 | Pending | |
 
 **Coverage:**
 - v1 requirements: 28 total
@@ -125,4 +125,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-20*
-*Last updated: 2026-02-20 after roadmap creation*
+*Last updated: 2026-02-23 after gap closure phase creation*
