@@ -115,7 +115,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFR-01 | Phase 1 | Complete | Audit: partial (unit coverage only, verified in 1.3) |
 | INFR-02 | Phase 1, 1.2 | Complete | Audit: partial (createRealEvent fixed in 1.2, verified in 1.3) |
 | INFR-03 | Phase 1 | Complete | Audit: partial (visual baselines fixed in 1.2, verified in 1.3) |
-| INFR-04 | Phase 1.1, 1.2, 1.3 | Partial | Audit: test gaps filled in 1.2/1.3, pod unit tests in Phase 4 |
+| INFR-04 | Phase 1.1, 1.2, 1.3 | Complete (partial scope) | Verified in 1.3: E2E + unit test infrastructure complete; pod unit tests deferred to Phase 4 |
 | INFR-05 | Phase 4 | Pending | |
 
 **Coverage:**
@@ -125,4 +125,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-20*
-*Last updated: 2026-02-23 after gap closure phase creation*
+*Last updated: 2026-02-23 after Phase 1.3 verification completion*

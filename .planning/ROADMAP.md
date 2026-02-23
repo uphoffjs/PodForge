@@ -90,8 +90,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 01.3-01-PLAN.md -- AddPlayerForm E2E tests + skip-btn click test + admin view visual baseline
-- [ ] 01.3-02-PLAN.md -- Full suite verification + VERIFICATION.md for Phase 01 and Phase 01.1
+- [x] 01.3-01-PLAN.md -- AddPlayerForm E2E tests + skip-btn click test + admin view visual baseline
+- [x] 01.3-02-PLAN.md -- Full suite verification + VERIFICATION.md for Phase 01 and Phase 01.1
 
 ### Phase 2: Pod Generation and Admin Controls
 **Goal**: Admin can generate rounds of pods that minimize repeat opponents, manage players, and end events -- all gated behind the event passphrase
@@ -148,10 +148,10 @@ Phases execute in numeric order: 1 -> 1.1 -> 1.2 -> 1.3 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and Player Flow | 4/5 | In Progress (01-05 unexecuted) | - |
-| 1.1 Cypress E2E Tests (INSERTED) | 2/3 | In Progress (01.1-03 unexecuted) | - |
-| 1.2 Audit Bug Fixes (GAP CLOSURE) | 1/3 | In Progress | - |
-| 1.3 Missing Coverage + Verification (GAP CLOSURE) | 0/2 | Not started | - |
+| 1. Foundation and Player Flow | 4/5 | Complete (01-05 covered by 1.3 verification) | 2026-02-23 |
+| 1.1 Cypress E2E Tests (INSERTED) | 2/3 | Complete (01.1-03 covered by 1.3 coverage) | 2026-02-23 |
+| 1.2 Audit Bug Fixes (GAP CLOSURE) | 3/3 | Complete | 2026-02-23 |
+| 1.3 Missing Coverage + Verification (GAP CLOSURE) | 2/2 | Complete | 2026-02-23 |
 | 2. Pod Generation and Admin Controls | 0/3 | Not started | - |
 | 3. Timer System | 0/2 | Not started | - |
 | 4. Event Polish, Testing, and Deployment | 0/2 | Not started | - |
