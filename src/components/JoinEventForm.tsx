@@ -47,11 +47,11 @@ export function JoinEventForm({ eventId, onJoined }: JoinEventFormProps) {
       />
 
       {validationError && (
-        <p className="text-sm text-error" data-testid="join-error">{validationError}</p>
+        <p className="text-sm text-error" data-testid="join-validation-error">{validationError}</p>
       )}
 
       {joinMutation.isError && (
-        <p className="text-sm text-error" data-testid="join-error">
+        <p className="text-sm text-error" data-testid="join-mutation-error">
           {(joinMutation.error as { code?: string })?.code === '23505'
             ? 'That name is already taken. Try another!'
             : 'Failed to join. Please try again.'}

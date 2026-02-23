@@ -16,11 +16,7 @@ describe('Player Join', () => {
       created_at: '2026-01-01T00:05:00Z',
     }
 
-    // Pre-populate the player in the mock response from the start.
-    // The join form still shows because currentPlayerId is null (localStorage empty),
-    // but the validation effect will find the player in the list after join,
-    // preventing the race condition from clearing the player identity.
-    cy.mockEventPage(undefined, [newPlayer])
+    cy.mockEventPage()
 
     // Verify the join form is visible (player not identified yet)
     cy.getByTestId('join-form').should('be.visible')
@@ -44,7 +40,7 @@ describe('Player Join', () => {
     cy.wait('@joinPlayer')
 
     // After join succeeds, the onJoined callback sets currentPlayerId
-    // With the player already in the list, the validation effect won't clear it
+    // The justJoinedRef guard prevents the validation effect from clearing identity
     cy.getByTestId('join-form').should('not.exist')
     cy.getByTestId('player-list').should('be.visible')
     cy.getByTestId('player-list').should('contain', 'Dave')

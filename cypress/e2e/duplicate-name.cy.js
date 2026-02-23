@@ -21,8 +21,8 @@ describe('Duplicate Name Rejection', () => {
       cy.wait('@joinDuplicate')
 
       // Error message should appear
-      cy.getByTestId('join-error').should('be.visible')
-      cy.getByTestId('join-error').should('contain', 'already taken')
+      cy.getByTestId('join-mutation-error').should('be.visible')
+      cy.getByTestId('join-mutation-error').should('contain', 'already taken')
     })
   })
 
@@ -51,7 +51,7 @@ describe('Duplicate Name Rejection', () => {
       cy.wait('@joinDuplicate')
 
       // Error should appear
-      cy.getByTestId('join-error').should('be.visible')
+      cy.getByTestId('join-mutation-error').should('be.visible')
 
       // Now override the POST intercept to return success for the new name
       cy.intercept('POST', '**/rest/v1/players*', {
