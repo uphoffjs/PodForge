@@ -24,8 +24,8 @@ export function CreateEventModal({ isOpen, onClose }: CreateEventModalProps) {
       {
         onSuccess: (eventId: string) => {
           // Store passphrase in sessionStorage for admin actions
-          // Uses same key format as useAdminAuth: pod_pairer_admin_{eventId}
-          sessionStorage.setItem(`pod_pairer_admin_${eventId}`, passphrase)
+          // Uses same key format as useAdminAuth: podforge_admin_{eventId}
+          sessionStorage.setItem(`podforge_admin_${eventId}`, passphrase)
           toast.success('Event created!')
           navigate(`/event/${eventId}`)
         },

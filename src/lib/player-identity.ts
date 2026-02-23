@@ -1,4 +1,4 @@
-const PLAYER_KEY_PREFIX = 'pod_pairer_player_'
+const PLAYER_KEY_PREFIX = 'podforge_player_'
 
 export function getStoredPlayerId(eventId: string): string | null {
   return localStorage.getItem(`${PLAYER_KEY_PREFIX}${eventId}`)

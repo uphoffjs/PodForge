@@ -1,4 +1,4 @@
-// Visual regression tests for pod-pairer dark theme across 3 breakpoints
+// Visual regression tests for PodForge dark theme across 3 breakpoints
 // Covers: landing page, event page (with players, empty state, join form)
 // Uses cypress-visual-regression compareSnapshot with 5% threshold
 
@@ -66,7 +66,7 @@ describe('Visual Regression - Event Page (with players)', () => {
       // Set localStorage identity so join form is NOT shown (player is already joined)
       cy.window().then((win) => {
         win.localStorage.setItem(
-          `pod-pairer-player-${event.id}`,
+          `podforge_player_${event.id}`,
           JSON.stringify({ id: 'player-1', name: 'Alice' })
         )
       })
@@ -91,7 +91,7 @@ describe('Visual Regression - Event Page (empty state)', () => {
       // Set identity so join form not shown, but pass empty players array
       cy.window().then((win) => {
         win.localStorage.setItem(
-          `pod-pairer-player-${event.id}`,
+          `podforge_player_${event.id}`,
           JSON.stringify({ id: 'player-solo', name: 'Solo' })
         )
       })

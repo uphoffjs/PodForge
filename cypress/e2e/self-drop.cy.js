@@ -2,7 +2,7 @@ describe('Self-Drop', () => {
   const eventId = 'test-uuid'
   const playerId = 'player-1'
   const playerName = 'Alice'
-  const storageKey = `pod_pairer_player_${eventId}`
+  const storageKey = `podforge_player_${eventId}`
 
   const event = {
     id: eventId,

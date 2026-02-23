@@ -1,4 +1,4 @@
-// Custom Cypress commands for pod-pairer E2E tests
+// Custom Cypress commands for PodForge E2E tests
 
 /**
  * Get an element by its data-testid attribute.

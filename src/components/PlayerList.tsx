@@ -17,8 +17,12 @@ export function PlayerList({ players, currentPlayerId, newPlayerIds }: PlayerLis
 
   if (players.length === 0) {
     return (
-      <div className="text-center py-8 text-text-secondary" data-testid="player-list-empty">
-        No players yet. Share the QR code or link to invite players.
+      <div className="text-center py-8" data-testid="player-list-empty">
+        <p className="text-text-primary font-semibold text-lg mb-2">No players yet</p>
+        <p className="text-text-secondary text-sm">
+          Share the QR code or event link below to invite players.
+          Once they join, they'll appear here automatically.
+        </p>
       </div>
     )
   }

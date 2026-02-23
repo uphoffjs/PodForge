@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 
-const STORAGE_KEY_PREFIX = 'pod_pairer_admin_'
+const STORAGE_KEY_PREFIX = 'podforge_admin_'
 
 function getStorageKey(eventId: string): string {
   return `${STORAGE_KEY_PREFIX}${eventId}`
