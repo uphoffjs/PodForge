@@ -28,6 +28,7 @@ export function ConfirmDialog({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+      data-testid="confirm-dialog"
       onClick={handleOverlayClick}
     >
       <div className="w-full max-w-sm bg-surface-raised border border-border rounded-2xl p-6">
@@ -41,6 +42,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onCancel}
             disabled={isLoading}
+            data-testid="confirm-dialog-cancel-btn"
             className="flex-1 rounded-lg border border-border py-2.5 px-4 text-sm font-medium text-text-secondary hover:text-text-primary hover:border-border-bright transition-colors disabled:opacity-50 min-h-[44px]"
           >
             Cancel
@@ -49,6 +51,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={isLoading}
+            data-testid="confirm-dialog-confirm-btn"
             className="flex-1 rounded-lg bg-error py-2.5 px-4 text-sm font-medium text-white hover:bg-error/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
           >
             {isLoading ? 'Leaving...' : confirmLabel}

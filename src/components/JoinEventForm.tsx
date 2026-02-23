@@ -29,7 +29,7 @@ export function JoinEventForm({ eventId, onJoined }: JoinEventFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-3">
+    <form onSubmit={handleSubmit} data-testid="join-form" className="w-full max-w-sm space-y-3">
       <label htmlFor="player-name" className="block text-lg font-semibold text-text-primary">
         Enter your name to join
       </label>
@@ -42,15 +42,16 @@ export function JoinEventForm({ eventId, onJoined }: JoinEventFormProps) {
         placeholder="Your name"
         maxLength={20}
         autoComplete="off"
+        data-testid="join-name-input"
         className="w-full px-4 py-3 text-lg bg-surface-raised border border-border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
       />
 
       {validationError && (
-        <p className="text-sm text-error">{validationError}</p>
+        <p className="text-sm text-error" data-testid="join-error">{validationError}</p>
       )}
 
       {joinMutation.isError && (
-        <p className="text-sm text-error">
+        <p className="text-sm text-error" data-testid="join-error">
           {(joinMutation.error as { code?: string })?.code === '23505'
             ? 'That name is already taken. Try another!'
             : 'Failed to join. Please try again.'}
@@ -60,6 +61,7 @@ export function JoinEventForm({ eventId, onJoined }: JoinEventFormProps) {
       <button
         type="submit"
         disabled={joinMutation.isPending}
+        data-testid="join-submit-btn"
         className="w-full py-3 text-lg font-semibold bg-accent text-surface rounded-lg hover:bg-accent-bright transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {joinMutation.isPending ? 'Joining...' : 'Join Event'}

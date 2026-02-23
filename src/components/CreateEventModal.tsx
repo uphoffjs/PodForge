@@ -44,11 +44,13 @@ export function CreateEventModal({ isOpen, onClose }: CreateEventModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+      data-testid="create-event-modal"
       onClick={handleOverlayClick}
     >
       <div className="w-full max-w-md bg-surface-raised border border-border rounded-2xl p-6 relative">
         <button
           onClick={onClose}
+          data-testid="create-event-close-btn"
           className="absolute top-4 right-4 text-text-muted hover:text-text-primary transition-colors"
           aria-label="Close"
         >
@@ -74,6 +76,7 @@ export function CreateEventModal({ isOpen, onClose }: CreateEventModalProps) {
               value={eventName}
               onChange={(e) => setEventName(e.target.value)}
               placeholder="e.g., Friday Night Commander"
+              data-testid="create-event-name-input"
               className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary placeholder-text-muted focus:outline-none focus:border-accent transition-colors"
             />
           </div>
@@ -92,6 +95,7 @@ export function CreateEventModal({ isOpen, onClose }: CreateEventModalProps) {
               value={passphrase}
               onChange={(e) => setPassphrase(e.target.value)}
               placeholder="Admin passphrase"
+              data-testid="create-event-passphrase-input"
               className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-text-primary placeholder-text-muted focus:outline-none focus:border-accent transition-colors"
             />
             <p className="text-xs text-text-muted mt-1.5">
@@ -102,6 +106,7 @@ export function CreateEventModal({ isOpen, onClose }: CreateEventModalProps) {
           <button
             type="submit"
             disabled={createEvent.isPending}
+            data-testid="create-event-submit-btn"
             className="mt-2 w-full rounded-lg bg-accent py-3 px-4 text-surface font-semibold text-base hover:bg-accent-bright transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
           >
             {createEvent.isPending ? 'Creating...' : 'Create Event'}

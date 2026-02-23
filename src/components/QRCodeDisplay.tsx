@@ -8,12 +8,13 @@ export function QRCodeDisplay({ eventId }: QRCodeDisplayProps) {
   const url = `${window.location.origin}/event/${eventId}`
 
   return (
-    <div className="bg-white p-4 rounded-xl inline-block">
+    <div className="bg-white p-4 rounded-xl inline-block" data-testid="qr-code">
       <QRCodeSVG
         value={url}
         size={200}
         level="M"
         marginSize={2}
+        data-testid="qr-code-svg"
       />
     </div>
   )

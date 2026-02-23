@@ -123,7 +123,7 @@ export function EventPage() {
 
   if (eventLoading || playersLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen px-4">
+      <div className="flex flex-col items-center justify-center min-h-screen px-4" data-testid="event-loading">
         <Loader2 className="w-8 h-8 text-accent animate-spin" />
         <p className="text-text-secondary mt-4">Loading event...</p>
       </div>
@@ -132,7 +132,7 @@ export function EventPage() {
 
   if (eventError) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen px-4">
+      <div className="flex flex-col items-center justify-center min-h-screen px-4" data-testid="event-error">
         <h1 className="text-2xl font-display font-bold text-error">Event Not Found</h1>
         <p className="text-text-secondary mt-2">
           This event doesn't exist or has been removed.
@@ -153,10 +153,10 @@ export function EventPage() {
     <div className="flex flex-col items-center min-h-screen px-4 py-6">
       {/* Event header */}
       <div className="w-full max-w-lg text-center mb-6">
-        <h1 className="text-3xl font-display font-bold text-accent">
+        <h1 className="text-3xl font-display font-bold text-accent" data-testid="event-name">
           {event?.name}
         </h1>
-        <span className="inline-block mt-2 px-3 py-1 text-xs font-semibold uppercase rounded-full bg-surface-raised border border-border text-text-secondary">
+        <span className="inline-block mt-2 px-3 py-1 text-xs font-semibold uppercase rounded-full bg-surface-raised border border-border text-text-secondary" data-testid="event-status">
           {event?.status}
         </span>
       </div>
@@ -168,6 +168,7 @@ export function EventPage() {
           <button
             type="button"
             onClick={() => setSkippedJoin(true)}
+            data-testid="join-skip-btn"
             className="mt-3 text-sm text-text-muted hover:text-text-secondary transition-colors"
           >
             Skip for now
@@ -190,6 +191,7 @@ export function EventPage() {
           <button
             type="button"
             onClick={() => setShowLeaveConfirm(true)}
+            data-testid="leave-event-btn"
             className="flex items-center justify-center gap-2 w-full py-2.5 px-4 text-sm font-medium text-error border border-error/40 rounded-lg hover:bg-error/10 transition-colors min-h-[44px]"
           >
             <LogOut className="w-4 h-4" />
@@ -209,11 +211,13 @@ export function EventPage() {
             type="text"
             readOnly
             value={`${window.location.origin}/event/${eventId}`}
+            data-testid="share-link-input"
             className="flex-1 px-3 py-2 text-sm bg-surface border border-border rounded-lg text-text-secondary truncate"
           />
           <button
             type="button"
             onClick={handleCopyLink}
+            data-testid="share-copy-btn"
             className="flex items-center gap-1 px-3 py-2 text-sm font-medium bg-accent text-surface rounded-lg hover:bg-accent-bright transition-colors"
           >
             <Copy className="w-4 h-4" />

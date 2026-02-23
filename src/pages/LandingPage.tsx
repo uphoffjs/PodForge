@@ -54,6 +54,7 @@ export function LandingPage() {
         {/* Create Event */}
         <button
           onClick={() => setIsModalOpen(true)}
+          data-testid="landing-create-event-btn"
           className="w-full flex items-center justify-center gap-2 rounded-lg bg-accent py-3.5 px-4 text-surface font-semibold text-lg hover:bg-accent-bright transition-colors min-h-[48px]"
         >
           <Plus size={22} />
@@ -74,11 +75,13 @@ export function LandingPage() {
             value={joinInput}
             onChange={(e) => setJoinInput(e.target.value)}
             placeholder="Paste event link or enter event ID"
+            data-testid="landing-join-input"
             className="flex-1 rounded-lg border border-border bg-surface-raised px-4 py-3 text-text-primary placeholder-text-muted focus:outline-none focus:border-accent transition-colors min-h-[44px]"
           />
           <button
             type="submit"
             disabled={!joinInput.trim()}
+            data-testid="landing-join-btn"
             className="rounded-lg bg-surface-raised border border-border px-4 py-3 text-text-secondary hover:text-accent hover:border-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed min-h-[44px]"
             aria-label="Join event"
           >

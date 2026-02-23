@@ -17,15 +17,15 @@ export function PlayerList({ players, currentPlayerId, newPlayerIds }: PlayerLis
 
   if (players.length === 0) {
     return (
-      <div className="text-center py-8 text-text-secondary">
+      <div className="text-center py-8 text-text-secondary" data-testid="player-list-empty">
         No players yet. Share the QR code or link to invite players.
       </div>
     )
   }
 
   return (
-    <div className="w-full">
-      <h2 className="text-lg font-semibold text-text-primary mb-3">
+    <div className="w-full" data-testid="player-list">
+      <h2 className="text-lg font-semibold text-text-primary mb-3" data-testid="player-list-heading">
         Players ({activePlayers.length} active
         {droppedPlayers.length > 0 && `, ${droppedPlayers.length} dropped`})
       </h2>
@@ -46,6 +46,7 @@ export function PlayerList({ players, currentPlayerId, newPlayerIds }: PlayerLis
           <button
             type="button"
             onClick={() => setShowDropped(!showDropped)}
+            data-testid="player-list-dropped-toggle"
             className="flex items-center gap-1 text-sm text-text-muted hover:text-text-secondary transition-colors"
           >
             {showDropped ? (

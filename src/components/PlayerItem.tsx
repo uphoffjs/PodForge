@@ -12,7 +12,7 @@ export function PlayerItem({ player, isSelf, isNew = false }: PlayerItemProps) {
 
   if (isDropped) {
     return (
-      <div className="py-2 px-3 text-text-muted opacity-60">
+      <div className="py-2 px-3 text-text-muted opacity-60" data-testid={`player-item-${player.id}`}>
         {player.name}
       </div>
     )
@@ -20,14 +20,14 @@ export function PlayerItem({ player, isSelf, isNew = false }: PlayerItemProps) {
 
   if (isSelf) {
     return (
-      <div className={`py-2 px-3 bg-self-highlight/20 border-l-2 border-self-highlight rounded-r ${flashClass}`}>
+      <div className={`py-2 px-3 bg-self-highlight/20 border-l-2 border-self-highlight rounded-r ${flashClass}`} data-testid={`player-item-${player.id}`}>
         <span className="font-bold text-text-primary">{player.name}</span>
       </div>
     )
   }
 
   return (
-    <div className={`py-2 px-3 text-text-primary ${flashClass}`}>
+    <div className={`py-2 px-3 text-text-primary ${flashClass}`} data-testid={`player-item-${player.id}`}>
       {player.name}
     </div>
   )
