@@ -10,30 +10,31 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ## Current Position
 
 Phase: 1 of 4 (Foundation and Player Flow)
-Plan: 1 of 5 in current phase
+Plan: 3 of 5 in current phase
 Status: Executing
-Last activity: 2026-02-23 -- Completed 01-01-PLAN.md (project scaffold + database foundation)
+Last activity: 2026-02-23 -- Completed 01-03-PLAN.md (event page with player join flow)
 
-Progress: [██░░░░░░░░] 10%
+Progress: [███░░░░░░░] 30%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 7 min
-- Total execution time: 0.12 hours
+- Total plans completed: 3
+- Average duration: 3 min
+- Total execution time: 0.18 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 1 | 1/5 | 7 min | 7 min |
+| 1 | 3/5 | 11 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (7 min)
-- Trend: First plan
+- Last 5 plans: 01-01 (7 min), 01-02 (2 min), 01-03 (2 min)
+- Trend: Accelerating
 
 *Updated after each plan completion*
+| Phase 01 P02 | 2min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -49,6 +50,10 @@ Recent decisions affecting current work:
 - [01-01]: Lowercase filenames (app.tsx, app.css) for consistency
 - [01-01]: Google Fonts CDN for Cinzel + Inter with font-display=swap
 - [01-01]: Amber/gold accent color (#f59e0b) against purple dark theme
+- [01-03]: Join form overlays player list (visible behind) rather than replacing it
+- [01-03]: Skip link below join form serves as admin skip-prompt (no separate modal)
+- [01-03]: Player self-highlight uses purple border-left + background tint (no "(you)" tag)
+- [Phase 01-02]: Direct sessionStorage write in modal onSuccess rather than useAdminAuth hook (eventId unknown at mount time)
 
 ### Pending Todos
 
@@ -61,5 +66,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 01-01-PLAN.md
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None

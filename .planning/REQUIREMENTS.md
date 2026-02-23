@@ -10,18 +10,18 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Event Management
 
 - [ ] **EVNT-01**: User can create a new event with a name and admin passphrase
-- [ ] **EVNT-02**: User can join an event by visiting the event link and entering their name
-- [ ] **EVNT-03**: User can join an event by scanning a QR code and entering their name
+- [x] **EVNT-02**: User can join an event by visiting the event link and entering their name
+- [x] **EVNT-03**: User can join an event by scanning a QR code and entering their name
 - [ ] **EVNT-04**: Admin can end an event, making it read-only (historical data stays visible)
 - [ ] **EVNT-05**: Event page displays info bar with event name, expandable QR code, shareable link with copy button, player count, and current round number
 
 ### Player Management
 
-- [ ] **PLYR-01**: All connected clients see the real-time player list (active players + collapsed dropped section)
+- [x] **PLYR-01**: All connected clients see the real-time player list (active players + collapsed dropped section)
 - [ ] **PLYR-02**: Player can self-drop from an event with confirmation (marks inactive, current round assignment stays)
 - [ ] **PLYR-03**: Admin can remove a player from the event (passphrase-gated)
 - [ ] **PLYR-04**: Admin can re-activate a dropped player (passphrase-gated)
-- [ ] **PLYR-05**: Duplicate player names within an event are prevented with a friendly error message
+- [x] **PLYR-05**: Duplicate player names within an event are prevented with a friendly error message
 
 ### Pod Generation
 
@@ -90,15 +90,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | EVNT-01 | Phase 1 | Pending |
-| EVNT-02 | Phase 1 | Pending |
-| EVNT-03 | Phase 1 | Pending |
+| EVNT-02 | Phase 1 | Complete |
+| EVNT-03 | Phase 1 | Complete |
 | EVNT-04 | Phase 2 | Pending |
 | EVNT-05 | Phase 4 | Pending |
-| PLYR-01 | Phase 1 | Pending |
+| PLYR-01 | Phase 1 | Complete |
 | PLYR-02 | Phase 1 | Pending |
 | PLYR-03 | Phase 2 | Pending |
 | PLYR-04 | Phase 2 | Pending |
-| PLYR-05 | Phase 1 | Pending |
+| PLYR-05 | Phase 1 | Complete |
 | PODG-01 | Phase 2 | Pending |
 | PODG-02 | Phase 2 | Pending |
 | PODG-03 | Phase 2 | Pending |
