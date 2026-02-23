@@ -29,12 +29,14 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. All connected clients see players appear and disappear in real time without refreshing
   4. Player can self-drop and sees their status change; other clients see the update live
   5. The app renders in a mobile-first dark theme that is readable at arm's length on a phone
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
-- [ ] 01-03: TBD
+- [ ] 01-01-PLAN.md -- Project scaffold + database foundation (Vite, deps, Supabase schema/RLS/RPC, dark theme)
+- [ ] 01-02-PLAN.md -- Landing page + event creation (Create Event modal, admin auth, join field)
+- [ ] 01-03-PLAN.md -- Event page + player join + player list (join form, player display, QR code)
+- [ ] 01-04-PLAN.md -- Real-time subscriptions + self-drop (Realtime channel, visibility refetch, drop confirmation)
+- [ ] 01-05-PLAN.md -- End-to-end verification checkpoint (human verification of full player flow)
 
 ### Phase 2: Pod Generation and Admin Controls
 **Goal**: Admin can generate rounds of pods that minimize repeat opponents, manage players, and end events -- all gated behind the event passphrase
@@ -91,7 +93,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and Player Flow | 0/3 | Not started | - |
+| 1. Foundation and Player Flow | 0/5 | Planned | - |
 | 2. Pod Generation and Admin Controls | 0/3 | Not started | - |
 | 3. Timer System | 0/2 | Not started | - |
 | 4. Event Polish, Testing, and Deployment | 0/2 | Not started | - |
