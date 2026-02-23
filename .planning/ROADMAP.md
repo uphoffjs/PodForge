@@ -67,11 +67,12 @@ Plans:
   6. All 24 existing E2E tests still pass after fixes
   7. ESLint passes with zero errors
 
-**Plans:** 2 plans
+**Plans:** 3 plans
 
 Plans:
-- [ ] 01.2-01-PLAN.md -- Fix Cypress test infrastructure: mockEventPage content-type, createRealEvent RPC params, visual-regression localStorage format
+- [ ] 01.2-01-PLAN.md -- Fix Cypress test infrastructure: mockEventPage content-type, createRealEvent RPC params, visual-regression localStorage format, self-drop.cy.js array fix
 - [ ] 01.2-02-PLAN.md -- Fix production code: race condition, duplicate testid, ESLint errors, remove test workaround
+- [ ] 01.2-03-PLAN.md -- Wave 2 E2E verification gate: run full Cypress suite after Plans 01+02 complete
 
 ### Phase 1.3: Missing E2E Coverage, Baselines, and Phase Verification (GAP CLOSURE)
 
