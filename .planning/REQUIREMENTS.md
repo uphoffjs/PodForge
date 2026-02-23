@@ -47,7 +47,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **INFR-01**: All state changes (player joins/drops, new rounds, timer updates, removals) push to all clients via Supabase Realtime
 - [x] **INFR-02**: Admin passphrase validated server-side via Supabase RPC; session-stored after first successful entry
 - [x] **INFR-03**: Mobile-first dark theme with glanceable pod cards, minimal chrome, no slow animations
-- [ ] **INFR-04**: Unit tests for pod generation algorithm and integration tests for major features
+- [x] **INFR-04**: Unit tests for pod generation algorithm and integration tests for major features
 - [ ] **INFR-05**: Deployment setup instructions for Vercel (frontend) and Supabase (backend)
 
 ## v2 Requirements
@@ -115,7 +115,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFR-01 | Phase 1 | Complete |
 | INFR-02 | Phase 1 | Complete |
 | INFR-03 | Phase 1 | Complete |
-| INFR-04 | Phase 4 | Pending |
+| INFR-04 | Phase 4 | Complete |
 | INFR-05 | Phase 4 | Pending |
 
 **Coverage:**
