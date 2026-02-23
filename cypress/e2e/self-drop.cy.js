@@ -37,9 +37,14 @@ describe('Self-Drop', () => {
     cy.intercept('GET', '**/realtime/v1/websocket*', { statusCode: 200, body: {} })
 
     // Mock API responses
+    // useEvent uses .single() which sends Accept: application/vnd.pgrst.object+json
+    // PostgREST returns a plain object (not array) with that content-type
     cy.intercept('GET', '**/rest/v1/events*', {
       statusCode: 200,
-      body: [event],
+      body: event,
+      headers: {
+        'content-type': 'application/vnd.pgrst.object+json; charset=utf-8',
+      },
     }).as('getEvent')
 
     cy.intercept('GET', '**/rest/v1/players*', {

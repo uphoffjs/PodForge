@@ -27,9 +27,14 @@ Cypress.Commands.add('mockEventPage', (eventData, playersData) => {
   const players = playersData || []
 
   // Intercept Supabase REST API calls for the event
+  // useEvent uses .single() which sends Accept: application/vnd.pgrst.object+json
+  // PostgREST returns a plain object (not array) with that content-type
   cy.intercept('GET', '**/rest/v1/events*', {
     statusCode: 200,
-    body: [event],
+    body: event,
+    headers: {
+      'content-type': 'application/vnd.pgrst.object+json; charset=utf-8',
+    },
   }).as('getEvent')
 
   // Intercept Supabase REST API calls for players
@@ -70,7 +75,7 @@ Cypress.Commands.add('createRealEvent', (name, passphrase) => {
       Authorization: `Bearer ${supabaseKey}`,
       'Content-Type': 'application/json',
     },
-    body: { event_name: name, admin_passphrase: passphrase },
+    body: { p_name: name, p_passphrase: passphrase },
   })
 })
 
