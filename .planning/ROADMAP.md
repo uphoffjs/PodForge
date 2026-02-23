@@ -38,6 +38,18 @@ Plans:
 - [ ] 01-04-PLAN.md -- Real-time subscriptions + self-drop (Realtime channel, visibility refetch, drop confirmation)
 - [ ] 01-05-PLAN.md -- End-to-end verification checkpoint (human verification of full player flow)
 
+### Phase 01.1: Cypress E2E Test Infrastructure and Phase 1 Flow Tests (INSERTED)
+
+**Goal:** Cypress E2E test infrastructure is set up with CI, and all Phase 1 user flows (event creation, player join, duplicate name rejection, self-drop, QR code) have comprehensive E2E test coverage with visual regression at multiple breakpoints
+**Depends on:** Phase 1
+**Requirements**: INFR-04
+**Plans:** 3 plans
+
+Plans:
+- [ ] 01.1-01-PLAN.md -- Cypress infrastructure + data-testid attributes (deps, config, commands, fixtures, ESLint, GitHub Actions, component test IDs)
+- [ ] 01.1-02-PLAN.md -- Core E2E test specs (event creation, player join, duplicate name, self-drop, QR code)
+- [ ] 01.1-03-PLAN.md -- Visual regression tests + baseline generation (3 breakpoints, 4 page states)
+
 ### Phase 2: Pod Generation and Admin Controls
 **Goal**: Admin can generate rounds of pods that minimize repeat opponents, manage players, and end events -- all gated behind the event passphrase
 **Depends on**: Phase 1
@@ -94,6 +106,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation and Player Flow | 0/5 | Planned | - |
+| 1.1 Cypress E2E Tests (INSERTED) | 0/3 | Planned | - |
 | 2. Pod Generation and Admin Controls | 0/3 | Not started | - |
 | 3. Timer System | 0/2 | Not started | - |
 | 4. Event Polish, Testing, and Deployment | 0/2 | Not started | - |
