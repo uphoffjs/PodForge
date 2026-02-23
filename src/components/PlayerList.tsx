@@ -6,9 +6,10 @@ import { PlayerItem } from '@/components/PlayerItem'
 type PlayerListProps = {
   players: Player[]
   currentPlayerId: string | null
+  newPlayerIds?: Set<string>
 }
 
-export function PlayerList({ players, currentPlayerId }: PlayerListProps) {
+export function PlayerList({ players, currentPlayerId, newPlayerIds }: PlayerListProps) {
   const [showDropped, setShowDropped] = useState(false)
 
   const activePlayers = players.filter((p) => p.status === 'active')
@@ -35,6 +36,7 @@ export function PlayerList({ players, currentPlayerId }: PlayerListProps) {
             key={player.id}
             player={player}
             isSelf={player.id === currentPlayerId}
+            isNew={newPlayerIds?.has(player.id) ?? false}
           />
         ))}
       </div>

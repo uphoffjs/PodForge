@@ -1,21 +1,39 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'react-router'
 import { toast } from 'sonner'
-import { Copy, Loader2 } from 'lucide-react'
+import { Copy, Loader2, LogOut } from 'lucide-react'
 import { useEvent } from '@/hooks/useEvent'
 import { useEventPlayers } from '@/hooks/useEventPlayers'
+import { useEventChannel } from '@/hooks/useEventChannel'
+import { useVisibilityRefetch } from '@/hooks/useVisibilityRefetch'
+import { useDropPlayer } from '@/hooks/useDropPlayer'
 import { getStoredPlayerId, clearPlayerId, storePlayerId } from '@/lib/player-identity'
 import { JoinEventForm } from '@/components/JoinEventForm'
 import { PlayerList } from '@/components/PlayerList'
 import { QRCodeDisplay } from '@/components/QRCodeDisplay'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 
 export function EventPage() {
   const { eventId } = useParams()
   const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null)
   const [skippedJoin, setSkippedJoin] = useState(false)
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
+  const [newPlayerIds, setNewPlayerIds] = useState<Set<string>>(new Set())
 
   const { data: event, isLoading: eventLoading, error: eventError } = useEvent(eventId ?? '')
   const { data: players, isLoading: playersLoading } = useEventPlayers(eventId ?? '')
+
+  // Wire up Realtime subscriptions
+  useEventChannel(eventId ?? '')
+
+  // Wire up tab restore refetch
+  useVisibilityRefetch(eventId ?? '')
+
+  // Self-drop mutation
+  const dropPlayer = useDropPlayer(eventId ?? '')
+
+  // Track previous player IDs for detecting new joins
+  const prevPlayerIdsRef = useRef<Set<string>>(new Set())
 
   // Check localStorage for existing player identity
   useEffect(() => {
@@ -37,6 +55,32 @@ export function EventPage() {
     }
   }, [eventId, players, currentPlayerId])
 
+  // Detect new player joins for highlight animation
+  useEffect(() => {
+    if (!players) return
+
+    const currentIds = new Set(players.filter((p) => p.status === 'active').map((p) => p.id))
+    const prevIds = prevPlayerIdsRef.current
+
+    // Only detect new players after initial load (prevIds is populated)
+    if (prevIds.size > 0) {
+      const added = new Set<string>()
+      for (const id of currentIds) {
+        if (!prevIds.has(id)) {
+          added.add(id)
+        }
+      }
+      if (added.size > 0) {
+        setNewPlayerIds(added)
+        // Clear the highlight after the animation completes
+        const timer = setTimeout(() => setNewPlayerIds(new Set()), 400)
+        return () => clearTimeout(timer)
+      }
+    }
+
+    prevPlayerIdsRef.current = currentIds
+  }, [players])
+
   const handleJoined = useCallback(
     (playerId: string) => {
       if (eventId) {
@@ -56,6 +100,17 @@ export function EventPage() {
       toast.error('Failed to copy link.')
     }
   }, [eventId])
+
+  const handleLeaveConfirm = useCallback(() => {
+    if (!currentPlayerId) return
+    dropPlayer.mutate(currentPlayerId, {
+      onSuccess: () => {
+        setShowLeaveConfirm(false)
+        setCurrentPlayerId(null)
+        setSkippedJoin(false)
+      },
+    })
+  }, [currentPlayerId, dropPlayer])
 
   if (!eventId) {
     return (
@@ -89,6 +144,11 @@ export function EventPage() {
   const isJoined = !!currentPlayerId || skippedJoin
   const showJoinForm = !isJoined
 
+  // Determine if the current player is active (for showing Leave Event button)
+  const isActivePlayer =
+    !!currentPlayerId &&
+    players?.some((p) => p.id === currentPlayerId && p.status === 'active')
+
   return (
     <div className="flex flex-col items-center min-h-screen px-4 py-6">
       {/* Event header */}
@@ -120,8 +180,23 @@ export function EventPage() {
         <PlayerList
           players={players ?? []}
           currentPlayerId={currentPlayerId}
+          newPlayerIds={newPlayerIds}
         />
       </div>
+
+      {/* Leave Event button -- separate from player list, deliberate action */}
+      {isActivePlayer && (
+        <div className="w-full max-w-lg mb-6">
+          <button
+            type="button"
+            onClick={() => setShowLeaveConfirm(true)}
+            className="flex items-center justify-center gap-2 w-full py-2.5 px-4 text-sm font-medium text-error border border-error/40 rounded-lg hover:bg-error/10 transition-colors min-h-[44px]"
+          >
+            <LogOut className="w-4 h-4" />
+            Leave Event
+          </button>
+        </div>
+      )}
 
       {/* Share section */}
       <div className="w-full max-w-lg flex flex-col items-center gap-4 p-4 bg-surface-raised border border-border rounded-xl">
@@ -146,6 +221,17 @@ export function EventPage() {
           </button>
         </div>
       </div>
+
+      {/* Leave Event confirmation dialog */}
+      <ConfirmDialog
+        isOpen={showLeaveConfirm}
+        title="Leave Event?"
+        message="You'll be marked as dropped. You can ask the admin to re-add you later."
+        confirmLabel="Leave Event"
+        onConfirm={handleLeaveConfirm}
+        onCancel={() => setShowLeaveConfirm(false)}
+        isLoading={dropPlayer.isPending}
+      />
     </div>
   )
 }
