@@ -1,0 +1,6 @@
+{
+  "code": "23505",
+  "details": "Key (event_id, name)=(test-uuid, Alice) already exists.",
+  "hint": null,
+  "message": "duplicate key value violates unique constraint \"players_event_id_name_key\""
+}
