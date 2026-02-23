@@ -70,7 +70,7 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 01.2-01-PLAN.md -- Fix Cypress test infrastructure: mockEventPage content-type, createRealEvent RPC params, visual-regression localStorage format, self-drop.cy.js array fix
+- [x] 01.2-01-PLAN.md -- Fix Cypress test infrastructure: mockEventPage content-type, createRealEvent RPC params, visual-regression localStorage format, self-drop.cy.js array fix
 - [ ] 01.2-02-PLAN.md -- Fix production code: race condition, duplicate testid, ESLint errors, remove test workaround
 - [ ] 01.2-03-PLAN.md -- Wave 2 E2E verification gate: run full Cypress suite after Plans 01+02 complete
 
@@ -148,7 +148,7 @@ Phases execute in numeric order: 1 -> 1.1 -> 1.2 -> 1.3 -> 2 -> 3 -> 4
 |-------|----------------|--------|-----------|
 | 1. Foundation and Player Flow | 4/5 | In Progress (01-05 unexecuted) | - |
 | 1.1 Cypress E2E Tests (INSERTED) | 2/3 | In Progress (01.1-03 unexecuted) | - |
-| 1.2 Audit Bug Fixes (GAP CLOSURE) | 0/2 | Not started | - |
+| 1.2 Audit Bug Fixes (GAP CLOSURE) | 1/3 | In Progress | - |
 | 1.3 Missing Coverage + Verification (GAP CLOSURE) | 0/2 | Not started | - |
 | 2. Pod Generation and Admin Controls | 0/3 | Not started | - |
 | 3. Timer System | 0/2 | Not started | - |
