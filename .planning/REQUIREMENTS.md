@@ -18,7 +18,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Player Management
 
 - [x] **PLYR-01**: All connected clients see the real-time player list (active players + collapsed dropped section)
-- [ ] **PLYR-02**: Player can self-drop from an event with confirmation (marks inactive, current round assignment stays)
+- [x] **PLYR-02**: Player can self-drop from an event with confirmation (marks inactive, current round assignment stays)
 - [ ] **PLYR-03**: Admin can remove a player from the event (passphrase-gated)
 - [ ] **PLYR-04**: Admin can re-activate a dropped player (passphrase-gated)
 - [x] **PLYR-05**: Duplicate player names within an event are prevented with a friendly error message
@@ -95,7 +95,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EVNT-04 | Phase 2 | Pending |
 | EVNT-05 | Phase 4 | Pending |
 | PLYR-01 | Phase 1 | Complete |
-| PLYR-02 | Phase 1 | Pending |
+| PLYR-02 | Phase 1 | Complete |
 | PLYR-03 | Phase 2 | Pending |
 | PLYR-04 | Phase 2 | Pending |
 | PLYR-05 | Phase 1 | Complete |

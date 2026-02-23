@@ -10,31 +10,32 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ## Current Position
 
 Phase: 1 of 4 (Foundation and Player Flow)
-Plan: 3 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: Executing
-Last activity: 2026-02-23 -- Completed 01-03-PLAN.md (event page with player join flow)
+Last activity: 2026-02-23 -- Completed 01-04-PLAN.md (realtime updates and self-drop)
 
-Progress: [███░░░░░░░] 30%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
+- Total plans completed: 4
 - Average duration: 3 min
-- Total execution time: 0.18 hours
+- Total execution time: 0.22 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 1 | 3/5 | 11 min | 4 min |
+| 1 | 4/5 | 13 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (7 min), 01-02 (2 min), 01-03 (2 min)
+- Last 5 plans: 01-01 (7 min), 01-02 (2 min), 01-03 (2 min), 01-04 (2 min)
 - Trend: Accelerating
 
 *Updated after each plan completion*
 | Phase 01 P02 | 2min | 2 tasks | 4 files |
+| Phase 01 P04 | 2min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -54,6 +55,9 @@ Recent decisions affecting current work:
 - [01-03]: Skip link below join form serves as admin skip-prompt (no separate modal)
 - [01-03]: Player self-highlight uses purple border-left + background tint (no "(you)" tag)
 - [Phase 01-02]: Direct sessionStorage write in modal onSuccess rather than useAdminAuth hook (eventId unknown at mount time)
+- [Phase 01]: [01-04]: Leave Event button placed below player list as separate deliberate action (not inline)
+- [Phase 01]: [01-04]: New player highlight via ref-based tracking with 400ms animate-flash (simple approach)
+- [Phase 01]: [01-04]: ConfirmDialog styled consistent with CreateEventModal (same overlay + card pattern)
 
 ### Pending Todos
 
@@ -66,5 +70,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Completed 01-03-PLAN.md
+Stopped at: Completed 01-04-PLAN.md
 Resume file: None
