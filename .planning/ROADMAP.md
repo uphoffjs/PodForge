@@ -43,7 +43,7 @@ Plans:
 **Goal:** Cypress E2E test infrastructure is set up with CI, and all Phase 1 user flows (event creation, player join, duplicate name rejection, self-drop, QR code) have comprehensive E2E test coverage with visual regression at multiple breakpoints
 **Depends on:** Phase 1
 **Requirements**: INFR-04
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [ ] 01.1-01-PLAN.md -- Cypress infrastructure + data-testid attributes (deps, config, commands, fixtures, ESLint, GitHub Actions, component test IDs)
@@ -106,7 +106,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation and Player Flow | 0/5 | Planned | - |
-| 1.1 Cypress E2E Tests (INSERTED) | 0/3 | Planned | - |
+| 1.1 Cypress E2E Tests (INSERTED) | 2/3 | In Progress | - |
 | 2. Pod Generation and Admin Controls | 0/3 | Not started | - |
 | 3. Timer System | 0/2 | Not started | - |
 | 4. Event Polish, Testing, and Deployment | 0/2 | Not started | - |
