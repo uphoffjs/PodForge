@@ -52,7 +52,7 @@ Plans:
 - [ ] 01.1-02-PLAN.md -- Core E2E test specs (event creation, player join, duplicate name, self-drop, QR code)
 - [ ] 01.1-03-PLAN.md -- Visual regression tests + baseline generation (3 breakpoints, 4 page states)
 
-### Phase 01.2: Audit Bug Fixes — Production and Test Infrastructure (GAP CLOSURE)
+### Phase 1.2: Audit Bug Fixes — Production and Test Infrastructure (GAP CLOSURE)
 
 **Goal:** Fix all production bugs and Cypress test infrastructure issues identified by the v1.0 milestone audit, so that existing tests are accurate and the codebase is clean for continued development
 **Depends on:** Phase 1, Phase 1.1
@@ -67,11 +67,13 @@ Plans:
   6. All 24 existing E2E tests still pass after fixes
   7. ESLint passes with zero errors
 
-Plans:
-- [ ] 01.2-01-PLAN.md -- TBD
-- [ ] 01.2-02-PLAN.md -- TBD
+**Plans:** 2 plans
 
-### Phase 01.3: Missing E2E Coverage, Baselines, and Phase Verification (GAP CLOSURE)
+Plans:
+- [ ] 01.2-01-PLAN.md -- Fix Cypress test infrastructure: mockEventPage content-type, createRealEvent RPC params, visual-regression localStorage format
+- [ ] 01.2-02-PLAN.md -- Fix production code: race condition, duplicate testid, ESLint errors, remove test workaround
+
+### Phase 1.3: Missing E2E Coverage, Baselines, and Phase Verification (GAP CLOSURE)
 
 **Goal:** Fill E2E test coverage gaps (AddPlayerForm, skip-btn click), complete visual regression baselines at 3 breakpoints, and produce VERIFICATION.md for Phases 1 and 1.1 — closing the milestone audit
 **Depends on:** Phase 1.2
