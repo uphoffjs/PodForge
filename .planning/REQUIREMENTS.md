@@ -9,7 +9,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Event Management
 
-- [ ] **EVNT-01**: User can create a new event with a name and admin passphrase
+- [x] **EVNT-01**: User can create a new event with a name and admin passphrase
 - [x] **EVNT-02**: User can join an event by visiting the event link and entering their name
 - [x] **EVNT-03**: User can join an event by scanning a QR code and entering their name
 - [ ] **EVNT-04**: Admin can end an event, making it read-only (historical data stays visible)
@@ -89,7 +89,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EVNT-01 | Phase 1 | Pending |
+| EVNT-01 | Phase 1 | Complete |
 | EVNT-02 | Phase 1 | Complete |
 | EVNT-03 | Phase 1 | Complete |
 | EVNT-04 | Phase 2 | Pending |
