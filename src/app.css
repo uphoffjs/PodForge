@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* MTG-inspired dark palette */
+  --color-surface: #0f0a1a;
+  --color-surface-raised: #1a1128;
+  --color-surface-overlay: #241a35;
+  --color-border: #2e2445;
+  --color-border-bright: #4a3a6b;
+
+  /* Accent -- amber/gold pops against purple */
+  --color-accent: #f59e0b;
+  --color-accent-bright: #fbbf24;
+
+  /* Player highlight */
+  --color-self-highlight: #7c3aed;
+
+  /* Text */
+  --color-text-primary: #f0edf5;
+  --color-text-secondary: #a89bc2;
+  --color-text-muted: #6b5c85;
+
+  /* Status */
+  --color-success: #10b981;
+  --color-error: #ef4444;
+  --color-warning: #f59e0b;
+
+  /* Fonts */
+  --font-display: "Cinzel", serif;
+  --font-body: "Inter", sans-serif;
+
+  /* Animation -- fast only */
+  --animate-flash: flash 0.4s ease-out;
+
+  @keyframes flash {
+    0% { background-color: var(--color-accent); opacity: 0.3; }
+    100% { background-color: transparent; opacity: 1; }
+  }
+}
+
+/* Base body reset */
+body {
+  margin: 0;
+  min-width: 320px;
+}
