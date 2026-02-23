@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Foundation and Player Flow** - Supabase schema, Realtime subscriptions, player join/drop, mobile-first dark theme
 - [ ] **Phase 1.2: Audit Bug Fixes — Production and Test Infrastructure** - Fix race condition, duplicate testid, 3 critical Cypress infrastructure bugs (GAP CLOSURE)
-- [ ] **Phase 1.3: Missing E2E Coverage, Baselines, and Phase Verification** - AddPlayerForm E2E tests, skip-btn click test, visual regression baselines, VERIFICATION.md (GAP CLOSURE)
+- [x] **Phase 1.3: Missing E2E Coverage, Baselines, and Phase Verification** - AddPlayerForm E2E tests, skip-btn click test, visual regression baselines, VERIFICATION.md (GAP CLOSURE) (completed 2026-02-23)
 - [ ] **Phase 2: Pod Generation and Admin Controls** - Pod algorithm with repeat-opponent avoidance, admin passphrase flow, round display, admin player management
 - [ ] **Phase 3: Timer System** - Server-authoritative countdown timer with admin controls, visual alerts, and browser notifications
 - [ ] **Phase 4: Event Polish, Testing, and Deployment** - Event info bar with QR/share, full test coverage, Vercel + Supabase deployment
@@ -87,7 +87,7 @@ Plans:
   4. VERIFICATION.md exists for Phase 01 with all 9 requirements verified
   5. VERIFICATION.md exists for Phase 01.1 with INFR-04 verified
 
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 01.3-01-PLAN.md -- AddPlayerForm E2E tests + skip-btn click test + admin view visual baseline
@@ -151,7 +151,7 @@ Phases execute in numeric order: 1 -> 1.1 -> 1.2 -> 1.3 -> 2 -> 3 -> 4
 | 1. Foundation and Player Flow | 4/5 | Complete (01-05 covered by 1.3 verification) | 2026-02-23 |
 | 1.1 Cypress E2E Tests (INSERTED) | 2/3 | Complete (01.1-03 covered by 1.3 coverage) | 2026-02-23 |
 | 1.2 Audit Bug Fixes (GAP CLOSURE) | 3/3 | Complete | 2026-02-23 |
-| 1.3 Missing Coverage + Verification (GAP CLOSURE) | 2/2 | Complete | 2026-02-23 |
+| 1.3 Missing Coverage + Verification (GAP CLOSURE) | 2/2 | Complete    | 2026-02-23 |
 | 2. Pod Generation and Admin Controls | 0/3 | Not started | - |
 | 3. Timer System | 0/2 | Not started | - |
 | 4. Event Polish, Testing, and Deployment | 0/2 | Not started | - |
