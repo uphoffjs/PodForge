@@ -59,6 +59,10 @@ Recent decisions affecting current work:
 - [Phase 01]: [01-04]: New player highlight via ref-based tracking with 400ms animate-flash (simple approach)
 - [Phase 01]: [01-04]: ConfirmDialog styled consistent with CreateEventModal (same overlay + card pattern)
 
+### Roadmap Evolution
+
+- Phase 1.1 inserted after Phase 1: Cypress E2E Test Infrastructure and Phase 1 Flow Tests (URGENT)
+
 ### Pending Todos
 
 None yet.
