@@ -1,5 +1,5 @@
 // Visual regression tests for PodForge dark theme across 3 breakpoints
-// Covers: landing page, event page (with players, empty state, join form)
+// Covers: landing page, event page (with players, empty state, join form, admin view)
 // Uses cypress-visual-regression compareSnapshot with 5% threshold
 
 const breakpoints = [
@@ -144,6 +144,89 @@ describe('Visual Regression - Event Page (join form)', () => {
       waitForContent('[data-testid="join-form"]')
       waitForFonts()
       cy.compareSnapshot(`event-join-form-${name}`, 0.05)
+    })
+  })
+})
+
+describe('Visual Regression - Event Page (admin view)', () => {
+  const event = {
+    id: 'visual-admin-uuid',
+    name: 'Friday Night Commander',
+    status: 'active',
+    created_at: '2026-01-01T00:00:00Z',
+  }
+
+  const players = [
+    {
+      id: 'player-1',
+      event_id: 'visual-admin-uuid',
+      name: 'Alice',
+      status: 'active',
+      created_at: '2026-01-01T00:01:00Z',
+    },
+    {
+      id: 'player-2',
+      event_id: 'visual-admin-uuid',
+      name: 'Bob',
+      status: 'active',
+      created_at: '2026-01-01T00:02:00Z',
+    },
+    {
+      id: 'player-3',
+      event_id: 'visual-admin-uuid',
+      name: 'Charlie',
+      status: 'dropped',
+      created_at: '2026-01-01T00:03:00Z',
+    },
+  ]
+
+  breakpoints.forEach(({ name, width, height }) => {
+    it(`matches baseline at ${name} (${width}x${height})`, () => {
+      cy.viewport(width, height)
+
+      // Block Realtime WebSocket
+      cy.intercept('GET', '**/realtime/v1/websocket*', {
+        statusCode: 200,
+        body: {},
+      })
+
+      // Mock event API (PostgREST single-object format)
+      cy.intercept('GET', '**/rest/v1/events*', {
+        statusCode: 200,
+        body: event,
+        headers: {
+          'content-type': 'application/vnd.pgrst.object+json; charset=utf-8',
+        },
+      }).as('getEvent')
+
+      // Mock players API
+      cy.intercept('GET', '**/rest/v1/players*', {
+        statusCode: 200,
+        body: players,
+      }).as('getPlayers')
+
+      // Visit with onBeforeLoad to set admin sessionStorage and player identity
+      // before React mounts (useAdminAuth reads sessionStorage at init)
+      cy.visit(`/event/${event.id}`, {
+        onBeforeLoad(win) {
+          win.sessionStorage.setItem(
+            `podforge_admin_${event.id}`,
+            'testpass'
+          )
+          win.localStorage.setItem(
+            `podforge_player_${event.id}`,
+            'player-1'
+          )
+        },
+      })
+
+      cy.wait('@getEvent')
+      cy.wait('@getPlayers')
+
+      // Wait for the admin add-player form to confirm admin view rendered
+      waitForContent('[data-testid="add-player-form"]')
+      waitForFonts()
+      cy.compareSnapshot(`event-admin-${name}`, 0.05)
     })
   })
 })

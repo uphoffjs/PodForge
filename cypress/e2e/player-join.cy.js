@@ -100,4 +100,24 @@ describe('Player Join', () => {
       name: 'Alice',
     })
   })
+
+  it('clicking skip button hides join form and shows player list', () => {
+    cy.fixture('players.json').then((players) => {
+      cy.mockEventPage(undefined, players)
+
+      // Join form should be visible initially
+      cy.getByTestId('join-form').should('be.visible')
+
+      // Click the skip button
+      cy.getByTestId('join-skip-btn').click()
+
+      // Join form should disappear (skippedJoin state set to true)
+      cy.getByTestId('join-form').should('not.exist')
+
+      // Player list should be visible with content
+      cy.getByTestId('player-list').should('be.visible')
+      cy.getByTestId('player-list').should('contain', 'Alice')
+      cy.getByTestId('player-list').should('contain', 'Bob')
+    })
+  })
 })
