@@ -17,11 +17,21 @@ function waitForFonts() {
   cy.document().its('fonts.status').should('equal', 'loaded')
 }
 
+/**
+ * Wait for page content to finish rendering after mocks resolve.
+ * cy.wait('@getEvent') only waits for the XHR — React may not have
+ * re-rendered yet. Assert on a visible element to ensure render is done.
+ */
+function waitForContent(selector) {
+  cy.get(selector, { timeout: 10000 }).should('be.visible')
+}
+
 describe('Visual Regression - Landing Page', () => {
   breakpoints.forEach(({ name, width, height }) => {
     it(`matches baseline at ${name} (${width}x${height})`, () => {
       cy.viewport(width, height)
       cy.mockLandingPage()
+      waitForContent('[data-testid="landing-create-event-btn"]')
       waitForFonts()
       cy.compareSnapshot(`landing-${name}`, 0.05)
     })
@@ -64,13 +74,15 @@ describe('Visual Regression - Event Page (with players)', () => {
     it(`matches baseline at ${name} (${width}x${height})`, () => {
       cy.viewport(width, height)
       // Set localStorage identity so join form is NOT shown (player is already joined)
+      // player-identity.ts stores plain UUID string, not JSON object
       cy.window().then((win) => {
         win.localStorage.setItem(
           `podforge_player_${event.id}`,
-          JSON.stringify({ id: 'player-1', name: 'Alice' })
+          'player-1'
         )
       })
       cy.mockEventPage(event, players)
+      waitForContent('[data-testid="player-list"]')
       waitForFonts()
       cy.compareSnapshot(`event-page-${name}`, 0.05)
     })
@@ -88,14 +100,11 @@ describe('Visual Regression - Event Page (empty state)', () => {
   breakpoints.forEach(({ name, width, height }) => {
     it(`matches baseline at ${name} (${width}x${height})`, () => {
       cy.viewport(width, height)
-      // Set identity so join form not shown, but pass empty players array
-      cy.window().then((win) => {
-        win.localStorage.setItem(
-          `podforge_player_${event.id}`,
-          JSON.stringify({ id: 'player-solo', name: 'Solo' })
-        )
-      })
+      // No localStorage identity set -- join form will appear
+      // Click skip button to dismiss it and show empty player list
       cy.mockEventPage(event, [])
+      cy.getByTestId('join-skip-btn').click()
+      waitForContent('[data-testid="player-list-empty"]')
       waitForFonts()
       cy.compareSnapshot(`event-empty-${name}`, 0.05)
     })
@@ -132,6 +141,7 @@ describe('Visual Regression - Event Page (join form)', () => {
       cy.viewport(width, height)
       // Do NOT set localStorage identity so join form IS shown
       cy.mockEventPage(event, players)
+      waitForContent('[data-testid="join-form"]')
       waitForFonts()
       cy.compareSnapshot(`event-join-form-${name}`, 0.05)
     })
