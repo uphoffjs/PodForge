@@ -541,6 +541,40 @@ describe('EventPage', () => {
     expect(screen.getByTestId('player-list')).toBeInTheDocument()
   })
 
+  // --- localStorage storedId guard (kills if(storedId) → if(true)) ---
+
+  it('does not reset currentPlayerId when storedId is null on eventId change while justJoined is pending', async () => {
+    const user = userEvent.setup()
+    mockUseParams.mockReturnValue({ eventId: 'evt1' })
+    mockGetStoredPlayerId.mockReturnValue(null)
+
+    const { rerender } = render(<EventPage />)
+
+    // Player joins → currentPlayerId = 'p-new', justJoinedRef = true
+    await user.click(screen.getByTestId('mock-join'))
+    expect(screen.queryByTestId('join-form')).not.toBeInTheDocument()
+
+    // Change eventId; getStoredPlayerId returns null for new event
+    // justJoinedRef is still true (p-new never appeared in players list)
+    mockUseParams.mockReturnValue({ eventId: 'evt2' })
+    mockGetStoredPlayerId.mockReturnValue(null)
+    mockUseEvent.mockReturnValue({
+      data: { id: 'evt2', name: 'Event 2', status: 'active', created_at: '2024-01-01' },
+      isLoading: false,
+      error: null,
+    })
+    mockUseEventPlayers.mockReturnValue({
+      data: defaultPlayers,
+      isLoading: false,
+    })
+
+    rerender(<EventPage />)
+
+    // Original: if(null) → skip, currentPlayerId stays 'p-new', join form hidden
+    // Mutant: if(true) → setCurrentPlayerId(null), join form appears
+    expect(screen.queryByTestId('join-form')).not.toBeInTheDocument()
+  })
+
   // --- Stored player verification ---
 
   it('clears stored player if they are not in the players list', () => {

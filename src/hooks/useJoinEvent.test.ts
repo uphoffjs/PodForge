@@ -147,6 +147,25 @@ describe('useJoinEvent', () => {
     )
   })
 
+  it('shows generic error when error has no code property (null error)', async () => {
+    // Rejecting with null bypasses the mutationFn destructuring and throws null
+    // directly. onError receives null. With ?. this safely returns undefined;
+    // without ?. it would crash.
+    mockSingle.mockRejectedValue(null)
+
+    const { result } = renderHook(() => useJoinEvent('evt1'), {
+      wrapper: createWrapper(),
+    })
+
+    result.current.mutate('Someone')
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+
+    expect(mockToastError).toHaveBeenCalledWith(
+      'Failed to join. Please try again.'
+    )
+  })
+
   it('shows generic error for other errors', async () => {
     mockSingle.mockResolvedValue({
       data: null,

@@ -134,6 +134,17 @@ describe('JoinEventForm', () => {
     )
   })
 
+  it('shows generic error when error is null (optional chaining safety)', () => {
+    hookState.isError = true
+    hookState.error = null
+
+    render(<JoinEventForm eventId="evt1" onJoined={vi.fn()} />)
+
+    expect(screen.getByTestId('join-mutation-error')).toHaveTextContent(
+      'Failed to join. Please try again.'
+    )
+  })
+
   it('shows generic error when isError with no code property', () => {
     hookState.isError = true
     hookState.error = { message: 'unknown error' }
