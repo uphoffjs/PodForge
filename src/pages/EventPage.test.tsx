@@ -169,6 +169,10 @@ vi.mock('@/components/AdminControls', () => ({
   ),
 }))
 
+vi.mock('@/components/PreviousRounds', () => ({
+  PreviousRounds: () => <div data-testid="previous-rounds" />,
+}))
+
 vi.mock('@/components/AdminPassphraseModal', () => ({
   AdminPassphraseModal: ({
     isOpen,

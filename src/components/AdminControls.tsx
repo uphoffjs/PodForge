@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Shuffle, Loader2 } from 'lucide-react'
+import { Shuffle, Loader2, Lock } from 'lucide-react'
 import { generatePods, type PlayerInfo, type RoundHistory } from '@/lib/pod-algorithm'
 import { useGenerateRound, type PodAssignment } from '@/hooks/useGenerateRound'
+import { useEndEvent } from '@/hooks/useEndEvent'
 import { useRounds } from '@/hooks/useRounds'
 import { usePods, type PodWithPlayers } from '@/hooks/usePods'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import type { Player, Round } from '@/types/database'
 
 interface AdminControlsProps {
@@ -44,8 +46,10 @@ export function AdminControls({
   isEventEnded,
 }: AdminControlsProps) {
   const [isGenerating, setIsGenerating] = useState(false)
+  const [showEndConfirm, setShowEndConfirm] = useState(false)
 
   const generateRound = useGenerateRound(eventId)
+  const endEvent = useEndEvent(eventId)
   const { data: rounds } = useRounds(eventId)
 
   // Fetch pods for all existing rounds to build history
@@ -119,6 +123,33 @@ export function AdminControls({
     }
   }
 
+  const handleEndEvent = () => {
+    if (isEventEnded) return
+
+    if (!passphrase) {
+      onPassphraseNeeded()
+      return
+    }
+
+    setShowEndConfirm(true)
+  }
+
+  const handleEndEventConfirm = () => {
+    if (!passphrase) return
+
+    endEvent.mutate(
+      { passphrase },
+      {
+        onSuccess: () => {
+          setShowEndConfirm(false)
+        },
+        onError: () => {
+          setShowEndConfirm(false)
+        },
+      },
+    )
+  }
+
   const isPending = isGenerating || generateRound.isPending
 
   return (
@@ -155,6 +186,36 @@ export function AdminControls({
           </>
         )}
       </button>
+
+      <button
+        type="button"
+        onClick={handleEndEvent}
+        disabled={endEvent.isPending || isEventEnded}
+        data-testid="end-event-btn"
+        className="flex items-center justify-center gap-2 w-full mt-3 rounded-lg border border-error text-error py-2.5 px-4 text-sm font-medium hover:bg-error/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+      >
+        {endEvent.isPending ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Ending...
+          </>
+        ) : (
+          <>
+            <Lock className="w-4 h-4" />
+            End Event
+          </>
+        )}
+      </button>
+
+      <ConfirmDialog
+        isOpen={showEndConfirm}
+        title="End this event?"
+        message="This action cannot be undone. All data will remain visible but no new rounds can be generated."
+        confirmLabel="End Event"
+        onConfirm={handleEndEventConfirm}
+        onCancel={() => setShowEndConfirm(false)}
+        isLoading={endEvent.isPending}
+      />
     </div>
   )
 }

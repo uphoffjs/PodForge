@@ -18,6 +18,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { RoundDisplay } from '@/components/RoundDisplay'
 import { AdminControls } from '@/components/AdminControls'
 import { AdminPassphraseModal } from '@/components/AdminPassphraseModal'
+import { PreviousRounds } from '@/components/PreviousRounds'
 
 export function EventPage() {
   const { eventId } = useParams()
@@ -258,12 +259,23 @@ export function EventPage() {
         />
       )}
 
+      {/* Previous rounds */}
+      <PreviousRounds
+        eventId={eventId}
+        currentRoundNumber={currentRound?.round_number ?? null}
+        currentPlayerId={currentPlayerId}
+      />
+
       {/* Player list */}
       <div className="w-full max-w-lg mb-6 p-4 bg-surface-raised border border-border rounded-xl">
         <PlayerList
           players={players ?? []}
           currentPlayerId={currentPlayerId}
           newPlayerIds={newPlayerIds}
+          isAdmin={isAdmin && !isEventEnded}
+          eventId={eventId}
+          passphrase={passphrase}
+          onPassphraseNeeded={handlePassphraseNeeded}
         />
       </div>
 
