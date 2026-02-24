@@ -34,10 +34,10 @@ Commander Pod Pairer goes from zero to deployed in four phases following the har
 **Plans**: 4 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Database schema (rounds/pods/pod_players), types, React Query hooks, Realtime updates
-- [ ] 02-02-PLAN.md — Pod generation algorithm (TDD): greedy opponent avoidance, bye rotation, seat randomization
-- [ ] 02-03-PLAN.md — Generate round flow + pod display UI (AdminControls, PodCard, RoundDisplay)
-- [ ] 02-04-PLAN.md — Admin player management (remove/reactivate), end event, previous rounds history
+- [x] 02-01-PLAN.md — Database schema (rounds/pods/pod_players), types, React Query hooks, Realtime updates
+- [x] 02-02-PLAN.md — Pod generation algorithm (TDD): greedy opponent avoidance, bye rotation, seat randomization
+- [x] 02-03-PLAN.md — Generate round flow + pod display UI (AdminControls, PodCard, RoundDisplay)
+- [x] 02-04-PLAN.md — Admin player management (remove/reactivate), end event, previous rounds history
 
 ### Phase 3: Timer System
 **Goal**: Admin can start, pause, resume, extend, and cancel a round timer that all players see counting down in real time with visual urgency cues and browser notifications at zero
@@ -79,6 +79,6 @@ Plans:
 | 1.2 Audit Bug Fixes | v1.0 | 3/3 | Complete | 2026-02-23 |
 | 1.3 Missing Coverage + Verification | v1.0 | 2/2 | Complete | 2026-02-23 |
 | 1.4 Sync Unit Tests | v1.0 | 1/1 | Complete | 2026-02-24 |
-| 2. Pod Generation and Admin Controls | v2.0 | 0/4 | Planned | - |
+| 2. Pod Generation and Admin Controls | v2.0 | 4/4 | Complete | 2026-02-24 |
 | 3. Timer System | — | 0/2 | Not started | - |
 | 4. Event Polish, Testing, and Deployment | — | 0/2 | Not started | - |

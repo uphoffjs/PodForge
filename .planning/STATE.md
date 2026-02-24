@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone -- who they're playing with, what seat they're in, and how much time they have.
-**Current focus:** v2.0 Complete App — Phase 2 in progress
+**Current focus:** v2.0 Complete App — Phase 2 complete
 
 ## Current Position
 
-Phase: 02-pod-generation-and-admin-controls (Plan 3 of 4 complete)
-Plan: 02-03 complete, next: 02-04
-Status: Executing
-Last activity: 2026-02-24 — Completed 02-03 admin controls and pod display UI
+Phase: 02-pod-generation-and-admin-controls (Plan 4 of 4 complete)
+Plan: 02-04 complete, phase complete
+Status: Phase Complete
+Last activity: 2026-02-24 — Completed 02-04 admin player management, end event, and previous rounds
 
-Progress: v2.0 Phase 2 ███████░░░ 75% (3/4 plans)
+Progress: v2.0 Phase 2 ██████████ 100% (4/4 plans)
 
 ## Performance Metrics
 
@@ -36,6 +36,8 @@ Progress: v2.0 Phase 2 ███████░░░ 75% (3/4 plans)
 - 02-03: AdminControls builds round history from latest round's pods only (sufficient for greedy algorithm)
 - 02-03: PodCard uses 4-color cycling (blue, green, amber, red) for pod border colors
 - 02-03: Event ended state hides interactive elements but preserves pods and player list for historical viewing
+- 02-04: AdminPlayerActions injected as ReactNode prop to keep PlayerItem/PlayerList generic and decoupled from admin logic
+- 02-04: PreviousRounds lazy-fetches pod data only when a section is expanded (usePods called with roundId on expand)
 
 ### Roadmap Evolution
 
@@ -52,5 +54,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 02-03-PLAN.md — admin controls & pod display UI (4 components, EventPage integration). Next: 02-04.
+Stopped at: Completed 02-04-PLAN.md — admin player management, end event, previous rounds. Phase 02 complete.
 Resume file: none
