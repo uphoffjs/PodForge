@@ -2,18 +2,33 @@ import { useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import type { Player } from '@/types/database'
 import { PlayerItem } from '@/components/PlayerItem'
+import { AdminPlayerActions } from '@/components/AdminPlayerActions'
 
 type PlayerListProps = {
   players: Player[]
   currentPlayerId: string | null
   newPlayerIds?: Set<string>
+  isAdmin?: boolean
+  eventId?: string
+  passphrase?: string | null
+  onPassphraseNeeded?: () => void
 }
 
-export function PlayerList({ players, currentPlayerId, newPlayerIds }: PlayerListProps) {
+export function PlayerList({
+  players,
+  currentPlayerId,
+  newPlayerIds,
+  isAdmin,
+  eventId,
+  passphrase,
+  onPassphraseNeeded,
+}: PlayerListProps) {
   const [showDropped, setShowDropped] = useState(false)
 
   const activePlayers = players.filter((p) => p.status === 'active')
   const droppedPlayers = players.filter((p) => p.status === 'dropped')
+
+  const canShowAdminActions = isAdmin && eventId && onPassphraseNeeded
 
   if (players.length === 0) {
     return (
@@ -41,6 +56,18 @@ export function PlayerList({ players, currentPlayerId, newPlayerIds }: PlayerLis
             player={player}
             isSelf={player.id === currentPlayerId}
             isNew={newPlayerIds?.has(player.id) ?? false}
+            adminActions={
+              canShowAdminActions ? (
+                <AdminPlayerActions
+                  eventId={eventId}
+                  playerId={player.id}
+                  playerName={player.name}
+                  playerStatus={player.status}
+                  passphrase={passphrase ?? null}
+                  onPassphraseNeeded={onPassphraseNeeded}
+                />
+              ) : undefined
+            }
           />
         ))}
       </div>
@@ -68,6 +95,18 @@ export function PlayerList({ players, currentPlayerId, newPlayerIds }: PlayerLis
                   key={player.id}
                   player={player}
                   isSelf={player.id === currentPlayerId}
+                  adminActions={
+                    canShowAdminActions ? (
+                      <AdminPlayerActions
+                        eventId={eventId}
+                        playerId={player.id}
+                        playerName={player.name}
+                        playerStatus={player.status}
+                        passphrase={passphrase ?? null}
+                        onPassphraseNeeded={onPassphraseNeeded}
+                      />
+                    ) : undefined
+                  }
                 />
               ))}
             </div>

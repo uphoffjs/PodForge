@@ -1,5 +1,6 @@
+import React from 'react'
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PlayerList } from './PlayerList'
 import type { Player } from '@/types/database'
@@ -11,10 +12,12 @@ vi.mock('@/components/PlayerItem', () => ({
     player,
     isSelf,
     isNew,
+    adminActions,
   }: {
     player: Player
     isSelf: boolean
     isNew?: boolean
+    adminActions?: React.ReactNode
   }) => (
     <div
       data-testid={`player-item-${player.id}`}
@@ -23,7 +26,23 @@ vi.mock('@/components/PlayerItem', () => ({
       data-status={player.status}
     >
       {player.name}
+      {adminActions}
     </div>
+  ),
+}))
+
+// Mock AdminPlayerActions to avoid supabase import chain in unit tests
+vi.mock('@/components/AdminPlayerActions', () => ({
+  AdminPlayerActions: ({
+    playerId,
+    playerStatus,
+  }: {
+    playerId: string
+    playerStatus: string
+  }) => (
+    <button data-testid={`admin-action-${playerId}`} data-status={playerStatus}>
+      {playerStatus === 'active' ? 'Remove' : 'Reactivate'}
+    </button>
   ),
 }))
 
