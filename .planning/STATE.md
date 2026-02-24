@@ -44,5 +44,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Stryker mutation testing — 92.22% baseline, 34 survivors identified, need to fix all. Then continue v2.0 requirements + roadmap.
-Resume file: .planning/PAUSE-CONTEXT.md
+Stopped at: Stryker mutation fixes in progress — wrote 12 new tests for EventPage.tsx + LandingPage.tsx (all pass). Need to run Stryker to verify kills, then fix PlayerList (3) and 6 single-survivor files.
+Resume file: .planning/.continue-here.md
