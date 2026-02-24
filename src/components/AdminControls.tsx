@@ -5,7 +5,8 @@ import { generatePods, type PlayerInfo, type RoundHistory } from '@/lib/pod-algo
 import { useGenerateRound, type PodAssignment } from '@/hooks/useGenerateRound'
 import { useEndEvent } from '@/hooks/useEndEvent'
 import { useRounds } from '@/hooks/useRounds'
-import { usePods, type PodWithPlayers } from '@/hooks/usePods'
+import { useAllRoundsPods } from '@/hooks/useAllRoundsPods'
+import type { PodWithPlayers } from '@/hooks/usePods'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import type { Player, Round } from '@/types/database'
 
@@ -52,10 +53,9 @@ export function AdminControls({
   const endEvent = useEndEvent(eventId)
   const { data: rounds } = useRounds(eventId)
 
-  // Fetch pods for all existing rounds to build history
-  // We use the most recent round to indicate we have data loaded
-  const latestRound = rounds?.[0]
-  const { data: latestPods } = usePods(latestRound?.id)
+  // Fetch pods for ALL existing rounds to build complete opponent history
+  const roundIds = rounds?.map((r) => r.id) ?? []
+  const { data: allPods } = useAllRoundsPods(eventId, roundIds)
 
   if (!isAdmin) return null
 
@@ -74,22 +74,17 @@ export function AdminControls({
       .filter((p) => p.status === 'active')
       .map((p) => ({ id: p.id, name: p.name }))
 
-    // Build round history from existing rounds
-    // For simplicity, we build history from available data
-    // The algorithm primarily needs previous round pods to avoid repeat opponents
+    // Build round history from ALL existing rounds for complete opponent avoidance
     const previousRounds: RoundHistory[] = []
-    if (rounds && latestPods) {
-      // Build a map of round pods -- we have the latest round's pods
-      // For a complete history we'd need all rounds' pods, but the greedy algorithm
-      // works best with the most recent data
+    if (rounds && allPods) {
+      // Group pods by round_id
       const podsByRound = new Map<string, PodWithPlayers[]>()
-      if (latestRound) {
-        podsByRound.set(latestRound.id, latestPods)
+      for (const pod of allPods) {
+        const existing = podsByRound.get(pod.round_id) ?? []
+        existing.push(pod)
+        podsByRound.set(pod.round_id, existing)
       }
-      previousRounds.push(...buildRoundHistoryFromData(
-        latestRound ? [latestRound] : [],
-        podsByRound
-      ))
+      previousRounds.push(...buildRoundHistoryFromData(rounds, podsByRound))
     }
 
     try {
