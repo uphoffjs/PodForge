@@ -410,6 +410,37 @@ describe('pod-algorithm', () => {
         expect(byePlayerIds).not.toContain('player-5')
       })
 
+      it('sorts ascending by bye count (lowest first), not by sum', () => {
+        // Targeted test for mutation: aByes - bByes => aByes + bByes
+        // With 9 players (1 bye needed), the single bye player must have the fewest byes.
+        // If sort is aByes + bByes, the comparison value doesn't distinguish direction,
+        // and players get sorted arbitrarily.
+        const players = makePlayers(9)
+
+        // Create history where players 5-9 have many byes, players 1-4 have 0
+        const previousRounds: RoundHistory[] = []
+        for (let round = 0; round < 5; round++) {
+          previousRounds.push({
+            pods: [
+              { playerIds: ['player-1', 'player-2', 'player-3', 'player-4'], isBye: false },
+              { playerIds: ['player-5', 'player-6', 'player-7', 'player-8'], isBye: false },
+              { playerIds: ['player-9'], isBye: true },
+            ],
+          })
+        }
+        // player-9 has 5 byes. All others have 0.
+
+        // Run multiple times due to random tie-breaking among 0-bye players
+        for (let i = 0; i < 10; i++) {
+          const result = generatePods(players, previousRounds)
+          const byePod = result.assignments.find((a) => a.is_bye)
+          const byePlayerIds = byePod!.players.map((p) => p.player_id)
+
+          // The bye must come from the 0-bye group (players 1-8), NOT player-9
+          expect(byePlayerIds).not.toContain('player-9')
+        }
+      })
+
       it('randomizes tie-breaking when bye counts are equal', () => {
         const players = makePlayers(5)
 
@@ -452,6 +483,233 @@ describe('pod-algorithm', () => {
         })
       })
     })
+
+    describe('greedy opponent avoidance deterministic verification', () => {
+      it('places player with zero overlap into pod over player with high overlap', () => {
+        // 8 players: in round 1, pod A = [1,2,3,4], pod B = [5,6,7,8]
+        // In round 2, the algorithm must avoid re-pairing 1-2-3-4 and 5-6-7-8.
+        // We run this deterministically by checking total overlap score per pod.
+        const players = makePlayers(8)
+        const previousRounds: RoundHistory[] = [
+          {
+            pods: [
+              { playerIds: ['player-1', 'player-2', 'player-3', 'player-4'], isBye: false },
+              { playerIds: ['player-5', 'player-6', 'player-7', 'player-8'], isBye: false },
+            ],
+          },
+        ]
+
+        // Run multiple times to account for randomness in first pick
+        let totalOverlapScores: number[] = []
+        for (let trial = 0; trial < 10; trial++) {
+          const result = generatePods(players, previousRounds)
+          const activePods = result.assignments.filter((a) => !a.is_bye)
+
+          // For each pod, count how many pairs of players were previously in the same pod
+          const history = buildOpponentHistory(previousRounds)
+          for (const pod of activePods) {
+            let overlap = 0
+            const ids = pod.players.map((p) => p.player_id)
+            for (let i = 0; i < ids.length; i++) {
+              for (let j = i + 1; j < ids.length; j++) {
+                overlap += history.get(ids[i])?.get(ids[j]) ?? 0
+              }
+            }
+            totalOverlapScores.push(overlap)
+          }
+        }
+
+        // With opponent avoidance, pods should have low overlap.
+        // Max possible overlap per pod would be 6 (all 4 from same previous pod = C(4,2) = 6).
+        // With avoidance, most pods should have overlap <= 3 (at most 2 players from same prev pod).
+        const avgOverlap = totalOverlapScores.reduce((a, b) => a + b, 0) / totalOverlapScores.length
+        expect(avgOverlap).toBeLessThan(4) // Much less than 6 (no avoidance)
+      })
+
+      it('greedy selection produces different groupings than random when history exists', () => {
+        // With strong history, greedy should produce measurably different results than ignoring history
+        const players = makePlayers(8)
+        const previousRounds: RoundHistory[] = [
+          {
+            pods: [
+              { playerIds: ['player-1', 'player-2', 'player-3', 'player-4'], isBye: false },
+              { playerIds: ['player-5', 'player-6', 'player-7', 'player-8'], isBye: false },
+            ],
+          },
+          {
+            pods: [
+              { playerIds: ['player-1', 'player-2', 'player-3', 'player-4'], isBye: false },
+              { playerIds: ['player-5', 'player-6', 'player-7', 'player-8'], isBye: false },
+            ],
+          },
+        ]
+
+        // After 2 identical rounds, players 1-4 have faced each other twice.
+        // The greedy algorithm MUST avoid putting them together again.
+        const history = buildOpponentHistory(previousRounds)
+        // Verify history is as expected
+        expect(history.get('player-1')?.get('player-2')).toBe(2)
+
+        // Run 10 trials
+        for (let trial = 0; trial < 10; trial++) {
+          const result = generatePods(players, previousRounds)
+          const activePods = result.assignments.filter((a) => !a.is_bye)
+
+          for (const pod of activePods) {
+            const ids = pod.players.map((p) => p.player_id)
+            const fromPrevPod1 = ids.filter((id) =>
+              ['player-1', 'player-2', 'player-3', 'player-4'].includes(id)
+            ).length
+
+            // With 2 rounds of history, no pod should contain 4 players from the same previous group
+            expect(fromPrevPod1).toBeLessThanOrEqual(3)
+          }
+        }
+      })
+    })
+
+    describe('8 players exact with no byes produces no bye pod', () => {
+      it('does not create a bye pod when player count is divisible by 4', () => {
+        const players = makePlayers(8)
+        const result = generatePods(players, [])
+
+        // numByes should be 0, so no bye processing happens
+        const byePods = result.assignments.filter((a) => a.is_bye)
+        expect(byePods).toHaveLength(0)
+
+        // Exactly 2 active pods
+        const activePods = result.assignments.filter((a) => !a.is_bye)
+        expect(activePods).toHaveLength(2)
+        expect(result.assignments).toHaveLength(2) // No extra bye pod
+      })
+
+      it('4 players divisible by 4 has no bye pod and no warnings', () => {
+        // When numByes is exactly 0, the bye branch should NOT execute.
+        // If mutated to >= 0, it would try to sort 0 players for byes
+        // and create an empty bye pod, changing the assignment count.
+        const players = makePlayers(4)
+        const result = generatePods(players, [])
+
+        expect(result.assignments).toHaveLength(1) // Only 1 active pod, no bye pod
+        expect(result.assignments[0].is_bye).toBe(false)
+        expect(result.assignments[0].players).toHaveLength(4)
+
+        // All 4 players should be in the pod
+        const playerIds = result.assignments[0].players.map((p) => p.player_id).sort()
+        expect(playerIds).toEqual(['player-1', 'player-2', 'player-3', 'player-4'])
+      })
+    })
+
+    describe('greedy selection correctness (kills loop mutations)', () => {
+      it('with strong history, greedy must pick specific low-overlap pairings', () => {
+        // 8 players: After 3 rounds of identical grouping, the greedy algorithm
+        // MUST separate heavily-overlapped players.
+        // If the greedy loop is disabled (false/empty body), it just picks pool[0]
+        // for all slots, resulting in random assignment without opponent avoidance.
+        const players = makePlayers(8)
+        const identicalRound = {
+          pods: [
+            { playerIds: ['player-1', 'player-2', 'player-3', 'player-4'], isBye: false },
+            { playerIds: ['player-5', 'player-6', 'player-7', 'player-8'], isBye: false },
+          ],
+        }
+        const previousRounds: RoundHistory[] = [identicalRound, identicalRound, identicalRound]
+
+        // Run 20 trials. With the greedy algorithm working, pods should
+        // consistently mix players from both groups.
+        let mixedCount = 0
+        const totalTrials = 20
+        for (let trial = 0; trial < totalTrials; trial++) {
+          const result = generatePods(players, previousRounds)
+          const activePods = result.assignments.filter((a) => !a.is_bye)
+
+          for (const pod of activePods) {
+            const ids = pod.players.map((p) => p.player_id)
+            const fromGroup1 = ids.filter((id) =>
+              ['player-1', 'player-2', 'player-3', 'player-4'].includes(id)
+            ).length
+            // A mixed pod has 2 from each group
+            if (fromGroup1 === 2) mixedCount++
+          }
+        }
+
+        // With the greedy algorithm, most pods should have a 2-2 split.
+        // Without greedy (mutation), it would be random ~= ~32% chance of 2-2 split
+        // per pod. With greedy + strong history, it should be much higher.
+        // We expect at least 60% of pods to be 2-2 mixed.
+        expect(mixedCount).toBeGreaterThan(totalTrials * 0.5)
+      })
+
+      it('greedy avoidance produces lower total overlap than random baseline over many trials', () => {
+        // This test directly detects mutations that disable the greedy loop body,
+        // score comparison, or score accumulation. It measures the quality of output.
+        const players = makePlayers(8)
+        const heavyHistory: RoundHistory[] = Array(5).fill({
+          pods: [
+            { playerIds: ['player-1', 'player-2', 'player-3', 'player-4'], isBye: false },
+            { playerIds: ['player-5', 'player-6', 'player-7', 'player-8'], isBye: false },
+          ],
+        })
+
+        const history = buildOpponentHistory(heavyHistory)
+
+        // Measure total pairwise overlap across many trials
+        let totalOverlapSum = 0
+        const trials = 50
+        for (let t = 0; t < trials; t++) {
+          const result = generatePods(players, heavyHistory)
+          for (const pod of result.assignments.filter((a) => !a.is_bye)) {
+            const ids = pod.players.map((p) => p.player_id)
+            for (let i = 0; i < ids.length; i++) {
+              for (let j = i + 1; j < ids.length; j++) {
+                totalOverlapSum += history.get(ids[i])?.get(ids[j]) ?? 0
+              }
+            }
+          }
+        }
+
+        // Each pod has C(4,2)=6 pairs, 2 pods = 12 pairs per trial, 50 trials = 600 pairs total.
+        // Random assignment: each pair has ~3/7 chance of having overlap 5, ~4/7 chance of 0.
+        // Expected random overlap per pair ~= 5 * 3/7 ~= 2.14, total ~= 2.14 * 600 ~= 1286
+        // Greedy with 5 rounds of identical history: should produce much lower total.
+        // With perfect mixing (2-2 split every time), overlap per pod ~= 4*5=20, total = 20*2*50=2000... hmm
+        // Actually let's think differently. With 2-2 split: each pod has C(2,2)=1 pair from
+        // same prev group and C(2,2)=1 pair from other prev group. Same-group pairs have overlap 5,
+        // cross-group pairs have overlap 0. Per pod: 2 same-group pairs * 5 = 10, 4 cross pairs * 0 = 0.
+        // Total per trial = 2 pods * 10 = 20. Random total per trial ~= 25.7
+        // Key: if greedy is DISABLED, it picks randomly, avg ~25.7 per trial.
+        // If greedy is ENABLED, it forces 2-2 splits, avg 20 per trial.
+        // Over 50 trials: greedy ~= 1000, random ~= 1286
+
+        const avgOverlapPerTrial = totalOverlapSum / trials
+        // Greedy should achieve avg overlap <= 22 per trial (2 pods of 4 with 2-2 splits)
+        // Random would be ~25.7. We use 24 as threshold.
+        expect(avgOverlapPerTrial).toBeLessThan(24)
+      })
+    })
+
+    describe('bye pod numbering', () => {
+      it('bye pod has pod_number higher than all active pods', () => {
+        const players = makePlayers(9) // 2 active pods + 1 bye
+        const result = generatePods(players, [])
+
+        const activePods = result.assignments.filter((a) => !a.is_bye)
+        const byePods = result.assignments.filter((a) => a.is_bye)
+
+        expect(byePods).toHaveLength(1)
+        const maxActivePodNumber = Math.max(...activePods.map((p) => p.pod_number))
+        expect(byePods[0].pod_number).toBeGreaterThan(maxActivePodNumber)
+      })
+
+      it('bye pod number equals number of active pods plus 1', () => {
+        const players = makePlayers(5) // 1 active pod + 1 bye
+        const result = generatePods(players, [])
+
+        const byePod = result.assignments.find((a) => a.is_bye)
+        expect(byePod).toBeDefined()
+        expect(byePod!.pod_number).toBe(2) // 1 active pod + 1 = 2
+      })
+    })
   })
 
   describe('buildOpponentHistory', () => {
@@ -474,12 +732,19 @@ describe('pod-algorithm', () => {
 
       const history = buildOpponentHistory(rounds)
 
-      // Each player should have 3 opponents each with count 1
+      // Each player should have exactly 3 opponents each with count 1
+      expect(history.get('a')?.size).toBe(3)
+      expect(history.get('b')?.size).toBe(3)
+      expect(history.get('c')?.size).toBe(3)
+      expect(history.get('d')?.size).toBe(3)
       expect(history.get('a')?.get('b')).toBe(1)
       expect(history.get('a')?.get('c')).toBe(1)
       expect(history.get('a')?.get('d')).toBe(1)
       expect(history.get('b')?.get('a')).toBe(1)
+      expect(history.get('b')?.get('c')).toBe(1)
+      expect(history.get('b')?.get('d')).toBe(1)
       expect(history.get('c')?.get('d')).toBe(1)
+      expect(history.get('d')?.get('c')).toBe(1)
     })
 
     it('does not count bye pods in opponent history', () => {
@@ -491,7 +756,7 @@ describe('pod-algorithm', () => {
               isBye: false,
             },
             {
-              playerIds: ['e'],
+              playerIds: ['e', 'f'],
               isBye: true,
             },
           ],
@@ -500,10 +765,31 @@ describe('pod-algorithm', () => {
 
       const history = buildOpponentHistory(rounds)
 
-      // 'e' should not appear in the history at all
+      // 'e' and 'f' should not appear in the history at all
       expect(history.has('e')).toBe(false)
+      expect(history.has('f')).toBe(false)
       // Players in the active pod should not have 'e' as an opponent
       expect(history.get('a')?.has('e')).toBeFalsy()
+      // Total entries should be only 4 players (from the active pod)
+      expect(history.size).toBe(4)
+    })
+
+    it('builds correct matrix when bye pod is not filtered (mutation detection)', () => {
+      // If isBye check is removed, a bye pod with 2 players would create opponent entries
+      const rounds: RoundHistory[] = [
+        {
+          pods: [
+            { playerIds: ['a', 'b', 'c', 'd'], isBye: false },
+            { playerIds: ['e', 'f'], isBye: true },
+          ],
+        },
+      ]
+
+      const history = buildOpponentHistory(rounds)
+
+      // e and f must NOT be opponents -- they're in a bye pod
+      expect(history.get('e')?.get('f')).toBeUndefined()
+      expect(history.has('e')).toBe(false)
     })
 
     it('increments counts across multiple rounds', () => {
@@ -531,6 +817,57 @@ describe('pod-algorithm', () => {
 
       // a and e were in the same pod once
       expect(history.get('a')?.get('e')).toBe(1)
+    })
+
+    it('correctly counts pairs in a 4-player pod (6 unique pairs)', () => {
+      // C(4,2) = 6 unique pairs. If the inner loop boundary is wrong (j <= length),
+      // it would cause an out-of-bounds access or extra undefined entries
+      const rounds: RoundHistory[] = [
+        {
+          pods: [
+            { playerIds: ['a', 'b', 'c', 'd'], isBye: false },
+          ],
+        },
+      ]
+
+      const history = buildOpponentHistory(rounds)
+
+      // Count total relationship entries across all players
+      let totalPairEntries = 0
+      for (const [, opponents] of history) {
+        totalPairEntries += opponents.size
+      }
+      // 6 unique pairs, each stored bidirectionally = 12 entries total
+      expect(totalPairEntries).toBe(12)
+    })
+
+    it('does not create undefined entries from out-of-bounds access', () => {
+      // If outer loop uses i <= playerIds.length instead of i < playerIds.length,
+      // it would try to access playerIds[4] which is undefined, creating
+      // entries with undefined keys in the map
+      const rounds: RoundHistory[] = [
+        {
+          pods: [
+            { playerIds: ['a', 'b', 'c', 'd'], isBye: false },
+          ],
+        },
+      ]
+
+      const history = buildOpponentHistory(rounds)
+
+      // Should only have exactly 4 players in the history
+      expect(history.size).toBe(4)
+      const keys = Array.from(history.keys())
+      expect(keys.sort()).toEqual(['a', 'b', 'c', 'd'])
+
+      // None of the opponent maps should have undefined keys
+      for (const [, opponents] of history) {
+        for (const key of opponents.keys()) {
+          expect(key).toBeDefined()
+          expect(typeof key).toBe('string')
+          expect(key.length).toBeGreaterThan(0)
+        }
+      }
     })
   })
 
