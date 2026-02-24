@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone -- who they're playing with, what seat they're in, and how much time they have.
-**Current focus:** Defining requirements for v2.0 Complete App
+**Current focus:** v2.0 Complete App — Phase 2 in progress
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-24 — Milestone v2.0 started
+Phase: 02-pod-generation-and-admin-controls (Plan 1 of 4 complete)
+Plan: 02-01 complete, next: 02-02
+Status: Executing
+Last activity: 2026-02-24 — Completed 02-01 data foundation
 
-Progress: v2.0 ░░░░░░░░░░ 0%
+Progress: v2.0 Phase 2 ██░░░░░░░░ 25% (1/4 plans)
 
 ## Performance Metrics
 
@@ -27,7 +27,9 @@ Progress: v2.0 ░░░░░░░░░░ 0%
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
+- 02-01: Admin RPCs validate passphrase inline via crypt() with RAISE EXCEPTION (not calling validate_passphrase helper)
+- 02-01: generate_round accepts pre-computed JSONB pod assignments, keeping algorithm client-side
+- 02-01: Updated players RLS policy to allow both 'active' and 'dropped' status changes for admin reactivation
 
 ### Roadmap Evolution
 
@@ -44,5 +46,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Stryker mutation fixes in progress — wrote 12 new tests for EventPage.tsx + LandingPage.tsx (all pass). Need to run Stryker to verify kills, then fix PlayerList (3) and 6 single-survivor files.
-Resume file: .planning/.continue-here.md
+Stopped at: Completed 02-01-PLAN.md — data foundation (schema, types, hooks, Realtime). Next: 02-02.
+Resume file: none
