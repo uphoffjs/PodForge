@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone -- who they're playing with, what seat they're in, and how much time they have.
-**Current focus:** v1.0 shipped. Planning next milestone — Phase 2: Pod Generation and Admin Controls
+**Current focus:** Defining requirements for v2.0 Complete App
 
 ## Current Position
 
-Phase: v1.0 complete (5 phases shipped)
+Phase: Not started (defining requirements)
 Plan: —
-Status: Milestone Complete
-Last activity: 2026-02-24 -- Milestone v1.0 archived
+Status: Defining requirements
+Last activity: 2026-02-24 — Milestone v2.0 started
 
-Progress: v1.0 ████████████████████ 100% shipped | Phases 2-4 not started
+Progress: v2.0 ░░░░░░░░░░ 0%
 
 ## Performance Metrics
 
@@ -31,8 +31,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Roadmap Evolution
 
-- Phase 1.1 inserted after Phase 1: Cypress E2E Test Infrastructure (URGENT)
-- Phases 1.2, 1.3, 1.4 inserted as gap closures from milestone audit
+- v1.0: Phase 1.1 inserted (Cypress E2E), Phases 1.2-1.4 inserted (gap closures)
 
 ### Pending Todos
 
@@ -40,10 +39,10 @@ None.
 
 ### Blockers/Concerns
 
-- 6-7 player pod assignment UX gap: 6 players = 1 pod + 2 byes (poor), 7 = 1 pod + 3 byes (terrible). Needs product decision before Phase 2 planning.
+- 6-7 player pod assignment resolved: warn admin, proceed anyway
 
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Milestone v1.0 archived. Next: /gsd:new-milestone
+Stopped at: Starting v2.0 milestone — defining requirements
 Resume file: None

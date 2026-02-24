@@ -4,6 +4,17 @@
 
 A web app for casual Magic: The Gathering Commander playgroups to manage pod pairings during events. Players join via QR code or shareable link, see real-time pod assignments with seat order and round timers, and can self-drop. Admin actions (creating events, generating rounds, removing players) are protected behind a per-event passphrase. No user accounts or logins — just show up and play.
 
+## Current Milestone: v2.0 Complete App
+
+**Goal:** Deliver the full Commander Pod Pairer experience — pod generation with opponent avoidance, round timer with real-time sync, admin controls, event polish, and deployment.
+
+**Target features:**
+- Pod generation algorithm with greedy opponent avoidance and bye rotation
+- Admin controls: remove/reactivate players, end events
+- Server-authoritative round timer with pause/resume and browser notifications
+- Event info bar with QR code, share link, player count, round number
+- Vercel + Supabase deployment
+
 ## Core Value
 
 When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone — who they're playing with, what seat they're in, and how much time they have. Fast, glanceable, no confusion.
@@ -63,7 +74,7 @@ Tech stack: React 19 (Vite), Supabase (Postgres + Realtime), Tailwind CSS v4, Ty
 Test coverage: 226 unit tests (Vitest), 44 Cypress E2E tests, 15 visual regression baselines, 96.15% Stryker mutation score.
 7 tech debt items documented (orphaned validate_passphrase RPC, unused hook exports, Realtime E2E gap, eslint-disable comments, deferred pod unit tests, unused Cypress fixtures).
 
-Known blocker for Phase 2: 6-7 player pod assignment UX gap needs product decision (allow 3-player pods, warn admin, or set minimum above 7).
+6-7 player pod assignment UX resolved: warn admin about high bye count, proceed anyway. No 3-player pods or minimum player restriction.
 
 ## Constraints
 
@@ -90,6 +101,7 @@ Known blocker for Phase 2: 6-7 player pod assignment UX gap needs product decisi
 | eslint-disable with justification for set-state-in-effect | useRef approach blocked by react-hooks/refs rule; documented justification | ⚠️ Revisit — 3 suppressed warnings |
 | Cypress spec files use .js extension | Matches specPattern and ESLint scoping | ✓ Good |
 | data-testid hierarchical kebab-case naming | component-element pattern for consistency | ✓ Good |
+| 6-7 player pod: warn admin, proceed anyway | Avoids complexity of 3-player pods; admin has context to decide | — Pending (Phase 2) |
 
 ---
-*Last updated: 2026-02-24 after v1.0 milestone*
+*Last updated: 2026-02-24 after v2.0 milestone started*
