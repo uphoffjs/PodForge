@@ -31,12 +31,13 @@ Commander Pod Pairer goes from zero to deployed in four phases following the har
   3. Each pod displays players with randomized seat order (1st-4th); bye pod is visually distinct with no seat order
   4. Round generation is blocked with a clear error when fewer than 4 active players
   5. Previous rounds are visible in collapsible sections (most recent first) and ended events become read-only
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
-- [ ] 02-03: TBD
+- [ ] 02-01-PLAN.md — Database schema (rounds/pods/pod_players), types, React Query hooks, Realtime updates
+- [ ] 02-02-PLAN.md — Pod generation algorithm (TDD): greedy opponent avoidance, bye rotation, seat randomization
+- [ ] 02-03-PLAN.md — Generate round flow + pod display UI (AdminControls, PodCard, RoundDisplay)
+- [ ] 02-04-PLAN.md — Admin player management (remove/reactivate), end event, previous rounds history
 
 ### Phase 3: Timer System
 **Goal**: Admin can start, pause, resume, extend, and cancel a round timer that all players see counting down in real time with visual urgency cues and browser notifications at zero
@@ -78,6 +79,6 @@ Plans:
 | 1.2 Audit Bug Fixes | v1.0 | 3/3 | Complete | 2026-02-23 |
 | 1.3 Missing Coverage + Verification | v1.0 | 2/2 | Complete | 2026-02-23 |
 | 1.4 Sync Unit Tests | v1.0 | 1/1 | Complete | 2026-02-24 |
-| 2. Pod Generation and Admin Controls | — | 0/3 | Not started | - |
+| 2. Pod Generation and Admin Controls | v2.0 | 0/4 | Planned | - |
 | 3. Timer System | — | 0/2 | Not started | - |
 | 4. Event Polish, Testing, and Deployment | — | 0/2 | Not started | - |
