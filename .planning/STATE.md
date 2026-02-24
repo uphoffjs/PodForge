@@ -44,5 +44,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Starting v2.0 milestone — defining requirements
-Resume file: None
+Stopped at: Stryker mutation testing — 92.22% baseline, 34 survivors identified, need to fix all. Then continue v2.0 requirements + roadmap.
+Resume file: .planning/PAUSE-CONTEXT.md
