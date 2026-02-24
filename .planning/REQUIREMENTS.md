@@ -90,7 +90,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status | Notes |
 |-------------|-------|--------|-------|
 | EVNT-01 | Phase 1 | Complete | Audit: partial (test cmd uses wrong params, fixed in 1.2) |
-| EVNT-02 | Phase 1, 1.2 | Complete | Audit: partial (race condition fixed in 1.2, verified in 1.3) |
+| EVNT-02 | Phase 1, 1.2, 1.4 | Complete | Audit: partial (race condition fixed in 1.2, verified in 1.3, unit tests synced in 1.4) |
 | EVNT-03 | Phase 1 | Complete | Audit: partial (visual baselines fixed in 1.2, verified in 1.3) |
 | EVNT-04 | Phase 2 | Pending | |
 | EVNT-05 | Phase 4 | Pending | |
@@ -98,7 +98,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PLYR-02 | Phase 1 | Complete | Audit: partial (verified in 1.3) |
 | PLYR-03 | Phase 2 | Pending | |
 | PLYR-04 | Phase 2 | Pending | |
-| PLYR-05 | Phase 1, 1.2 | Complete | Audit: partial (duplicate testid fixed in 1.2, verified in 1.3) |
+| PLYR-05 | Phase 1, 1.2, 1.4 | Complete | Audit: partial (duplicate testid fixed in 1.2, verified in 1.3, unit tests synced in 1.4) |
 | PODG-01 | Phase 2 | Pending | |
 | PODG-02 | Phase 2 | Pending | |
 | PODG-03 | Phase 2 | Pending | |
@@ -115,7 +115,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFR-01 | Phase 1 | Complete | Audit: partial (unit coverage only, verified in 1.3) |
 | INFR-02 | Phase 1, 1.2 | Complete | Audit: partial (createRealEvent fixed in 1.2, verified in 1.3) |
 | INFR-03 | Phase 1 | Complete | Audit: partial (visual baselines fixed in 1.2, verified in 1.3) |
-| INFR-04 | Phase 1.1, 1.2, 1.3 | Complete (partial scope) | Verified in 1.3: E2E + unit test infrastructure complete; pod unit tests deferred to Phase 4 |
+| INFR-04 | Phase 1.1, 1.2, 1.3, 1.4 | Complete (partial scope) | Verified in 1.3: E2E + unit test infrastructure complete; 8 failing unit tests fixed in 1.4; pod unit tests deferred to Phase 4 |
 | INFR-05 | Phase 4 | Pending | |
 
 **Coverage:**
@@ -125,4 +125,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-20*
-*Last updated: 2026-02-23 after Phase 1.3 verification completion*
+*Last updated: 2026-02-24 after gap closure Phase 1.4 added*
