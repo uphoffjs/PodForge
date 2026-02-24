@@ -106,10 +106,10 @@ Plans:
   3. Full unit test suite passes: 226/226 (zero failures)
   4. Full Cypress E2E suite still passes: 44/44 (no regressions)
 
-**Plans:** TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 01.4-01-PLAN.md -- Fix stale unit test assertions and testid queries
+- [ ] 01.4-01-PLAN.md -- Fix stale unit test assertions and testid queries, verify full suite green
 
 ### Phase 2: Pod Generation and Admin Controls
 **Goal**: Admin can generate rounds of pods that minimize repeat opponents, manage players, and end events -- all gated behind the event passphrase
