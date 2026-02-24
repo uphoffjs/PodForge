@@ -21,6 +21,7 @@ const {
   mockUseEventChannel,
   mockUseVisibilityRefetch,
   mockUseDropPlayer,
+  mockUseCurrentRound,
 } = vi.hoisted(() => ({
   mockUseEvent: vi.fn(),
   mockUseEventPlayers: vi.fn(),
@@ -35,6 +36,7 @@ const {
   mockUseEventChannel: vi.fn(),
   mockUseVisibilityRefetch: vi.fn(),
   mockUseDropPlayer: vi.fn(),
+  mockUseCurrentRound: vi.fn(),
 }))
 
 // ---------------------------------------------------------------------------
@@ -66,6 +68,10 @@ vi.mock('@/hooks/useVisibilityRefetch', () => ({
 
 vi.mock('@/hooks/useDropPlayer', () => ({
   useDropPlayer: (...args: unknown[]) => mockUseDropPlayer(...args),
+}))
+
+vi.mock('@/hooks/useCurrentRound', () => ({
+  useCurrentRound: (...args: unknown[]) => mockUseCurrentRound(...args),
 }))
 
 vi.mock('@/lib/player-identity', () => ({
@@ -147,6 +153,45 @@ vi.mock('@/components/ConfirmDialog', () => ({
     ) : null,
 }))
 
+vi.mock('@/components/RoundDisplay', () => ({
+  RoundDisplay: ({ roundNumber }: { roundId: string; roundNumber: number; currentPlayerId: string | null }) => (
+    <div data-testid="round-display" data-round-number={roundNumber} />
+  ),
+}))
+
+vi.mock('@/components/AdminControls', () => ({
+  AdminControls: ({ onPassphraseNeeded }: { eventId: string; isAdmin: boolean; passphrase: string | null; onPassphraseNeeded: () => void; players: Player[]; isEventEnded: boolean }) => (
+    <div data-testid="admin-controls">
+      <button data-testid="mock-passphrase-needed" onClick={onPassphraseNeeded}>
+        Need Passphrase
+      </button>
+    </div>
+  ),
+}))
+
+vi.mock('@/components/AdminPassphraseModal', () => ({
+  AdminPassphraseModal: ({
+    isOpen,
+    onSubmit,
+    onCancel,
+  }: {
+    isOpen: boolean
+    onSubmit: (passphrase: string) => void
+    onCancel: () => void
+    error?: string | null
+  }) =>
+    isOpen ? (
+      <div data-testid="admin-passphrase-modal">
+        <button data-testid="mock-passphrase-submit" onClick={() => onSubmit('secret123')}>
+          Submit
+        </button>
+        <button data-testid="mock-passphrase-cancel" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    ) : null,
+}))
+
 // ---------------------------------------------------------------------------
 // Default mock data
 // ---------------------------------------------------------------------------
@@ -198,6 +243,7 @@ function setDefaultMocks() {
   })
   mockGetStoredPlayerId.mockReturnValue(null)
   mockUseDropPlayer.mockReturnValue({ mutate: mockDropMutate, isPending: false })
+  mockUseCurrentRound.mockReturnValue({ data: null, isLoading: false })
 }
 
 // ---------------------------------------------------------------------------

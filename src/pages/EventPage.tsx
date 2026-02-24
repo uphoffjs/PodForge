@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'react-router'
 import { toast } from 'sonner'
-import { Copy, Loader2, LogOut } from 'lucide-react'
+import { Copy, Loader2, LogOut, Lock } from 'lucide-react'
 import { useEvent } from '@/hooks/useEvent'
 import { useEventPlayers } from '@/hooks/useEventPlayers'
 import { useEventChannel } from '@/hooks/useEventChannel'
 import { useVisibilityRefetch } from '@/hooks/useVisibilityRefetch'
 import { useDropPlayer } from '@/hooks/useDropPlayer'
+import { useCurrentRound } from '@/hooks/useCurrentRound'
 import { getStoredPlayerId, clearPlayerId, storePlayerId } from '@/lib/player-identity'
 import { useAdminAuth } from '@/hooks/useAdminAuth'
 import { JoinEventForm } from '@/components/JoinEventForm'
@@ -14,6 +15,9 @@ import { PlayerList } from '@/components/PlayerList'
 import { AddPlayerForm } from '@/components/AddPlayerForm'
 import { QRCodeDisplay } from '@/components/QRCodeDisplay'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { RoundDisplay } from '@/components/RoundDisplay'
+import { AdminControls } from '@/components/AdminControls'
+import { AdminPassphraseModal } from '@/components/AdminPassphraseModal'
 
 export function EventPage() {
   const { eventId } = useParams()
@@ -21,9 +25,12 @@ export function EventPage() {
   const [skippedJoin, setSkippedJoin] = useState(false)
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
   const [newPlayerIds, setNewPlayerIds] = useState<Set<string>>(new Set())
+  const [showPassphraseModal, setShowPassphraseModal] = useState(false)
+  const [passphraseError, setPassphraseError] = useState<string | null>(null)
 
   const { data: event, isLoading: eventLoading, error: eventError } = useEvent(eventId ?? '')
   const { data: players, isLoading: playersLoading } = useEventPlayers(eventId ?? '')
+  const { data: currentRound } = useCurrentRound(eventId ?? '')
 
   // Wire up Realtime subscriptions
   useEventChannel(eventId ?? '')
@@ -32,7 +39,7 @@ export function EventPage() {
   useVisibilityRefetch(eventId ?? '')
 
   // Admin auth (sessionStorage-based)
-  const { isAdmin } = useAdminAuth(eventId ?? '')
+  const { isAdmin, passphrase, setPassphrase, clearPassphrase } = useAdminAuth(eventId ?? '')
 
   // Self-drop mutation
   const dropPlayer = useDropPlayer(eventId ?? '')
@@ -135,6 +142,25 @@ export function EventPage() {
     })
   }, [currentPlayerId, dropPlayer])
 
+  const handlePassphraseSubmit = useCallback(
+    (enteredPassphrase: string) => {
+      setPassphrase(enteredPassphrase)
+      setPassphraseError(null)
+      setShowPassphraseModal(false)
+    },
+    [setPassphrase],
+  )
+
+  const handlePassphraseCancel = useCallback(() => {
+    setShowPassphraseModal(false)
+    setPassphraseError(null)
+  }, [])
+
+  const handlePassphraseNeeded = useCallback(() => {
+    setShowPassphraseModal(true)
+    setPassphraseError(null)
+  }, [])
+
   if (!eventId) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen px-4">
@@ -164,8 +190,9 @@ export function EventPage() {
     )
   }
 
+  const isEventEnded = event?.status === 'ended'
   const isJoined = !!currentPlayerId || skippedJoin
-  const showJoinForm = !isJoined
+  const showJoinForm = !isJoined && !isEventEnded
 
   // Determine if the current player is active (for showing Leave Event button)
   const isActivePlayer =
@@ -184,7 +211,18 @@ export function EventPage() {
         </span>
       </div>
 
-      {/* Join form (shown for unrecognized players) */}
+      {/* Event ended banner */}
+      {isEventEnded && (
+        <div
+          className="w-full max-w-lg mb-6 flex items-center gap-3 p-4 bg-surface-raised border border-border rounded-xl"
+          data-testid="event-ended-banner"
+        >
+          <Lock className="w-5 h-5 text-text-secondary flex-shrink-0" />
+          <p className="text-text-secondary font-medium">This event has ended</p>
+        </div>
+      )}
+
+      {/* Join form (shown for unrecognized players, hidden when event ended) */}
       {showJoinForm && (
         <div className="w-full max-w-lg mb-6 p-6 bg-surface-overlay border border-border-bright rounded-xl">
           <JoinEventForm eventId={eventId} onJoined={handleJoined} />
@@ -199,6 +237,27 @@ export function EventPage() {
         </div>
       )}
 
+      {/* Current round display */}
+      {currentRound && (
+        <RoundDisplay
+          roundId={currentRound.id}
+          roundNumber={currentRound.round_number}
+          currentPlayerId={currentPlayerId}
+        />
+      )}
+
+      {/* Admin controls (hidden when event ended) */}
+      {isAdmin && !isEventEnded && (
+        <AdminControls
+          eventId={eventId}
+          isAdmin={isAdmin}
+          passphrase={passphrase}
+          onPassphraseNeeded={handlePassphraseNeeded}
+          players={players ?? []}
+          isEventEnded={isEventEnded}
+        />
+      )}
+
       {/* Player list */}
       <div className="w-full max-w-lg mb-6 p-4 bg-surface-raised border border-border rounded-xl">
         <PlayerList
@@ -209,10 +268,10 @@ export function EventPage() {
       </div>
 
       {/* Admin: Add Player card */}
-      {isAdmin && <AddPlayerForm eventId={eventId} />}
+      {isAdmin && !isEventEnded && <AddPlayerForm eventId={eventId} />}
 
       {/* Leave Event button -- separate from player list, deliberate action */}
-      {isActivePlayer && (
+      {isActivePlayer && !isEventEnded && (
         <div className="w-full max-w-lg mb-6">
           <button
             type="button"
@@ -261,6 +320,14 @@ export function EventPage() {
         onConfirm={handleLeaveConfirm}
         onCancel={() => setShowLeaveConfirm(false)}
         isLoading={dropPlayer.isPending}
+      />
+
+      {/* Admin passphrase modal */}
+      <AdminPassphraseModal
+        isOpen={showPassphraseModal}
+        onSubmit={handlePassphraseSubmit}
+        onCancel={handlePassphraseCancel}
+        error={passphraseError}
       />
     </div>
   )
