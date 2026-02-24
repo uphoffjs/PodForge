@@ -34,6 +34,41 @@ export function useEventChannel(eventId: string) {
           queryClient.invalidateQueries({ queryKey: ['event', eventId] })
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'rounds',
+          filter: `event_id=eq.${eventId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['rounds', eventId] })
+          queryClient.invalidateQueries({ queryKey: ['currentRound', eventId] })
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'pods',
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['pods'] })
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'pod_players',
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['pods'] })
+        }
+      )
       .subscribe()
 
     return () => {

@@ -62,7 +62,7 @@ describe('useEventChannel', () => {
       wrapper: createWrapper(),
     })
 
-    expect(mockOn).toHaveBeenCalledTimes(2)
+    expect(mockOn).toHaveBeenCalledTimes(5)
 
     expect(mockOn).toHaveBeenCalledWith(
       'postgres_changes',
@@ -82,6 +82,37 @@ describe('useEventChannel', () => {
         schema: 'public',
         table: 'events',
         filter: 'id=eq.evt1',
+      },
+      expect.any(Function)
+    )
+
+    expect(mockOn).toHaveBeenCalledWith(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'rounds',
+        filter: 'event_id=eq.evt1',
+      },
+      expect.any(Function)
+    )
+
+    expect(mockOn).toHaveBeenCalledWith(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'pods',
+      },
+      expect.any(Function)
+    )
+
+    expect(mockOn).toHaveBeenCalledWith(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'pod_players',
       },
       expect.any(Function)
     )
@@ -192,6 +223,87 @@ describe('useEventChannel', () => {
     // Old channel should be removed, new channel created
     expect(mockRemoveChannel).toHaveBeenCalledTimes(1)
     expect(mockChannel).toHaveBeenCalledWith('event:evt2')
+  })
+
+  it('rounds callback invalidates rounds and currentRound queries', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    renderHook(() => useEventChannel('evt1'), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    const roundsCall = capturedCallbacks.find(
+      (c) => (c.config as { table: string }).table === 'rounds'
+    )
+    expect(roundsCall).toBeDefined()
+
+    roundsCall!.callback()
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['rounds', 'evt1'],
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['currentRound', 'evt1'],
+    })
+  })
+
+  it('pods callback invalidates pods queries', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    renderHook(() => useEventChannel('evt1'), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    const podsCall = capturedCallbacks.find(
+      (c) => (c.config as { table: string }).table === 'pods'
+    )
+    expect(podsCall).toBeDefined()
+
+    podsCall!.callback()
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['pods'],
+    })
+  })
+
+  it('pod_players callback invalidates pods queries', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    renderHook(() => useEventChannel('evt1'), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    const podPlayersCall = capturedCallbacks.find(
+      (c) => (c.config as { table: string }).table === 'pod_players'
+    )
+    expect(podPlayersCall).toBeDefined()
+
+    podPlayersCall!.callback()
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['pods'],
+    })
+  })
+
+  it('rounds callback uses correct filter with eventId', () => {
+    renderHook(() => useEventChannel('abc-123'), {
+      wrapper: createWrapper(),
+    })
+
+    const roundsCall = capturedCallbacks.find(
+      (c) => (c.config as { table: string }).table === 'rounds'
+    )
+    expect(roundsCall).toBeDefined()
+    expect((roundsCall!.config as { filter: string }).filter).toBe('event_id=eq.abc-123')
   })
 
   it('each callback only invalidates its own query key, not both', () => {
