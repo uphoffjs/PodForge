@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-24)
 
 ## Current Position
 
-Phase: 02-pod-generation-and-admin-controls (Plan 1 of 4 complete)
-Plan: 02-01 complete, next: 02-02
+Phase: 02-pod-generation-and-admin-controls (Plan 2 of 4 complete)
+Plan: 02-02 complete, next: 02-03
 Status: Executing
-Last activity: 2026-02-24 — Completed 02-01 data foundation
+Last activity: 2026-02-24 — Completed 02-02 pod generation algorithm
 
-Progress: v2.0 Phase 2 ██░░░░░░░░ 25% (1/4 plans)
+Progress: v2.0 Phase 2 █████░░░░░ 50% (2/4 plans)
 
 ## Performance Metrics
 
@@ -30,6 +30,9 @@ Progress: v2.0 Phase 2 ██░░░░░░░░ 25% (1/4 plans)
 - 02-01: Admin RPCs validate passphrase inline via crypt() with RAISE EXCEPTION (not calling validate_passphrase helper)
 - 02-01: generate_round accepts pre-computed JSONB pod assignments, keeping algorithm client-side
 - 02-01: Updated players RLS policy to allow both 'active' and 'dropped' status changes for admin reactivation
+- 02-02: Greedy algorithm with opponent history matrix (O(n*k)) for pod assignment, not optimal (NP-hard) or random
+- 02-02: Pure function design with zero external dependencies for maximum testability
+- 02-02: Fisher-Yates shuffle for all randomization (seats, tie-breaking, pool ordering)
 
 ### Roadmap Evolution
 
@@ -46,5 +49,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 02-01-PLAN.md — data foundation (schema, types, hooks, Realtime). Next: 02-02.
+Stopped at: Completed 02-02-PLAN.md — pod generation algorithm (TDD, 40 tests, 90.6% mutation score). Next: 02-03.
 Resume file: none
