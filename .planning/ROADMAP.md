@@ -38,7 +38,25 @@ Plans:
 - [x] 02-02-PLAN.md — Pod generation algorithm (TDD): greedy opponent avoidance, bye rotation, seat randomization
 - [x] 02-03-PLAN.md — Generate round flow + pod display UI (AdminControls, PodCard, RoundDisplay)
 - [x] 02-04-PLAN.md — Admin player management (remove/reactivate), end event, previous rounds history
-- [ ] 02-05-PLAN.md — Gap closure: fetch all rounds' pods for complete opponent history (PODG-02 fix)
+- [x] 02-05-PLAN.md — Gap closure: fetch all rounds' pods for complete opponent history (PODG-02 fix)
+
+### Phase 2.1: Phase 2 E2E and Integration Tests
+**Goal**: Comprehensive Cypress E2E and integration test coverage for all Phase 2 features — pod generation, admin controls, round history, and sit-out fairness
+**Depends on**: Phase 2
+**Requirements**: PODG-01, PODG-02, PODG-03, PODG-04, PODG-05, PODG-06, PODG-07, PLYR-03, PLYR-04, EVNT-04
+**Success Criteria** (what must be TRUE):
+  1. E2E tests cover the full admin flow: enter passphrase, generate round, view pods, generate additional rounds, end event
+  2. E2E tests verify pod display: seat assignments, bye pod visual distinction, pod border colors
+  3. E2E tests verify player management: admin remove player, admin reactivate player
+  4. E2E tests verify previous rounds display and collapsible sections
+  5. Integration tests verify sit-out fairness rotation across multiple rounds
+  6. All existing Phase 1 E2E tests continue to pass
+**Plans**: 3 plans
+
+Plans:
+- [ ] 02.1-01-PLAN.md — Admin passphrase, round generation, and pod display E2E tests
+- [ ] 02.1-02-PLAN.md — Admin player management, end event, and previous rounds E2E tests
+- [ ] 02.1-03-PLAN.md — Sit-out fairness integration tests and full regression suite verification
 
 ### Phase 3: Timer System
 **Goal**: Admin can start, pause, resume, extend, and cancel a round timer that all players see counting down in real time with visual urgency cues and browser notifications at zero
@@ -80,6 +98,7 @@ Plans:
 | 1.2 Audit Bug Fixes | v1.0 | 3/3 | Complete | 2026-02-23 |
 | 1.3 Missing Coverage + Verification | v1.0 | 2/2 | Complete | 2026-02-23 |
 | 1.4 Sync Unit Tests | v1.0 | 1/1 | Complete | 2026-02-24 |
-| 2. Pod Generation and Admin Controls | v2.0 | 4/5 | Gap closure | 2026-02-24 |
+| 2. Pod Generation and Admin Controls | v2.0 | 5/5 | Complete | 2026-02-24 |
+| 2.1 Phase 2 E2E and Integration Tests | v2.0 | 0/3 | Not started | - |
 | 3. Timer System | — | 0/2 | Not started | - |
 | 4. Event Polish, Testing, and Deployment | — | 0/2 | Not started | - |
