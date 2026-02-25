@@ -6,7 +6,7 @@ import { useAddPlayer } from './useAddPlayer'
 
 // Hoist mock fns so vi.mock factories can reference them
 const {
-  mockFrom, mockInsert, mockSelect, mockSingle,
+  mockFrom, mockInsert, mockSingle,
   mockToastSuccess, mockToastError,
 } = vi.hoisted(() => {
   const mockSingle = vi.fn()

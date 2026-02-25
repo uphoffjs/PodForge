@@ -5,7 +5,6 @@ import {
   buildByeCounts,
   type PlayerInfo,
   type RoundHistory,
-  type PodAssignmentResult,
 } from './pod-algorithm'
 
 function makePlayers(count: number): PlayerInfo[] {
@@ -225,10 +224,6 @@ describe('pod-algorithm', () => {
         const pod1Ids = activePods[0].players
           .map((p) => p.player_id)
           .sort()
-        const pod2Ids = activePods[1].players
-          .map((p) => p.player_id)
-          .sort()
-
         const prevPod1 = ['player-1', 'player-2', 'player-3', 'player-4']
         const prevPod2 = ['player-5', 'player-6', 'player-7', 'player-8']
 
@@ -823,7 +818,6 @@ describe('pod-algorithm', () => {
 
       it.each(countsWithByes)('rotates byes fairly across 5 rounds with %i players', (count) => {
         const players = makePlayers(count)
-        const byesPerRound = count % 4
         let previousRounds: RoundHistory[] = []
         const byeCountMap = new Map<string, number>()
         players.forEach(p => byeCountMap.set(p.id, 0))

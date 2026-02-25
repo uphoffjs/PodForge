@@ -7,7 +7,6 @@ import { useJoinEvent } from './useJoinEvent'
 const {
   mockFrom,
   mockInsert,
-  mockSelect,
   mockSingle,
   mockStorePlayerId,
   mockToastSuccess,

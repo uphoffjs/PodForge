@@ -43,7 +43,7 @@ export function EventPage() {
   useVisibilityRefetch(eventId ?? '')
 
   // Admin auth (sessionStorage-based)
-  const { isAdmin, passphrase, setPassphrase, clearPassphrase } = useAdminAuth(eventId ?? '')
+  const { isAdmin, passphrase, setPassphrase } = useAdminAuth(eventId ?? '')
 
   // Self-drop mutation
   const dropPlayer = useDropPlayer(eventId ?? '')
