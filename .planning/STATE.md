@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Complete App
 status: in-progress
-last_updated: "2026-02-25T19:25:27.000Z"
+last_updated: "2026-02-25T19:27:49Z"
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 14
-  completed_plans: 12
+  completed_plans: 13
 ---
 
 # Project State
@@ -53,6 +53,7 @@ Progress: Phase 04 ██████░░░░ 67% (2/3 plans)
 - 03-03: 2min, 2 tasks, 3 files
 
 **Phase 4:**
+- 04-01: 3min, 2 tasks, 4 files
 - 04-02: 2min, 2 tasks, 2 files
 
 ## Accumulated Context
@@ -62,6 +63,7 @@ Progress: Phase 04 ██████░░░░ 67% (2/3 plans)
 See: .planning/PROJECT.md Key Decisions table (comprehensive list)
 
 - 04-02: Used it.each parameterized tests for efficient coverage of all 17 player counts (4-20)
+- [Phase 04]: EventInfoBar owns its own copy/QR logic as standalone component, not a wrapper
 
 ### Roadmap Evolution
 
@@ -79,5 +81,5 @@ None — all v2.0 concerns resolved.
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 04-02-PLAN.md
+Stopped at: Completed 04-01-PLAN.md (event info bar)
 Resume file: none

@@ -43,8 +43,8 @@ Commander Pod Pairer is a web app for casual MTG Commander playgroups. Players j
 **Plans:** 3 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Event info bar component (EVNT-05)
-- [ ] 04-02-PLAN.md — Pod algorithm comprehensive test coverage (INFR-04)
+- [x] 04-01-PLAN.md — Event info bar component (EVNT-05)
+- [x] 04-02-PLAN.md — Pod algorithm comprehensive test coverage (INFR-04)
 - [ ] 04-03-PLAN.md — Timer E2E tests and deployment documentation (INFR-05)
 
 ## Progress
@@ -59,4 +59,4 @@ Plans:
 | 2. Pod Generation and Admin Controls | v2.0 | 5/5 | Complete | 2026-02-24 |
 | 2.1 Phase 2 E2E and Integration Tests | v2.0 | 3/3 | Complete | 2026-02-25 |
 | 3. Timer System | v2.0 | 3/3 | Complete | 2026-02-25 |
-| 4. Event Polish, Testing, and Deployment | — | 0/3 | Not started | - |
+| 4. Event Polish, Testing, and Deployment | — | 2/3 | In Progress | - |
