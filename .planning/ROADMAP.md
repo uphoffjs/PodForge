@@ -54,8 +54,8 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02.1-01-PLAN.md — Admin passphrase, round generation, and pod display E2E tests
-- [ ] 02.1-02-PLAN.md — Admin player management, end event, and previous rounds E2E tests
+- [x] 02.1-01-PLAN.md — Admin passphrase, round generation, and pod display E2E tests
+- [x] 02.1-02-PLAN.md — Admin player management, end event, and previous rounds E2E tests
 - [ ] 02.1-03-PLAN.md — Sit-out fairness integration tests and full regression suite verification
 
 ### Phase 3: Timer System
@@ -99,6 +99,6 @@ Plans:
 | 1.3 Missing Coverage + Verification | v1.0 | 2/2 | Complete | 2026-02-23 |
 | 1.4 Sync Unit Tests | v1.0 | 1/1 | Complete | 2026-02-24 |
 | 2. Pod Generation and Admin Controls | v2.0 | 5/5 | Complete | 2026-02-24 |
-| 2.1 Phase 2 E2E and Integration Tests | v2.0 | 0/3 | Not started | - |
+| 2.1 Phase 2 E2E and Integration Tests | v2.0 | 2/3 | In Progress | - |
 | 3. Timer System | — | 0/2 | Not started | - |
 | 4. Event Polish, Testing, and Deployment | — | 0/2 | Not started | - |
