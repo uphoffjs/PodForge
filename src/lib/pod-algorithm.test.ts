@@ -1097,5 +1097,26 @@ describe('pod-algorithm', () => {
       const counts = buildByeCounts(rounds, playerIds)
       expect(counts.get('newplayer')).toBe(0)
     })
+
+    it('handles historical bye player not in current player list (dropped player in bye history)', () => {
+      // 'dropped-player' was in a bye pod but is not in the current playerIds
+      const playerIds = ['a', 'b', 'c', 'd']
+      const rounds: RoundHistory[] = [
+        {
+          pods: [
+            { playerIds: ['a', 'b', 'c', 'd'], isBye: false },
+            { playerIds: ['dropped-player'], isBye: true },
+          ],
+        },
+      ]
+
+      const counts = buildByeCounts(rounds, playerIds)
+
+      // Current players should have 0 byes
+      expect(counts.get('a')).toBe(0)
+      expect(counts.get('b')).toBe(0)
+      // The dropped player gets a count entry via the ?? 0 fallback on line 99
+      expect(counts.get('dropped-player')).toBe(1)
+    })
   })
 })

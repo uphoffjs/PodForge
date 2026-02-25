@@ -4,9 +4,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
 import { useEventChannel } from './useEventChannel'
 
-const { mockSubscribe, mockRemoveChannel, mockOn, mockChannel, capturedCallbacks } = vi.hoisted(
+const { mockSubscribe, mockRemoveChannel, mockOn, mockChannel, capturedCallbacks, subscribeHolder } = vi.hoisted(
   () => {
     const capturedCallbacks: Array<{ event: string; config: unknown; callback: () => void }> = []
+    const subscribeHolder: { callback: ((status: string, err?: { message: string }) => void) | null } = { callback: null }
     const mockSubscribe = vi.fn()
     const mockOn = vi.fn()
     const channelObj = { on: mockOn, subscribe: mockSubscribe }
@@ -14,7 +15,10 @@ const { mockSubscribe, mockRemoveChannel, mockOn, mockChannel, capturedCallbacks
       capturedCallbacks.push({ event, config, callback })
       return channelObj
     })
-    mockSubscribe.mockReturnValue(channelObj)
+    mockSubscribe.mockImplementation((cb?: (status: string, err?: { message: string }) => void) => {
+      if (cb) subscribeHolder.callback = cb
+      return channelObj
+    })
     const mockChannel = vi.fn((_name: string) => channelObj)
     return {
       mockSubscribe,
@@ -22,6 +26,7 @@ const { mockSubscribe, mockRemoveChannel, mockOn, mockChannel, capturedCallbacks
       mockOn,
       mockChannel,
       capturedCallbacks,
+      subscribeHolder,
     }
   }
 )
@@ -47,6 +52,7 @@ describe('useEventChannel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     capturedCallbacks.length = 0
+    subscribeHolder.callback = null
   })
 
   it('creates channel with correct name event:{eventId}', () => {
@@ -375,5 +381,60 @@ describe('useEventChannel', () => {
     expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: ['event', 'evt1'],
     })
+  })
+
+  // --- subscribe callback branches (CHANNEL_ERROR, TIMED_OUT, other) ---
+
+  it('subscribe callback logs error on CHANNEL_ERROR status', () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    renderHook(() => useEventChannel('evt1'), {
+      wrapper: createWrapper(),
+    })
+
+    expect(subscribeHolder.callback).not.toBeNull()
+    subscribeHolder.callback!('CHANNEL_ERROR', { message: 'test error' })
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[useEventChannel] Realtime channel error:',
+      'test error'
+    )
+
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('subscribe callback logs warning on TIMED_OUT status', () => {
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    renderHook(() => useEventChannel('evt1'), {
+      wrapper: createWrapper(),
+    })
+
+    expect(subscribeHolder.callback).not.toBeNull()
+    subscribeHolder.callback!('TIMED_OUT', undefined)
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      '[useEventChannel] Realtime channel subscription timed out'
+    )
+
+    consoleWarnSpy.mockRestore()
+  })
+
+  it('subscribe callback does nothing on SUBSCRIBED status (no-op)', () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    renderHook(() => useEventChannel('evt1'), {
+      wrapper: createWrapper(),
+    })
+
+    expect(subscribeHolder.callback).not.toBeNull()
+    subscribeHolder.callback!('SUBSCRIBED', undefined)
+
+    expect(consoleErrorSpy).not.toHaveBeenCalled()
+    expect(consoleWarnSpy).not.toHaveBeenCalled()
+
+    consoleErrorSpy.mockRestore()
+    consoleWarnSpy.mockRestore()
   })
 })

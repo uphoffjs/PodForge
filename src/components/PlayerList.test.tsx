@@ -409,4 +409,134 @@ describe('PlayerList', () => {
     expect(heading).toHaveTextContent('0 active')
     expect(heading).toHaveTextContent('1 dropped')
   })
+
+  // --- Admin actions rendering (canShowAdminActions branches on lines 31, 60-66, 99-105) ---
+
+  it('renders admin actions for active players when isAdmin, eventId, and onPassphraseNeeded are set', () => {
+    const players = [
+      makePlayer({ id: 'p1', name: 'Alice', status: 'active' }),
+      makePlayer({ id: 'p2', name: 'Bob', status: 'active' }),
+    ]
+
+    render(
+      <PlayerList
+        players={players}
+        currentPlayerId={null}
+        isAdmin={true}
+        eventId="evt1"
+        passphrase="secret"
+        onPassphraseNeeded={vi.fn()}
+      />
+    )
+
+    expect(screen.getByTestId('admin-action-p1')).toBeInTheDocument()
+    expect(screen.getByTestId('admin-action-p2')).toBeInTheDocument()
+  })
+
+  it('renders admin actions with passphrase=null when passphrase prop is undefined (nullish fallback)', async () => {
+    const user = userEvent.setup()
+    const players = [
+      makePlayer({ id: 'p1', name: 'Alice', status: 'active' }),
+      makePlayer({ id: 'p2', name: 'Bob', status: 'dropped' }),
+    ]
+
+    render(
+      <PlayerList
+        players={players}
+        currentPlayerId={null}
+        isAdmin={true}
+        eventId="evt1"
+        onPassphraseNeeded={vi.fn()}
+        // passphrase intentionally omitted (undefined) to exercise `passphrase ?? null` fallback
+      />
+    )
+
+    // Active player admin actions visible
+    expect(screen.getByTestId('admin-action-p1')).toBeInTheDocument()
+
+    // Open dropped section to exercise the second ?? null branch on line 105
+    await user.click(screen.getByTestId('player-list-dropped-toggle'))
+    expect(screen.getByTestId('admin-action-p2')).toBeInTheDocument()
+  })
+
+  it('renders admin actions for dropped players when toggle is open', async () => {
+    const user = userEvent.setup()
+    const players = [
+      makePlayer({ id: 'p1', name: 'Alice', status: 'active' }),
+      makePlayer({ id: 'p2', name: 'Bob', status: 'dropped' }),
+    ]
+
+    render(
+      <PlayerList
+        players={players}
+        currentPlayerId={null}
+        isAdmin={true}
+        eventId="evt1"
+        passphrase="secret"
+        onPassphraseNeeded={vi.fn()}
+      />
+    )
+
+    // Active player admin actions visible
+    expect(screen.getByTestId('admin-action-p1')).toBeInTheDocument()
+
+    // Open dropped section
+    await user.click(screen.getByTestId('player-list-dropped-toggle'))
+
+    // Dropped player admin actions visible
+    expect(screen.getByTestId('admin-action-p2')).toBeInTheDocument()
+    expect(screen.getByTestId('admin-action-p2')).toHaveAttribute('data-status', 'dropped')
+  })
+
+  it('does not render admin actions when isAdmin is false', () => {
+    const players = [
+      makePlayer({ id: 'p1', name: 'Alice', status: 'active' }),
+    ]
+
+    render(
+      <PlayerList
+        players={players}
+        currentPlayerId={null}
+        isAdmin={false}
+        eventId="evt1"
+        onPassphraseNeeded={vi.fn()}
+      />
+    )
+
+    expect(screen.queryByTestId('admin-action-p1')).not.toBeInTheDocument()
+  })
+
+  it('does not render admin actions when eventId is undefined', () => {
+    const players = [
+      makePlayer({ id: 'p1', name: 'Alice', status: 'active' }),
+    ]
+
+    render(
+      <PlayerList
+        players={players}
+        currentPlayerId={null}
+        isAdmin={true}
+        onPassphraseNeeded={vi.fn()}
+      />
+    )
+
+    expect(screen.queryByTestId('admin-action-p1')).not.toBeInTheDocument()
+  })
+
+  it('does not render admin actions when onPassphraseNeeded is undefined', () => {
+    const players = [
+      makePlayer({ id: 'p1', name: 'Alice', status: 'active' }),
+    ]
+
+    render(
+      <PlayerList
+        players={players}
+        currentPlayerId={null}
+        isAdmin={true}
+        eventId="evt1"
+      />
+    )
+
+    expect(screen.queryByTestId('admin-action-p1')).not.toBeInTheDocument()
+  })
 })

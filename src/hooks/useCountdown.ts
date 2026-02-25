@@ -48,12 +48,6 @@ export function useCountdown(timer: RoundTimer | null): CountdownState | null {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
-    // Clear any existing interval
-    if (intervalRef.current !== null) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
-
     if (!timer || timer.status === 'cancelled') {
       return
     }

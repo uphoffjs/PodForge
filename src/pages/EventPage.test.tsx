@@ -991,6 +991,275 @@ describe('EventPage', () => {
     })
   })
 
+  // --- Passphrase modal flow (lines 148-156) ---
+
+  describe('passphrase modal', () => {
+    beforeEach(() => {
+      mockUseAdminAuth.mockReturnValue({
+        isAdmin: true,
+        passphrase: null,
+        setPassphrase: vi.fn(),
+        clearPassphrase: vi.fn(),
+      })
+    })
+
+    it('opens passphrase modal when admin controls trigger onPassphraseNeeded', async () => {
+      const user = userEvent.setup()
+      render(<EventPage />)
+
+      // Modal should not be visible initially
+      expect(screen.queryByTestId('admin-passphrase-modal')).not.toBeInTheDocument()
+
+      // Click the "Need Passphrase" button from admin-controls mock
+      await user.click(screen.getByTestId('mock-passphrase-needed'))
+
+      // Modal should now be visible
+      expect(screen.getByTestId('admin-passphrase-modal')).toBeInTheDocument()
+    })
+
+    it('closes passphrase modal and clears error when cancel is clicked', async () => {
+      const user = userEvent.setup()
+      render(<EventPage />)
+
+      // Open the modal
+      await user.click(screen.getByTestId('mock-passphrase-needed'))
+      expect(screen.getByTestId('admin-passphrase-modal')).toBeInTheDocument()
+
+      // Click cancel
+      await user.click(screen.getByTestId('mock-passphrase-cancel'))
+
+      // Modal should close
+      expect(screen.queryByTestId('admin-passphrase-modal')).not.toBeInTheDocument()
+    })
+
+    it('calls setPassphrase and closes modal when passphrase is submitted', async () => {
+      const user = userEvent.setup()
+      const mockSetPassphrase = vi.fn()
+      mockUseAdminAuth.mockReturnValue({
+        isAdmin: true,
+        passphrase: null,
+        setPassphrase: mockSetPassphrase,
+        clearPassphrase: vi.fn(),
+      })
+
+      render(<EventPage />)
+
+      // Open the modal
+      await user.click(screen.getByTestId('mock-passphrase-needed'))
+      expect(screen.getByTestId('admin-passphrase-modal')).toBeInTheDocument()
+
+      // Click submit (mock calls onSubmit with 'secret123')
+      await user.click(screen.getByTestId('mock-passphrase-submit'))
+
+      // setPassphrase should have been called
+      expect(mockSetPassphrase).toHaveBeenCalledWith('secret123')
+      // Modal should close
+      expect(screen.queryByTestId('admin-passphrase-modal')).not.toBeInTheDocument()
+    })
+  })
+
+  // --- Event ended state ---
+
+  describe('event ended state', () => {
+    beforeEach(() => {
+      mockUseEvent.mockReturnValue({
+        data: { ...defaultEvent, status: 'ended' },
+        isLoading: false,
+        error: null,
+      })
+      mockGetStoredPlayerId.mockReturnValue('p1')
+      mockUseAdminAuth.mockReturnValue({
+        isAdmin: true,
+        passphrase: 'secret',
+        setPassphrase: vi.fn(),
+        clearPassphrase: vi.fn(),
+      })
+    })
+
+    it('shows event-ended-banner when event status is ended', () => {
+      render(<EventPage />)
+      expect(screen.getByTestId('event-ended-banner')).toBeInTheDocument()
+    })
+
+    it('hides join form when event is ended', () => {
+      mockGetStoredPlayerId.mockReturnValue(null)
+      render(<EventPage />)
+      expect(screen.queryByTestId('join-form')).not.toBeInTheDocument()
+    })
+
+    it('hides admin controls when event is ended', () => {
+      render(<EventPage />)
+      expect(screen.queryByTestId('admin-controls')).not.toBeInTheDocument()
+    })
+
+    it('hides add player form when event is ended', () => {
+      render(<EventPage />)
+      expect(screen.queryByTestId('add-player-form')).not.toBeInTheDocument()
+    })
+
+    it('hides leave event button when event is ended', () => {
+      render(<EventPage />)
+      expect(screen.queryByTestId('leave-event-btn')).not.toBeInTheDocument()
+    })
+  })
+
+  // --- Timer display visibility ---
+
+  describe('timer display and controls', () => {
+    it('shows timer-display when timer has running status', () => {
+      mockUseTimer.mockReturnValue({
+        data: {
+          id: 't1',
+          event_id: 'evt1',
+          round_id: 'r1',
+          status: 'running',
+          duration_minutes: 60,
+          started_at: '2026-01-01T00:00:00Z',
+          expires_at: new Date(Date.now() + 1800 * 1000).toISOString(),
+          remaining_seconds: null,
+          paused_at: null,
+          created_at: '2026-01-01T00:00:00Z',
+        },
+        isLoading: false,
+      })
+
+      render(<EventPage />)
+
+      expect(screen.getByTestId('timer-display')).toBeInTheDocument()
+    })
+
+    it('does NOT show timer-display when timer status is cancelled', () => {
+      mockUseTimer.mockReturnValue({
+        data: {
+          id: 't1',
+          event_id: 'evt1',
+          round_id: 'r1',
+          status: 'cancelled',
+          duration_minutes: 60,
+          started_at: '2026-01-01T00:00:00Z',
+          expires_at: '2026-01-01T01:00:00Z',
+          remaining_seconds: null,
+          paused_at: null,
+          created_at: '2026-01-01T00:00:00Z',
+        },
+        isLoading: false,
+      })
+
+      render(<EventPage />)
+
+      expect(screen.queryByTestId('timer-display')).not.toBeInTheDocument()
+    })
+
+    it('shows timer-controls when admin with passphrase and running timer', () => {
+      mockUseAdminAuth.mockReturnValue({
+        isAdmin: true,
+        passphrase: 'secret',
+        setPassphrase: vi.fn(),
+        clearPassphrase: vi.fn(),
+      })
+      mockUseTimer.mockReturnValue({
+        data: {
+          id: 't1',
+          event_id: 'evt1',
+          round_id: 'r1',
+          status: 'running',
+          duration_minutes: 60,
+          started_at: '2026-01-01T00:00:00Z',
+          expires_at: new Date(Date.now() + 1800 * 1000).toISOString(),
+          remaining_seconds: null,
+          paused_at: null,
+          created_at: '2026-01-01T00:00:00Z',
+        },
+        isLoading: false,
+      })
+
+      render(<EventPage />)
+
+      expect(screen.getByTestId('timer-controls')).toBeInTheDocument()
+    })
+
+    it('does NOT show timer-controls when admin but passphrase is null', () => {
+      mockUseAdminAuth.mockReturnValue({
+        isAdmin: true,
+        passphrase: null,
+        setPassphrase: vi.fn(),
+        clearPassphrase: vi.fn(),
+      })
+      mockUseTimer.mockReturnValue({
+        data: {
+          id: 't1',
+          event_id: 'evt1',
+          round_id: 'r1',
+          status: 'running',
+          duration_minutes: 60,
+          started_at: '2026-01-01T00:00:00Z',
+          expires_at: new Date(Date.now() + 1800 * 1000).toISOString(),
+          remaining_seconds: null,
+          paused_at: null,
+          created_at: '2026-01-01T00:00:00Z',
+        },
+        isLoading: false,
+      })
+
+      render(<EventPage />)
+
+      // timer-display should be visible (timer exists and not cancelled)
+      expect(screen.getByTestId('timer-display')).toBeInTheDocument()
+      // timer-controls should NOT be visible (passphrase is null)
+      expect(screen.queryByTestId('timer-controls')).not.toBeInTheDocument()
+    })
+  })
+
+  // --- Fallback branches when event/players data is undefined ---
+
+  it('uses fallback values for EventInfoBar when event data is undefined', () => {
+    mockUseEvent.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: null,
+    })
+
+    render(<EventPage />)
+
+    const infoBar = screen.getByTestId('event-info-bar')
+    expect(infoBar).toHaveAttribute('data-event-name', '')
+    expect(infoBar).toHaveAttribute('data-event-status', 'active')
+  })
+
+  it('passes empty array to player list when players data is undefined', () => {
+    mockUseEventPlayers.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+    })
+
+    render(<EventPage />)
+
+    const playerList = screen.getByTestId('player-list')
+    expect(playerList).toHaveAttribute('data-player-count', '0')
+  })
+
+  it('passes empty array to admin controls players prop when players is undefined', () => {
+    mockUseAdminAuth.mockReturnValue({
+      isAdmin: true,
+      passphrase: 'secret',
+      setPassphrase: vi.fn(),
+      clearPassphrase: vi.fn(),
+    })
+    mockUseEventPlayers.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+    })
+
+    render(<EventPage />)
+
+    // Admin controls should still render (isAdmin=true, event not ended)
+    expect(screen.getByTestId('admin-controls')).toBeInTheDocument()
+  })
+
+  // Note: handleJoined and handleLeaveConfirm no longer have defensive guards
+  // because they are architecturally unreachable (the component returns early
+  // before rendering the children that call these callbacks).
+
   // --- Combination states ---
 
   it('shows both admin form and leave button when admin is also a player', () => {

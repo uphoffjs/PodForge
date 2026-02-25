@@ -262,4 +262,95 @@ describe('useTimerNotification', () => {
       )
     }).not.toThrow()
   })
+
+  it('returns isSupported=false and permission="unsupported" when Notification is not in window', () => {
+    // Temporarily remove Notification from window
+    const savedNotification = window.Notification
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (window as any).Notification
+
+    const { result } = renderHook(() => useTimerNotification(null, null))
+
+    expect(result.current.isSupported).toBe(false)
+    expect(result.current.permission).toBe('unsupported')
+
+    // Restore
+    Object.defineProperty(window, 'Notification', {
+      value: savedNotification,
+      writable: true,
+      configurable: true,
+    })
+  })
+
+  it('requestPermission returns early when Notification is not supported', async () => {
+    const savedNotification = window.Notification
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (window as any).Notification
+
+    const { result } = renderHook(() => useTimerNotification(null, null))
+
+    await act(async () => {
+      await result.current.requestPermission()
+    })
+
+    // Should still be 'unsupported' - no error thrown
+    expect(result.current.permission).toBe('unsupported')
+
+    // Restore
+    Object.defineProperty(window, 'Notification', {
+      value: savedNotification,
+      writable: true,
+      configurable: true,
+    })
+  })
+
+  it('returns permission "unsupported" when Notification.permission getter throws', () => {
+    // Create a Notification mock where accessing .permission throws
+    const throwingNotification = Object.assign(vi.fn(), {
+      requestPermission: vi.fn().mockResolvedValue('granted'),
+    })
+    Object.defineProperty(throwingNotification, 'permission', {
+      get() {
+        throw new Error('SecurityError: blocked')
+      },
+      configurable: true,
+    })
+    Object.defineProperty(window, 'Notification', {
+      value: throwingNotification,
+      writable: true,
+      configurable: true,
+    })
+
+    const { result } = renderHook(() => useTimerNotification(null, null))
+
+    expect(result.current.permission).toBe('unsupported')
+  })
+
+  it('resets lastNotifiedTimerId when timer changes, allowing notification for new timer', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    const timer1 = makeTimer({ id: 'timer-1' })
+    const expired = makeExpiredCountdown()
+    const notExpired = makeCountdown({ remainingSeconds: 300, isOvertime: false })
+
+    const { rerender } = renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer1, c: expired } }
+    )
+
+    // First timer expired, notification fires
+    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
+
+    // Switch to timer-2 that is NOT expired yet (this resets the lastNotifiedTimerId ref via the effect on line 66-68)
+    const timer2 = makeTimer({ id: 'timer-2' })
+    rerender({ t: timer2, c: notExpired })
+
+    // No new notification for non-expired timer
+    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
+
+    // Now timer-2 expires - should fire because the ref was reset
+    rerender({ t: timer2, c: expired })
+
+    expect(mockNotificationConstructor).toHaveBeenCalledTimes(2)
+  })
 })

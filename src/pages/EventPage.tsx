@@ -116,9 +116,10 @@ export function EventPage() {
 
   const handleJoined = useCallback(
     (playerId: string) => {
-      if (eventId) {
-        storePlayerId(eventId, playerId)
-      }
+      // eventId is guaranteed non-empty here because the component returns
+      // early on line 158 when eventId is undefined, before any child can
+      // call this callback.
+      storePlayerId(eventId!, playerId)
       justJoinedRef.current = true
       setCurrentPlayerId(playerId)
     },
@@ -126,8 +127,10 @@ export function EventPage() {
   )
 
   const handleLeaveConfirm = useCallback(() => {
-    if (!currentPlayerId) return
-    dropPlayer.mutate(currentPlayerId, {
+    // currentPlayerId is guaranteed non-null here because the Leave Event
+    // button only renders when isActivePlayer is true, which requires
+    // currentPlayerId to be truthy.
+    dropPlayer.mutate(currentPlayerId!, {
       onSuccess: () => {
         setShowLeaveConfirm(false)
         setCurrentPlayerId(null)

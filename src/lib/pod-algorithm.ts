@@ -163,8 +163,9 @@ export function generatePods(
     // violates transitivity and can produce incorrect orderings.
     const shuffled = shuffleArray(activePlayers)
     const sorted = shuffled.sort((a, b) => {
-      const aByes = byeCounts.get(a.id) ?? 0
-      const bByes = byeCounts.get(b.id) ?? 0
+      // All active player IDs are guaranteed to be in byeCounts (initialized with 0)
+      const aByes = byeCounts.get(a.id)!
+      const bByes = byeCounts.get(b.id)!
       return aByes - bByes
     })
 

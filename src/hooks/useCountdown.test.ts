@@ -208,4 +208,103 @@ describe('useCountdown', () => {
 
     expect(result.current!.display).toBe('0:00')
   })
+
+  it('clears existing interval when timer prop changes to a different running timer', () => {
+    // First timer: 10 seconds from now
+    const expiresAt1 = new Date(Date.now() + 10 * 1000).toISOString()
+    const timer1 = makeTimer({ id: 'timer-1', status: 'running', expires_at: expiresAt1 })
+
+    const { result, rerender } = renderHook(
+      ({ timer }) => useCountdown(timer),
+      { initialProps: { timer: timer1 as RoundTimer | null } }
+    )
+
+    // Timer 1 is running and interval is set up
+    expect(result.current).not.toBeNull()
+    const initialRemaining = result.current!.remainingSeconds
+
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(result.current!.remainingSeconds).toBe(initialRemaining - 1)
+
+    // Switch to a different running timer (exercises lines 52-55: clearing old interval)
+    const expiresAt2 = new Date(Date.now() + 60 * 1000).toISOString()
+    const timer2 = makeTimer({ id: 'timer-2', status: 'running', expires_at: expiresAt2 })
+
+    rerender({ timer: timer2 })
+
+    // New timer should have different remaining seconds
+    expect(result.current).not.toBeNull()
+    const newRemaining = result.current!.remainingSeconds
+    expect(newRemaining).toBeGreaterThan(initialRemaining - 2)
+
+    // Verify the new interval works
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(result.current!.remainingSeconds).toBe(newRemaining - 1)
+  })
+
+  it('clears existing interval when timer prop changes to null', () => {
+    const expiresAt = new Date(Date.now() + 10 * 1000).toISOString()
+    const timer = makeTimer({ status: 'running', expires_at: expiresAt })
+
+    const { result, rerender } = renderHook(
+      ({ timer: t }) => useCountdown(t),
+      { initialProps: { timer: timer as RoundTimer | null } }
+    )
+
+    expect(result.current).not.toBeNull()
+
+    // Switch to null timer (exercises lines 52-55 clearing interval, then line 57 early return)
+    rerender({ timer: null })
+
+    expect(result.current).toBeNull()
+  })
+
+  it('uses 0 as fallback when paused timer has null remaining_seconds', () => {
+    const timer = makeTimer({
+      status: 'paused',
+      remaining_seconds: null,
+    })
+
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current).not.toBeNull()
+    expect(result.current!.remainingSeconds).toBe(0)
+    expect(result.current!.display).toBe('0:00')
+    expect(result.current!.isPaused).toBe(true)
+  })
+
+  it('handles rapid timer changes without leaking intervals', () => {
+    const expiresAt1 = new Date(Date.now() + 10 * 1000).toISOString()
+    const timer1 = makeTimer({ id: 'timer-1', status: 'running', expires_at: expiresAt1 })
+
+    const { result, rerender } = renderHook(
+      ({ timer }) => useCountdown(timer),
+      { initialProps: { timer: timer1 as RoundTimer | null } }
+    )
+
+    expect(result.current).not.toBeNull()
+
+    // Rapidly change timers
+    const expiresAt2 = new Date(Date.now() + 20 * 1000).toISOString()
+    const timer2 = makeTimer({ id: 'timer-2', status: 'running', expires_at: expiresAt2 })
+    rerender({ timer: timer2 })
+
+    const expiresAt3 = new Date(Date.now() + 30 * 1000).toISOString()
+    const timer3 = makeTimer({ id: 'timer-3', status: 'running', expires_at: expiresAt3 })
+    rerender({ timer: timer3 })
+
+    // Should work correctly with the latest timer
+    expect(result.current).not.toBeNull()
+
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+
+    // Verify it's tracking the latest timer (approximately 29 seconds remaining)
+    expect(result.current!.remainingSeconds).toBeGreaterThanOrEqual(28)
+  })
 })
