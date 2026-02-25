@@ -37,19 +37,19 @@ When an admin hits "Generate Next Round," every player instantly sees their pod 
 
 ### Active
 
-- [ ] Pod generation algorithm: minimize repeat opponents via greedy assignment with opponent history matrix
-- [ ] Bye rotation: players with fewest byes prioritized, ties broken randomly
-- [ ] Fewer than 4 players blocks round generation with error
-- [ ] Random seat order (1st-4th) assigned per pod, displayed clearly
-- [ ] Bye pod members get no seat assignment, visually distinct
+- ✓ Pod generation algorithm: minimize repeat opponents via greedy assignment with opponent history matrix — v2.0 Phase 2
+- ✓ Bye rotation: players with fewest byes prioritized, ties broken randomly — v2.0 Phase 2
+- ✓ Fewer than 4 players blocks round generation with error — v2.0 Phase 2
+- ✓ Random seat order (1st-4th) assigned per pod, displayed clearly — v2.0 Phase 2
+- ✓ Bye pod members get no seat assignment, visually distinct — v2.0 Phase 2
+- ✓ Previous rounds visible in collapsible sections, most recent first — v2.0 Phase 2
+- ✓ Admin can remove player, re-activate dropped player, end event — v2.0 Phase 2
+- ✓ Ended event becomes read-only (historical data stays visible) — v2.0 Phase 2
 - [ ] Round timer with admin-set duration (optional, with presets: 60/90/120 min)
 - [ ] Timer visible to all clients, counts down in real time (mm:ss), color changes at thresholds
 - [ ] Admin timer controls: pause, resume, +5 min, cancel
 - [ ] Browser notifications when timer hits zero
 - [ ] Timer state stored server-side (server-authoritative)
-- [ ] Previous rounds visible in collapsible sections, most recent first
-- [ ] Admin can remove player, re-activate dropped player, end event
-- [ ] Ended event becomes read-only (historical data stays visible)
 - [ ] Event info bar: name, QR code (expandable), shareable link with copy, player count, round number
 - [ ] Multiple simultaneous admins supported per event
 - [ ] Player joining mid-event enters pool for next round with empty history and 0 bye count
@@ -69,10 +69,11 @@ When an admin hits "Generate Next Round," every player instantly sees their pod 
 
 ## Context
 
-Shipped v1.0 with 5,386 LOC TypeScript/CSS.
+Shipped v1.0 with 5,386 LOC TypeScript/CSS. Phase 2 complete (pod generation + admin controls).
 Tech stack: React 19 (Vite), Supabase (Postgres + Realtime), Tailwind CSS v4, TypeScript.
-Test coverage: 226 unit tests (Vitest), 44 Cypress E2E tests, 15 visual regression baselines, 96.15% Stryker mutation score.
-7 tech debt items documented (orphaned validate_passphrase RPC, unused hook exports, Realtime E2E gap, eslint-disable comments, deferred pod unit tests, unused Cypress fixtures).
+Test coverage: 303 unit tests (Vitest), 44 Cypress E2E tests, 15 visual regression baselines, 90.6% Stryker mutation score on pod algorithm.
+Supabase migrations: 00001 (schema), 00002 (rounds/pods/admin RPCs), 00003 (REPLICA IDENTITY FULL for Realtime).
+DB password stored in .env as SUPABASE_DB_PASSWORD (gitignored) for CLI push operations.
 
 6-7 player pod assignment UX resolved: warn admin about high bye count, proceed anyway. No 3-player pods or minimum player restriction.
 
@@ -90,7 +91,7 @@ Test coverage: 226 unit tests (Vitest), 44 Cypress E2E tests, 15 visual regressi
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Per-event passphrase (no site-wide gate) | Anyone should be able to create an event for their group | ✓ Good — simple, works well |
-| Greedy pod assignment (not globally optimal) | Good enough for <20 players, simpler to implement and debug | — Pending (Phase 2) |
+| Greedy pod assignment (not globally optimal) | Good enough for <20 players, simpler to implement and debug | ✓ Good — 90.6% mutation score |
 | Browser notifications for timer | Players need alerts when app is backgrounded on phones | — Pending (Phase 3) |
 | Full test coverage from v1 | Pod algorithm is complex enough to warrant tests; integration tests catch real-time issues | ✓ Good — caught 13 bugs via milestone audit |
 | Visual-only timer alerts + browser notifications | No sound alerts — visual + push notification covers the use cases | — Pending (Phase 3) |
@@ -101,7 +102,10 @@ Test coverage: 226 unit tests (Vitest), 44 Cypress E2E tests, 15 visual regressi
 | eslint-disable with justification for set-state-in-effect | useRef approach blocked by react-hooks/refs rule; documented justification | ⚠️ Revisit — 3 suppressed warnings |
 | Cypress spec files use .js extension | Matches specPattern and ESLint scoping | ✓ Good |
 | data-testid hierarchical kebab-case naming | component-element pattern for consistency | ✓ Good |
-| 6-7 player pod: warn admin, proceed anyway | Avoids complexity of 3-player pods; admin has context to decide | — Pending (Phase 2) |
+| 6-7 player pod: warn admin, proceed anyway | Avoids complexity of 3-player pods; admin has context to decide | ✓ Good |
+| Trash2 icon for remove player | UserMinus was confusing; trash can is more universally understood | ✓ Good |
+| REPLICA IDENTITY FULL on tables with Realtime filters | Required for Supabase Realtime to filter by non-PK columns (event_id) | ✓ Good — fixed silent Realtime failure |
+| SUPABASE_DB_PASSWORD in .env | Enables CLI `supabase db push` without manual password entry | ✓ Good — .env is gitignored |
 
 ---
-*Last updated: 2026-02-24 after v2.0 milestone started*
+*Last updated: 2026-02-25 after Phase 2 complete + bug fixes (anon key, REPLICA IDENTITY, migration push)*
