@@ -29,3 +29,12 @@ dist-ssr
 cypress/snapshots/actual/
 cypress/snapshots/diff/
 cypress/videos/
+
+# Test coverage
+coverage/
+
+# Supabase
+supabase/.temp/
+
+# Misc
+VERIFICATION-CHECKLIST.md
