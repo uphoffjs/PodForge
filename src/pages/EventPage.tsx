@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'react-router'
-import { toast } from 'sonner'
-import { Copy, Loader2, LogOut, Lock } from 'lucide-react'
+import { Loader2, LogOut, Lock } from 'lucide-react'
 import { useEvent } from '@/hooks/useEvent'
 import { useEventPlayers } from '@/hooks/useEventPlayers'
 import { useEventChannel } from '@/hooks/useEventChannel'
@@ -14,7 +13,7 @@ import { useAdminAuth } from '@/hooks/useAdminAuth'
 import { JoinEventForm } from '@/components/JoinEventForm'
 import { PlayerList } from '@/components/PlayerList'
 import { AddPlayerForm } from '@/components/AddPlayerForm'
-import { QRCodeDisplay } from '@/components/QRCodeDisplay'
+import { EventInfoBar } from '@/components/EventInfoBar'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { RoundDisplay } from '@/components/RoundDisplay'
 import { AdminControls } from '@/components/AdminControls'
@@ -126,16 +125,6 @@ export function EventPage() {
     [eventId],
   )
 
-  const handleCopyLink = useCallback(async () => {
-    const url = `${window.location.origin}/event/${eventId}`
-    try {
-      await navigator.clipboard.writeText(url)
-      toast.success('Link copied!')
-    } catch {
-      toast.error('Failed to copy link.')
-    }
-  }, [eventId])
-
   const handleLeaveConfirm = useCallback(() => {
     if (!currentPlayerId) return
     dropPlayer.mutate(currentPlayerId, {
@@ -198,6 +187,7 @@ export function EventPage() {
   const isEventEnded = event?.status === 'ended'
   const isJoined = !!currentPlayerId || skippedJoin
   const showJoinForm = !isJoined && !isEventEnded
+  const activePlayerCount = players?.filter((p) => p.status === 'active').length ?? 0
 
   // Determine if the current player is active (for showing Leave Event button)
   const isActivePlayer =
@@ -206,15 +196,14 @@ export function EventPage() {
 
   return (
     <div className="flex flex-col items-center min-h-screen px-4 py-6">
-      {/* Event header */}
-      <div className="w-full max-w-lg text-center mb-6">
-        <h1 className="text-3xl font-display font-bold text-accent" data-testid="event-name">
-          {event?.name}
-        </h1>
-        <span className="inline-block mt-2 px-3 py-1 text-xs font-semibold uppercase rounded-full bg-surface-raised border border-border text-text-secondary" data-testid="event-status">
-          {event?.status}
-        </span>
-      </div>
+      {/* Event info bar */}
+      <EventInfoBar
+        eventId={eventId}
+        eventName={event?.name ?? ''}
+        eventStatus={event?.status ?? 'active'}
+        activePlayerCount={activePlayerCount}
+        currentRoundNumber={currentRound?.round_number ?? null}
+      />
 
       {/* Event ended banner */}
       {isEventEnded && (
@@ -315,32 +304,6 @@ export function EventPage() {
           </button>
         </div>
       )}
-
-      {/* Share section */}
-      <div className="w-full max-w-lg flex flex-col items-center gap-4 p-4 bg-surface-raised border border-border rounded-xl">
-        <h2 className="text-lg font-semibold text-text-primary">Share This Event</h2>
-
-        <QRCodeDisplay eventId={eventId} />
-
-        <div className="flex items-center gap-2 w-full">
-          <input
-            type="text"
-            readOnly
-            value={`${window.location.origin}/event/${eventId}`}
-            data-testid="share-link-input"
-            className="flex-1 px-3 py-2 text-sm bg-surface border border-border rounded-lg text-text-secondary truncate"
-          />
-          <button
-            type="button"
-            onClick={handleCopyLink}
-            data-testid="share-copy-btn"
-            className="flex items-center gap-1 px-3 py-2 text-sm font-medium bg-accent text-surface rounded-lg hover:bg-accent-bright transition-colors"
-          >
-            <Copy className="w-4 h-4" />
-            Copy
-          </button>
-        </div>
-      </div>
 
       {/* Leave Event confirmation dialog */}
       <ConfirmDialog

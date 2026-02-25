@@ -16,8 +16,6 @@ const {
   mockClearPlayerId,
   mockStorePlayerId,
   mockUseParams,
-  mockToastSuccess,
-  mockToastError,
   mockUseEventChannel,
   mockUseVisibilityRefetch,
   mockUseDropPlayer,
@@ -32,8 +30,6 @@ const {
   mockClearPlayerId: vi.fn(),
   mockStorePlayerId: vi.fn(),
   mockUseParams: vi.fn(),
-  mockToastSuccess: vi.fn(),
-  mockToastError: vi.fn(),
   mockUseEventChannel: vi.fn(),
   mockUseVisibilityRefetch: vi.fn(),
   mockUseDropPlayer: vi.fn(),
@@ -86,10 +82,6 @@ vi.mock('@/lib/player-identity', () => ({
   storePlayerId: (...args: unknown[]) => mockStorePlayerId(...args),
 }))
 
-vi.mock('sonner', () => ({
-  toast: { success: mockToastSuccess, error: mockToastError },
-}))
-
 // ---------------------------------------------------------------------------
 // Mock child components to isolate page logic
 // ---------------------------------------------------------------------------
@@ -133,8 +125,27 @@ vi.mock('@/components/AddPlayerForm', () => ({
   AddPlayerForm: () => <div data-testid="add-player-form" />,
 }))
 
-vi.mock('@/components/QRCodeDisplay', () => ({
-  QRCodeDisplay: () => <div data-testid="qr-code" />,
+vi.mock('@/components/EventInfoBar', () => ({
+  EventInfoBar: ({
+    eventName,
+    eventStatus,
+    activePlayerCount,
+    currentRoundNumber,
+  }: {
+    eventId: string
+    eventName: string
+    eventStatus: string
+    activePlayerCount: number
+    currentRoundNumber: number | null
+  }) => (
+    <div
+      data-testid="event-info-bar"
+      data-event-name={eventName}
+      data-event-status={eventStatus}
+      data-active-player-count={activePlayerCount}
+      data-current-round-number={currentRoundNumber ?? ''}
+    />
+  ),
 }))
 
 vi.mock('@/components/ConfirmDialog', () => ({
@@ -266,27 +277,6 @@ function setDefaultMocks() {
 }
 
 // ---------------------------------------------------------------------------
-// Clipboard mock helper -- navigator.clipboard is a read-only getter in jsdom
-// ---------------------------------------------------------------------------
-let originalClipboard: Clipboard
-
-function mockClipboard(writeText: ReturnType<typeof vi.fn>) {
-  Object.defineProperty(navigator, 'clipboard', {
-    value: { writeText },
-    writable: true,
-    configurable: true,
-  })
-}
-
-function restoreClipboard() {
-  Object.defineProperty(navigator, 'clipboard', {
-    value: originalClipboard,
-    writable: true,
-    configurable: true,
-  })
-}
-
-// ---------------------------------------------------------------------------
 // Helper to read newPlayerIds from the PlayerList mock
 // ---------------------------------------------------------------------------
 function getNewPlayerIds(): string[] {
@@ -301,11 +291,9 @@ describe('EventPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setDefaultMocks()
-    originalClipboard = navigator.clipboard
   })
 
   afterEach(() => {
-    restoreClipboard()
     vi.useRealTimers()
   })
 
@@ -362,13 +350,45 @@ describe('EventPage', () => {
     expect(screen.getByText('No event ID provided.')).toBeInTheDocument()
   })
 
-  // --- Loaded state: header ---
+  // --- Loaded state: EventInfoBar ---
 
-  it('shows event name and status badge when loaded', () => {
+  it('renders EventInfoBar with correct props when loaded', () => {
     render(<EventPage />)
 
-    expect(screen.getByTestId('event-name')).toHaveTextContent('Test Event')
-    expect(screen.getByTestId('event-status')).toHaveTextContent('active')
+    const infoBar = screen.getByTestId('event-info-bar')
+    expect(infoBar).toBeInTheDocument()
+    expect(infoBar).toHaveAttribute('data-event-name', 'Test Event')
+    expect(infoBar).toHaveAttribute('data-event-status', 'active')
+    expect(infoBar).toHaveAttribute('data-active-player-count', '1')
+    expect(infoBar).toHaveAttribute('data-current-round-number', '')
+  })
+
+  it('passes active player count excluding dropped players to EventInfoBar', () => {
+    mockUseEventPlayers.mockReturnValue({
+      data: [
+        { id: 'p1', name: 'Alice', status: 'active', event_id: 'evt1', created_at: '2024-01-01' },
+        { id: 'p2', name: 'Bob', status: 'dropped', event_id: 'evt1', created_at: '2024-01-02' },
+        { id: 'p3', name: 'Charlie', status: 'active', event_id: 'evt1', created_at: '2024-01-03' },
+      ],
+      isLoading: false,
+    })
+
+    render(<EventPage />)
+
+    const infoBar = screen.getByTestId('event-info-bar')
+    expect(infoBar).toHaveAttribute('data-active-player-count', '2')
+  })
+
+  it('passes current round number to EventInfoBar when round exists', () => {
+    mockUseCurrentRound.mockReturnValue({
+      data: { id: 'r1', event_id: 'evt1', round_number: 3, created_at: '2024-01-01' },
+      isLoading: false,
+    })
+
+    render(<EventPage />)
+
+    const infoBar = screen.getByTestId('event-info-bar')
+    expect(infoBar).toHaveAttribute('data-current-round-number', '3')
   })
 
   // --- Join form visibility ---
@@ -547,55 +567,6 @@ describe('EventPage', () => {
     expect(screen.queryByTestId('leave-event-btn')).not.toBeInTheDocument()
     // Join form should reappear (skippedJoin reset to false, no currentPlayerId)
     expect(screen.getByTestId('join-form')).toBeInTheDocument()
-  })
-
-  // --- Share section ---
-
-  it('shows share section with QR code', () => {
-    render(<EventPage />)
-
-    expect(screen.getByText('Share This Event')).toBeInTheDocument()
-    expect(screen.getByTestId('qr-code')).toBeInTheDocument()
-  })
-
-  it('shows share link input with correct URL', () => {
-    render(<EventPage />)
-
-    const linkInput = screen.getByTestId('share-link-input')
-    expect(linkInput).toBeInTheDocument()
-    expect(linkInput).toHaveValue(
-      `${window.location.origin}/event/evt1`
-    )
-  })
-
-  it('copies link to clipboard and shows success toast', async () => {
-    const user = userEvent.setup()
-    const writeText = vi.fn().mockResolvedValue(undefined)
-    mockClipboard(writeText)
-
-    render(<EventPage />)
-
-    await user.click(screen.getByTestId('share-copy-btn'))
-
-    expect(writeText).toHaveBeenCalledTimes(1)
-    expect(writeText).toHaveBeenCalledWith(
-      `${window.location.origin}/event/evt1`
-    )
-    expect(mockToastSuccess).toHaveBeenCalledTimes(1)
-    expect(mockToastSuccess).toHaveBeenCalledWith('Link copied!')
-  })
-
-  it('shows error toast when clipboard write fails', async () => {
-    const user = userEvent.setup()
-    const writeText = vi.fn().mockRejectedValue(new Error('Clipboard denied'))
-    mockClipboard(writeText)
-
-    render(<EventPage />)
-
-    await user.click(screen.getByTestId('share-copy-btn'))
-
-    expect(mockToastError).toHaveBeenCalledTimes(1)
-    expect(mockToastError).toHaveBeenCalledWith('Failed to copy link.')
   })
 
   // --- Player list always visible ---
@@ -1038,14 +1009,6 @@ describe('EventPage', () => {
     expect(screen.queryByTestId('join-form')).not.toBeInTheDocument()
   })
 
-  it('shows copy button with correct text', () => {
-    render(<EventPage />)
-
-    const copyBtn = screen.getByTestId('share-copy-btn')
-    expect(copyBtn).toBeInTheDocument()
-    expect(copyBtn).toHaveTextContent('Copy')
-  })
-
   // --- Hook argument fallbacks (kills ?? '' → ?? 'Stryker' mutations) ---
 
   it('passes empty string fallback to hooks when eventId is undefined', () => {
@@ -1200,33 +1163,6 @@ describe('EventPage', () => {
       expect(mockStorePlayerId).toHaveBeenCalledWith('evt2', 'p-new')
     })
 
-    it('handleCopyLink uses current eventId after eventId change', async () => {
-      const user = userEvent.setup()
-      const writeText = vi.fn().mockResolvedValue(undefined)
-      mockClipboard(writeText)
-      mockUseParams.mockReturnValue({ eventId: 'evt1' })
-
-      const { rerender } = render(<EventPage />)
-
-      mockUseParams.mockReturnValue({ eventId: 'evt2' })
-      mockUseEvent.mockReturnValue({
-        data: { id: 'evt2', name: 'Event 2', status: 'active', created_at: '2024-01-01' },
-        isLoading: false,
-        error: null,
-      })
-      mockUseEventPlayers.mockReturnValue({
-        data: defaultPlayers,
-        isLoading: false,
-      })
-
-      rerender(<EventPage />)
-
-      await user.click(screen.getByTestId('share-copy-btn'))
-
-      expect(writeText).toHaveBeenCalledWith(
-        expect.stringContaining('/event/evt2')
-      )
-    })
   })
 
   // --- Highlight detection edge cases (kills added.size > 0 and cleanup mutations) ---
