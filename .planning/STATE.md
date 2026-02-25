@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone -- who they're playing with, what seat they're in, and how much time they have.
-**Current focus:** v2.0 Complete App — Phase 2 complete (including gap closure)
+**Current focus:** v2.0 Complete App — Phase 2.1 E2E and integration tests in progress
 
 ## Current Position
 
-Phase: 02-pod-generation-and-admin-controls (Plan 5 of 5 complete)
-Plan: 02-05 complete, phase complete
-Status: Phase Complete
-Last activity: 2026-02-24 — Completed 02-05 gap closure: useAllRoundsPods hook for complete opponent history
+Phase: 02.1-phase-2-e2e-and-integration-tests (Plan 1 of 3 complete)
+Plan: 02.1-01 complete
+Status: In Progress
+Last activity: 2026-02-25 — Completed 02.1-01: E2E tests for admin auth, round generation, and pod display
 
-Progress: v2.0 Phase 2 ██████████ 100% (5/5 plans)
+Progress: Phase 2.1 E2E Tests ███-------  33% (1/3 plans)
 
 ## Performance Metrics
 
@@ -22,6 +22,9 @@ Progress: v2.0 Phase 2 ██████████ 100% (5/5 plans)
 - Total plans completed: 12
 - Average duration: 5 min
 - Total execution time: 0.87 hours
+
+**Phase 2.1:**
+- 02.1-01: 4min, 2 tasks, 5 files
 
 ## Accumulated Context
 
@@ -40,6 +43,9 @@ Progress: v2.0 Phase 2 ██████████ 100% (5/5 plans)
 - 02-04: PreviousRounds lazy-fetches pod data only when a section is expanded (usePods called with roundId on expand)
 - 02-05: useAllRoundsPods fetches all rounds in a single Supabase query using .in('round_id', roundIds) for efficiency
 - 02-05: PodWithPlayers type import retained from usePods module; only the hook call was removed from AdminControls
+- 02.1-01: Differentiate useRounds vs useCurrentRound intercepts by checking URL for limit=1 query parameter
+- 02.1-01: Use .cy.js extension matching established Phase 1 pattern, overriding global .cy.ts preference
+- 02.1-01: Mock pods with full nested pod_players(*, players(*)) shape matching PostgREST select syntax
 
 ### Roadmap Evolution
 
@@ -55,6 +61,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-24
-Stopped at: Completed 02-05-PLAN.md — gap closure: useAllRoundsPods hook for complete opponent history across all rounds. Phase 02 fully complete.
+Last session: 2026-02-25
+Stopped at: Completed 02.1-01-PLAN.md — E2E tests for admin auth, round generation, and pod display (16 tests across 3 specs)
 Resume file: none
