@@ -33,3 +33,16 @@ export type PodPlayer = {
   player_id: string
   seat_number: number | null
 }
+
+export type RoundTimer = {
+  id: string
+  round_id: string
+  event_id: string
+  duration_minutes: number
+  status: 'running' | 'paused' | 'cancelled'
+  started_at: string
+  remaining_seconds: number | null
+  paused_at: string | null
+  expires_at: string
+  created_at: string
+}

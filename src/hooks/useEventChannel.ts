@@ -71,6 +71,18 @@ export function useEventChannel(eventId: string) {
           queryClient.invalidateQueries({ queryKey: ['allRoundsPods', eventId] })
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'round_timers',
+          filter: `event_id=eq.${eventId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['timer', eventId] })
+        }
+      )
       .subscribe((status, err) => {
         if (status === 'CHANNEL_ERROR') {
           console.error('[useEventChannel] Realtime channel error:', err?.message)

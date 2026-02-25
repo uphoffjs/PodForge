@@ -62,7 +62,7 @@ describe('useEventChannel', () => {
       wrapper: createWrapper(),
     })
 
-    expect(mockOn).toHaveBeenCalledTimes(5)
+    expect(mockOn).toHaveBeenCalledTimes(6)
 
     expect(mockOn).toHaveBeenCalledWith(
       'postgres_changes',
@@ -113,6 +113,17 @@ describe('useEventChannel', () => {
         event: '*',
         schema: 'public',
         table: 'pod_players',
+      },
+      expect.any(Function)
+    )
+
+    expect(mockOn).toHaveBeenCalledWith(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'round_timers',
+        filter: 'event_id=eq.evt1',
       },
       expect.any(Function)
     )
@@ -292,6 +303,40 @@ describe('useEventChannel', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['pods'],
     })
+  })
+
+  it('round_timers callback invalidates timer query with correct key', () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    renderHook(() => useEventChannel('evt1'), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    const timerCall = capturedCallbacks.find(
+      (c) => (c.config as { table: string }).table === 'round_timers'
+    )
+    expect(timerCall).toBeDefined()
+
+    timerCall!.callback()
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['timer', 'evt1'],
+    })
+  })
+
+  it('round_timers callback uses correct filter with eventId', () => {
+    renderHook(() => useEventChannel('abc-123'), {
+      wrapper: createWrapper(),
+    })
+
+    const timerCall = capturedCallbacks.find(
+      (c) => (c.config as { table: string }).table === 'round_timers'
+    )
+    expect(timerCall).toBeDefined()
+    expect((timerCall!.config as { filter: string }).filter).toBe('event_id=eq.abc-123')
   })
 
   it('rounds callback uses correct filter with eventId', () => {
