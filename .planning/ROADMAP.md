@@ -71,7 +71,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Database schema (round_timers table), timer RPC functions, TypeScript types, query/mutation hooks, Realtime updates
+- [x] 03-01-PLAN.md — Database schema (round_timers table), timer RPC functions, TypeScript types, query/mutation hooks, Realtime updates
 - [ ] 03-02-PLAN.md — Timer display (useCountdown, TimerDisplay, urgency colors, overtime), admin timer controls (TimerControls, duration picker), EventPage integration
 - [ ] 03-03-PLAN.md — Browser notifications (useTimerNotification hook, permission flow, iOS PWA handling)
 
@@ -100,6 +100,6 @@ Plans:
 | 1.3 Missing Coverage + Verification | v1.0 | 2/2 | Complete | 2026-02-23 |
 | 1.4 Sync Unit Tests | v1.0 | 1/1 | Complete | 2026-02-24 |
 | 2. Pod Generation and Admin Controls | v2.0 | 5/5 | Complete | 2026-02-24 |
-| 2.1 Phase 2 E2E and Integration Tests | v2.0 | 2/3 | In Progress | - |
-| 3. Timer System | — | 0/3 | Not started | - |
+| 2.1 Phase 2 E2E and Integration Tests | v2.0 | 3/3 | Complete | 2026-02-25 |
+| 3. Timer System | — | 1/3 | In Progress | - |
 | 4. Event Polish, Testing, and Deployment | — | 0/2 | Not started | - |

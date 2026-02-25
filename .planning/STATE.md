@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone -- who they're playing with, what seat they're in, and how much time they have.
-**Current focus:** v2.0 Complete App — Phase 2.1 E2E and integration tests in progress
+**Current focus:** v2.0 Complete App — Phase 3 Timer System in progress
 
 ## Current Position
 
-Phase: 02.1-phase-2-e2e-and-integration-tests (Plan 3 of 3 complete)
-Plan: 02.1-03 complete
-Status: Phase Complete
-Last activity: 2026-02-25 — Completed 02.1-03: Multi-round integration tests for pod algorithm fairness (12 tests) + full regression gate (317 Vitest + 75 Cypress)
+Phase: 03-timer-system (Plan 1 of 3 complete)
+Plan: 03-01 complete
+Status: In Progress
+Last activity: 2026-02-25 — Completed 03-01: Timer data layer (round_timers table, 4 RPCs, types, 5 hooks, Realtime)
 
-Progress: Phase 2.1 E2E Tests ██████████ 100% (3/3 plans)
+Progress: Phase 3 Timer System ███░░░░░░░ 33% (1/3 plans)
 
 ## Performance Metrics
 
@@ -40,6 +40,9 @@ Progress: Phase 2.1 E2E Tests ██████████ 100% (3/3 plans)
 - 02.1-01: 4min, 2 tasks, 5 files
 - 02.1-02: 6min, 2 tasks, 3 files
 - 02.1-03: 4min, 2 tasks, 1 file
+
+**Phase 3:**
+- 03-01: 2min, 2 tasks, 10 files
 
 ## Accumulated Context
 
@@ -66,6 +69,10 @@ Progress: Phase 2.1 E2E Tests ██████████ 100% (3/3 plans)
 - 02.1-02: Verified lazy loading via intercept alias .all length assertion before expand and cy.wait after expand
 - 02.1-03: Adjusted opponent avoidance bounds to match actual greedy algorithm behavior (max pair count <= 4 for 12 players, <= 4 repeat pairs for 8 players)
 - 02.1-03: Deferred visual regression baseline updates as pre-existing issue unrelated to Phase 2.1
+- 03-01: Server-authoritative timer: clients compute remaining = expires_at - now(), no drift between clients
+- 03-01: Denormalized event_id on round_timers for efficient Realtime filtering (avoids join through rounds)
+- 03-01: GREATEST(0, ...) on pause to prevent negative remaining_seconds
+- 03-01: extend_timer works on both running (updates expires_at) and paused (updates remaining_seconds) timers
 
 ### Roadmap Evolution
 
@@ -82,5 +89,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 02.1-03-PLAN.md — Phase 02.1 complete: multi-round integration tests + full regression suite (317 Vitest + 75 Cypress)
+Stopped at: Completed 03-01-PLAN.md — Timer data layer: round_timers table, 4 RPCs, RoundTimer type, 5 hooks, Realtime (319 Vitest tests pass)
 Resume file: none
