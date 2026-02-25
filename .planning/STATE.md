@@ -22,12 +22,12 @@ See: .planning/PROJECT.md (updated 2026-02-24)
 
 ## Current Position
 
-Phase: 03-timer-system (Plan 1 of 3 complete)
-Plan: 03-01 complete
+Phase: 03-timer-system (Plan 2 of 3 complete)
+Plan: 03-02 complete
 Status: In Progress
-Last activity: 2026-02-25 — Completed 03-01: Timer data layer (round_timers table, 4 RPCs, types, 5 hooks, Realtime)
+Last activity: 2026-02-25 — Completed 03-02: Timer display & controls (useCountdown hook, TimerDisplay, TimerControls, duration picker, EventPage integration)
 
-Progress: Phase 3 Timer System ███░░░░░░░ 33% (1/3 plans)
+Progress: Phase 3 Timer System ██████░░░░ 67% (2/3 plans)
 
 ## Performance Metrics
 
@@ -43,6 +43,7 @@ Progress: Phase 3 Timer System ███░░░░░░░ 33% (1/3 plans)
 
 **Phase 3:**
 - 03-01: 2min, 2 tasks, 10 files
+- 03-02: 3min, 2 tasks, 7 files
 
 ## Accumulated Context
 
@@ -73,6 +74,10 @@ Progress: Phase 3 Timer System ███░░░░░░░ 33% (1/3 plans)
 - 03-01: Denormalized event_id on round_timers for efficient Realtime filtering (avoids join through rounds)
 - 03-01: GREATEST(0, ...) on pause to prevent negative remaining_seconds
 - 03-01: extend_timer works on both running (updates expires_at) and paused (updates remaining_seconds) timers
+- 03-02: useCountdown recomputes from expires_at - Date.now() each tick for zero client-side drift
+- 03-02: TimerDisplay (presentation) and TimerControls (admin) are separate components wired by EventPage
+- 03-02: Duration picker toggles on re-click (deselect) since timer is optional per TIMR-01
+- 03-02: TimerControls only renders when admin has passphrase already, avoiding repeated prompts
 
 ### Roadmap Evolution
 
@@ -89,5 +94,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 03-01-PLAN.md — Timer data layer: round_timers table, 4 RPCs, RoundTimer type, 5 hooks, Realtime (319 Vitest tests pass)
+Stopped at: Completed 03-02-PLAN.md — Timer display & controls: useCountdown hook, TimerDisplay, TimerControls, duration picker, EventPage integration (334 Vitest tests pass)
 Resume file: none
