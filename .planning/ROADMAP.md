@@ -56,7 +56,7 @@ Plans:
 Plans:
 - [x] 02.1-01-PLAN.md — Admin passphrase, round generation, and pod display E2E tests
 - [x] 02.1-02-PLAN.md — Admin player management, end event, and previous rounds E2E tests
-- [ ] 02.1-03-PLAN.md — Sit-out fairness integration tests and full regression suite verification
+- [x] 02.1-03-PLAN.md — Sit-out fairness integration tests and full regression suite verification
 
 ### Phase 3: Timer System
 **Goal**: Admin can start, pause, resume, extend, and cancel a round timer that all players see counting down in real time with visual urgency cues and browser notifications at zero
