@@ -1,4 +1,5 @@
 import { useCountdown } from '@/hooks/useCountdown'
+import { useTimerNotification } from '@/hooks/useTimerNotification'
 import type { RoundTimer } from '@/types/database'
 
 interface TimerDisplayProps {
@@ -14,6 +15,7 @@ const urgencyStyles = {
 
 export function TimerDisplay({ timer }: TimerDisplayProps) {
   const countdown = useCountdown(timer)
+  const { isSupported, permission, requestPermission } = useTimerNotification(timer, countdown)
 
   if (!countdown) return null
 
@@ -40,6 +42,29 @@ export function TimerDisplay({ timer }: TimerDisplayProps) {
       >
         {statusLabel}
       </div>
+
+      {isSupported && permission === 'default' && (
+        <div
+          className="mt-2 flex items-center justify-center gap-2 text-xs text-text-secondary"
+          data-testid="timer-notification-prompt"
+        >
+          <span>Get alerted when time is up</span>
+          <button
+            type="button"
+            onClick={requestPermission}
+            className="rounded bg-white/10 px-2 py-0.5 font-medium hover:bg-white/20 transition-colors"
+            data-testid="timer-notification-enable-btn"
+          >
+            Enable
+          </button>
+        </div>
+      )}
+
+      {isSupported && permission === 'denied' && (
+        <div className="mt-2 text-xs text-text-secondary opacity-60">
+          Notifications blocked
+        </div>
+      )}
     </div>
   )
 }
