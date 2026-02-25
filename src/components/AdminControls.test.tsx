@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
@@ -13,16 +13,18 @@ vi.mock('@/lib/pod-algorithm', () => ({
   generatePods: (...args: unknown[]) => mockGeneratePods(...args),
 }))
 
-// Mock hooks
+// Mock hooks - configurable
 const mockMutate = vi.fn()
 const mockEndMutate = vi.fn()
 
+let mockGenerateRoundIsPending = false
 vi.mock('@/hooks/useGenerateRound', () => ({
-  useGenerateRound: () => ({ mutate: mockMutate, isPending: false }),
+  useGenerateRound: () => ({ mutate: mockMutate, isPending: mockGenerateRoundIsPending }),
 }))
 
+let mockEndEventIsPending = false
 vi.mock('@/hooks/useEndEvent', () => ({
-  useEndEvent: () => ({ mutate: mockEndMutate, isPending: false }),
+  useEndEvent: () => ({ mutate: mockEndMutate, isPending: mockEndEventIsPending }),
 }))
 
 // Configurable mock data for useRounds
@@ -92,6 +94,8 @@ describe('AdminControls', () => {
     vi.clearAllMocks()
     mockRoundsData = undefined
     mockAllPodsData = undefined
+    mockGenerateRoundIsPending = false
+    mockEndEventIsPending = false
     mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
   })
 
@@ -248,15 +252,28 @@ describe('AdminControls', () => {
     expect(mockGeneratePods).not.toHaveBeenCalled()
   })
 
-  it('does not call generatePods when event is ended', async () => {
+  it('handleGenerateRound returns early when event is ended (defensive guard)', async () => {
     const user = userEvent.setup()
 
-    render(
-      <AdminControls {...defaultProps} isEventEnded={true} />,
-      { wrapper: createWrapper() }
+    // Render with isEventEnded=false first (buttons are enabled)
+    const wrapper = createWrapper()
+    const { rerender } = render(
+      <AdminControls {...defaultProps} isEventEnded={false} />,
+      { wrapper }
     )
 
-    await user.click(screen.getByTestId('generate-round-btn'))
+    // Now rerender with isEventEnded=true -- buttons become disabled,
+    // but the timer duration section is hidden. The generate button is still in DOM.
+    rerender(<AdminControls {...defaultProps} isEventEnded={true} />)
+
+    // Use fireEvent which doesn't respect disabled in testing-library
+    const generateBtn = screen.getByTestId('generate-round-btn')
+    // Workaround: directly invoke onClick from React's internal props
+    const reactPropsKey = Object.keys(generateBtn).find(k => k.startsWith('__reactProps'))
+    if (reactPropsKey) {
+      const onClick = (generateBtn as Record<string, unknown>)[reactPropsKey] as { onClick?: () => void }
+      onClick?.onClick?.()
+    }
 
     expect(mockGeneratePods).not.toHaveBeenCalled()
   })
@@ -278,5 +295,354 @@ describe('AdminControls', () => {
     render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
 
     expect(screen.getByText('No rounds yet')).toBeInTheDocument()
+  })
+
+  // --- End Event button ---
+
+  it('calls onPassphraseNeeded when clicking End Event with null passphrase', async () => {
+    const user = userEvent.setup()
+    const onPassphraseNeeded = vi.fn()
+
+    render(
+      <AdminControls {...defaultProps} passphrase={null} onPassphraseNeeded={onPassphraseNeeded} />,
+      { wrapper: createWrapper() }
+    )
+
+    await user.click(screen.getByTestId('end-event-btn'))
+
+    expect(onPassphraseNeeded).toHaveBeenCalledTimes(1)
+    expect(mockEndMutate).not.toHaveBeenCalled()
+  })
+
+  it('handleEndEvent returns early when event is ended (defensive guard)', () => {
+    const onPassphraseNeeded = vi.fn()
+
+    render(
+      <AdminControls {...defaultProps} isEventEnded={true} onPassphraseNeeded={onPassphraseNeeded} />,
+      { wrapper: createWrapper() }
+    )
+
+    const btn = screen.getByTestId('end-event-btn')
+    // Directly invoke React's onClick handler bypassing disabled check
+    const reactPropsKey = Object.keys(btn).find(k => k.startsWith('__reactProps'))
+    if (reactPropsKey) {
+      const props = (btn as Record<string, unknown>)[reactPropsKey] as { onClick?: () => void }
+      props?.onClick?.()
+    }
+
+    expect(onPassphraseNeeded).not.toHaveBeenCalled()
+    expect(mockEndMutate).not.toHaveBeenCalled()
+  })
+
+  it('opens ConfirmDialog when clicking End Event with valid passphrase', async () => {
+    const user = userEvent.setup()
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
+
+    await user.click(screen.getByTestId('end-event-btn'))
+
+    expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument()
+  })
+
+  // --- End Event confirm flow ---
+
+  it('calls endEvent.mutate on confirm with passphrase', async () => {
+    const user = userEvent.setup()
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('end-event-btn'))
+    await user.click(screen.getByTestId('confirm-dialog-confirm-btn'))
+
+    expect(mockEndMutate).toHaveBeenCalledTimes(1)
+    expect(mockEndMutate).toHaveBeenCalledWith(
+      { passphrase: 'secret123' },
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      })
+    )
+  })
+
+  it('endEvent onSuccess closes the confirm dialog', async () => {
+    const user = userEvent.setup()
+    mockEndMutate.mockImplementation(
+      (_params: unknown, options: { onSuccess?: () => void }) => {
+        options.onSuccess?.()
+      }
+    )
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('end-event-btn'))
+    expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument()
+
+    await user.click(screen.getByTestId('confirm-dialog-confirm-btn'))
+
+    expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
+  })
+
+  it('endEvent onError closes the confirm dialog', async () => {
+    const user = userEvent.setup()
+    mockEndMutate.mockImplementation(
+      (_params: unknown, options: { onError?: () => void }) => {
+        options.onError?.()
+      }
+    )
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('end-event-btn'))
+    expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument()
+
+    await user.click(screen.getByTestId('confirm-dialog-confirm-btn'))
+
+    expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
+  })
+
+  it('handleEndEventConfirm returns early when passphrase becomes null', async () => {
+    const user = userEvent.setup()
+    const wrapper = createWrapper()
+
+    const { rerender } = render(
+      <AdminControls {...defaultProps} />,
+      { wrapper }
+    )
+
+    // Open dialog
+    await user.click(screen.getByTestId('end-event-btn'))
+    expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument()
+
+    // Rerender with null passphrase (simulate race condition)
+    rerender(<AdminControls {...defaultProps} passphrase={null} />)
+
+    // Click confirm - should bail out early
+    await user.click(screen.getByTestId('confirm-dialog-confirm-btn'))
+
+    expect(mockEndMutate).not.toHaveBeenCalled()
+  })
+
+  it('cancel button closes the end event confirm dialog', async () => {
+    const user = userEvent.setup()
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('end-event-btn'))
+    expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument()
+
+    await user.click(screen.getByTestId('confirm-dialog-cancel-btn'))
+
+    expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
+  })
+
+  // --- Timer duration picker ---
+
+  it('renders timer duration buttons when event is not ended', () => {
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    expect(screen.getByTestId('timer-duration-60')).toBeInTheDocument()
+    expect(screen.getByTestId('timer-duration-90')).toBeInTheDocument()
+    expect(screen.getByTestId('timer-duration-120')).toBeInTheDocument()
+  })
+
+  it('hides timer duration buttons when event is ended', () => {
+    render(
+      <AdminControls {...defaultProps} isEventEnded={true} />,
+      { wrapper: createWrapper() }
+    )
+
+    expect(screen.queryByTestId('timer-duration-60')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('timer-duration-90')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('timer-duration-120')).not.toBeInTheDocument()
+  })
+
+  it('clicking a duration button selects it', async () => {
+    const user = userEvent.setup()
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    const btn60 = screen.getByTestId('timer-duration-60')
+    expect(btn60.className).toContain('bg-surface')
+
+    await user.click(btn60)
+
+    expect(btn60.className).toContain('bg-accent')
+  })
+
+  it('clicking the same duration button again deselects it (toggle)', async () => {
+    const user = userEvent.setup()
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    const btn60 = screen.getByTestId('timer-duration-60')
+
+    await user.click(btn60)
+    expect(btn60.className).toContain('bg-accent')
+
+    await user.click(btn60)
+    expect(btn60.className).toContain('bg-surface')
+  })
+
+  it('passes selected duration to generateRound.mutate as timerDurationMinutes', async () => {
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({ assignments: [{ playerIds: ['p1', 'p2', 'p3', 'p4'], isBye: false }], warnings: [] })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('timer-duration-90'))
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(mockMutate).toHaveBeenCalledTimes(1)
+    expect(mockMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ timerDurationMinutes: 90 }),
+      expect.any(Object)
+    )
+  })
+
+  it('passes undefined timerDurationMinutes when no duration selected', async () => {
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(mockMutate).toHaveBeenCalledTimes(1)
+    expect(mockMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ timerDurationMinutes: undefined }),
+      expect.any(Object)
+    )
+  })
+
+  // --- Generate round success/error callbacks ---
+
+  it('onSuccess callback shows toast, resets isGenerating, and resets selectedDuration', async () => {
+    const { toast } = await import('sonner')
+    const user = userEvent.setup()
+    mockRoundsData = [
+      { id: 'r1', event_id: 'evt1', round_number: 1, created_at: '2026-01-01T00:00:00Z' },
+    ]
+    mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
+    mockMutate.mockImplementation(
+      (_params: unknown, options: { onSuccess?: () => void }) => {
+        options.onSuccess?.()
+      }
+    )
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    // Select a duration first
+    await user.click(screen.getByTestId('timer-duration-60'))
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(toast.success).toHaveBeenCalledWith('Round 2 generated!')
+    // Duration should be reset (back to unselected style)
+    expect(screen.getByTestId('timer-duration-60').className).toContain('bg-surface')
+  })
+
+  it('onError callback resets isGenerating', async () => {
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
+    mockMutate.mockImplementation(
+      (_params: unknown, options: { onError?: () => void }) => {
+        options.onError?.()
+      }
+    )
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    // After error, button should go back to normal (not "Generating...")
+    expect(screen.getByTestId('generate-round-btn')).toHaveTextContent('Generate Next Round')
+  })
+
+  it('generatePods throwing shows toast.error with the error message', async () => {
+    const { toast } = await import('sonner')
+    const user = userEvent.setup()
+    mockGeneratePods.mockImplementation(() => {
+      throw new Error('Not enough players')
+    })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(toast.error).toHaveBeenCalledWith('Not enough players')
+    expect(mockMutate).not.toHaveBeenCalled()
+  })
+
+  it('algorithm warnings are shown via toast.warning', async () => {
+    const { toast } = await import('sonner')
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({
+      assignments: [],
+      warnings: ['Some players will be repeated opponents'],
+    })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(toast.warning).toHaveBeenCalledWith('Some players will be repeated opponents')
+  })
+
+  // --- Edge case: generatePods throws non-Error ---
+
+  it('generatePods throwing a non-Error does not call toast.error', async () => {
+    const { toast } = await import('sonner')
+    const user = userEvent.setup()
+    mockGeneratePods.mockImplementation(() => {
+      throw 'string error' // eslint-disable-line no-throw-literal
+    })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(mockMutate).not.toHaveBeenCalled()
+  })
+
+  // --- Edge case: buildRoundHistoryFromData with missing pods for a round ---
+
+  it('handles round with no pods in the pods map (fallback to empty array)', async () => {
+    const user = userEvent.setup()
+
+    mockRoundsData = [
+      { id: 'r1', event_id: 'evt1', round_number: 1, created_at: '2026-01-01T00:00:00Z' },
+    ]
+    // allPods is defined but has no pods for round r1
+    mockAllPodsData = []
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(mockGeneratePods).toHaveBeenCalledTimes(1)
+    const [, previousRounds] = mockGeneratePods.mock.calls[0]
+    expect(previousRounds).toHaveLength(1)
+    expect(previousRounds[0].pods).toHaveLength(0) // empty because no pods matched r1
+  })
+
+  // --- isPending state ---
+
+  it('shows "Generating..." text with Loader icon when isPending', () => {
+    mockGenerateRoundIsPending = true
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    expect(screen.getByTestId('generate-round-btn')).toHaveTextContent('Generating...')
+  })
+
+  it('shows "Ending..." text when endEvent.isPending', () => {
+    mockEndEventIsPending = true
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    expect(screen.getByTestId('end-event-btn')).toHaveTextContent('Ending...')
   })
 })
