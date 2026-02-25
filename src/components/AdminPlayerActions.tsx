@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { UserMinus, UserPlus } from 'lucide-react'
+import { Trash2, UserPlus } from 'lucide-react'
 import { useRemovePlayer } from '@/hooks/useRemovePlayer'
 import { useReactivatePlayer } from '@/hooks/useReactivatePlayer'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -81,7 +81,7 @@ export function AdminPlayerActions({
           className="ml-2 text-error/60 hover:text-error transition-colors disabled:opacity-50"
           title={`Remove ${playerName}`}
         >
-          <UserMinus className="w-4 h-4" />
+          <Trash2 className="w-4 h-4" />
         </button>
       ) : (
         <button
