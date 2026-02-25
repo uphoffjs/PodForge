@@ -38,10 +38,14 @@ export function useGenerateRound(eventId: string) {
     },
     onError: (error: Error) => {
       const message = error.message.toLowerCase()
-      if (message.includes('passphrase') || message.includes('invalid')) {
+      if (message.includes('invalid passphrase')) {
         toast.error('Invalid passphrase')
       } else if (message.includes('fewer than 4')) {
         toast.error(error.message)
+      } else if (message.includes('event not found')) {
+        toast.error('Event not found')
+      } else if (message.includes('event has ended')) {
+        toast.error('Event has ended')
       } else {
         toast.error('Failed to generate round. Please try again.')
       }

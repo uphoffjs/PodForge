@@ -25,7 +25,7 @@ export function useExtendTimer(eventId: string) {
     },
     onError: (error: Error) => {
       const message = error.message.toLowerCase()
-      if (message.includes('passphrase') || message.includes('invalid')) {
+      if (message.includes('invalid passphrase')) {
         toast.error('Invalid passphrase')
       } else {
         toast.error('Failed to extend timer')
