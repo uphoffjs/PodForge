@@ -68,11 +68,12 @@ Plans:
   3. Admin can pause, resume, add 5 minutes, and cancel the timer; changes reflect on all clients in real time
   4. Timer changes color at thresholds (yellow under 10 min, red under 5 min, flashing at 0:00)
   5. Browser notification fires when timer reaches zero, with a graceful permission request flow
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md — Database schema (round_timers table), timer RPC functions, TypeScript types, query/mutation hooks, Realtime updates
+- [ ] 03-02-PLAN.md — Timer display (useCountdown, TimerDisplay, urgency colors, overtime), admin timer controls (TimerControls, duration picker), EventPage integration
+- [ ] 03-03-PLAN.md — Browser notifications (useTimerNotification hook, permission flow, iOS PWA handling)
 
 ### Phase 4: Event Polish, Testing, and Deployment
 **Goal**: Event page shows full info bar with QR code and share link, all critical paths have test coverage, and the app is deployable to Vercel + Supabase
@@ -100,5 +101,5 @@ Plans:
 | 1.4 Sync Unit Tests | v1.0 | 1/1 | Complete | 2026-02-24 |
 | 2. Pod Generation and Admin Controls | v2.0 | 5/5 | Complete | 2026-02-24 |
 | 2.1 Phase 2 E2E and Integration Tests | v2.0 | 2/3 | In Progress | - |
-| 3. Timer System | — | 0/2 | Not started | - |
+| 3. Timer System | — | 0/3 | Not started | - |
 | 4. Event Polish, Testing, and Deployment | — | 0/2 | Not started | - |
