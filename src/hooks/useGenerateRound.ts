@@ -31,6 +31,7 @@ export function useGenerateRound(eventId: string) {
       queryClient.invalidateQueries({ queryKey: ['rounds', eventId] })
       queryClient.invalidateQueries({ queryKey: ['currentRound', eventId] })
       queryClient.invalidateQueries({ queryKey: ['pods'] })
+      queryClient.invalidateQueries({ queryKey: ['allRoundsPods', eventId] })
     },
     onError: (error: Error) => {
       const message = error.message.toLowerCase()

@@ -4,7 +4,7 @@ import type { PodWithPlayers } from '@/hooks/usePods'
 
 export function useAllRoundsPods(eventId: string, roundIds: string[]) {
   return useQuery<PodWithPlayers[]>({
-    queryKey: ['allRoundsPods', eventId],
+    queryKey: ['allRoundsPods', eventId, roundIds],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('pods')

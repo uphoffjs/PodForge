@@ -158,13 +158,14 @@ export function generatePods(
   let podPlayers: PlayerInfo[]
 
   if (numByes > 0) {
-    // Sort by fewest byes (ascending), break ties randomly
-    const sorted = [...activePlayers].sort((a, b) => {
+    // Shuffle first for random tie-breaking, then stable sort by bye count.
+    // Using Math.random() inside a sort comparator is broken because it
+    // violates transitivity and can produce incorrect orderings.
+    const shuffled = shuffleArray(activePlayers)
+    const sorted = shuffled.sort((a, b) => {
       const aByes = byeCounts.get(a.id) ?? 0
       const bByes = byeCounts.get(b.id) ?? 0
-      if (aByes !== bByes) return aByes - bByes
-      // Random tie-breaking
-      return Math.random() - 0.5
+      return aByes - bByes
     })
 
     byePlayers = sorted.slice(0, numByes)

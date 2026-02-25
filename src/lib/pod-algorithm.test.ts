@@ -456,6 +456,79 @@ describe('pod-algorithm', () => {
         // With randomized tie-breaking, multiple different players should get byes
         expect(byePlayerSets.size).toBeGreaterThan(1)
       })
+
+      it('fairly rotates sit-outs across 4 rounds with 7 players (regression: sit-out-fairness-bug)', () => {
+        // Regression test: With 7 players and pod size 4, 3 players sit out each round.
+        // Over 4 rounds, no player should sit out more than 2 times (fair distribution).
+        // Previously, the same players would sit out every round due to stale bye data
+        // and a broken sort comparator using Math.random() - 0.5.
+        const players = makePlayers(7)
+        const byeCountMap = new Map<string, number>()
+        for (const p of players) {
+          byeCountMap.set(p.id, 0)
+        }
+
+        // Simulate 4 consecutive rounds, building history as we go
+        let previousRounds: RoundHistory[] = []
+        for (let round = 0; round < 4; round++) {
+          const result = generatePods(players, previousRounds)
+
+          // Build round history from result
+          const roundHistory: RoundHistory = {
+            pods: result.assignments.map((a) => ({
+              playerIds: a.players.map((p) => p.player_id),
+              isBye: a.is_bye,
+            })),
+          }
+          previousRounds.push(roundHistory)
+
+          // Track bye counts
+          const byePod = result.assignments.find((a) => a.is_bye)
+          if (byePod) {
+            for (const p of byePod.players) {
+              byeCountMap.set(p.player_id, (byeCountMap.get(p.player_id) ?? 0) + 1)
+            }
+          }
+        }
+
+        // With 7 players, 3 byes per round, 4 rounds = 12 total sit-outs
+        // Fair distribution: each player sits out ~12/7 ~= 1.7 times
+        // No player should sit out more than 2 times (allowing for rounding)
+        const byeCounts = Array.from(byeCountMap.values())
+        const maxByes = Math.max(...byeCounts)
+        const minByes = Math.min(...byeCounts)
+
+        // Max bye count should not exceed 2 (with fair rotation)
+        expect(maxByes).toBeLessThanOrEqual(2)
+        // The spread between most and least should be at most 1
+        expect(maxByes - minByes).toBeLessThanOrEqual(1)
+      })
+
+      it('never picks the highest-bye player for sit-out when lower-bye players exist (sort stability)', () => {
+        // Targeted regression test for the Math.random()-0.5 sort comparator bug.
+        // The broken comparator could violate transitivity and place high-bye players
+        // before low-bye players. Run many iterations to catch statistical failures.
+        const players = makePlayers(5)
+
+        // Player-5 has 3 byes, all others have 0
+        const previousRounds: RoundHistory[] = []
+        for (let i = 0; i < 3; i++) {
+          previousRounds.push({
+            pods: [
+              { playerIds: ['player-1', 'player-2', 'player-3', 'player-4'], isBye: false },
+              { playerIds: ['player-5'], isBye: true },
+            ],
+          })
+        }
+
+        // Run 50 times. Player-5 should NEVER be picked (3 byes vs 0 for others)
+        for (let i = 0; i < 50; i++) {
+          const result = generatePods(players, previousRounds)
+          const byePod = result.assignments.find((a) => a.is_bye)
+          const byePlayerIds = byePod!.players.map((p) => p.player_id)
+          expect(byePlayerIds).not.toContain('player-5')
+        }
+      })
     })
 
     describe('result structure', () => {

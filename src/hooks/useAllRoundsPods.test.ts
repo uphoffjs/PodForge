@@ -85,7 +85,7 @@ describe('useAllRoundsPods', () => {
     expect(result.current.error).toEqual({ message: 'Query failed' })
   })
 
-  it('uses queryKey containing allRoundsPods and eventId', async () => {
+  it('uses queryKey containing allRoundsPods, eventId, and roundIds', async () => {
     mockOrder.mockResolvedValue({ data: [], error: null })
 
     const queryClient = new QueryClient({
@@ -104,6 +104,6 @@ describe('useAllRoundsPods', () => {
     const queryCache = queryClient.getQueryCache()
     const queries = queryCache.getAll()
     expect(queries).toHaveLength(1)
-    expect(queries[0].queryKey).toEqual(['allRoundsPods', 'evt-abc'])
+    expect(queries[0].queryKey).toEqual(['allRoundsPods', 'evt-abc', ['r1']])
   })
 })

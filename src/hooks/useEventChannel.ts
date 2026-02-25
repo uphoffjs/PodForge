@@ -56,6 +56,7 @@ export function useEventChannel(eventId: string) {
         },
         () => {
           queryClient.invalidateQueries({ queryKey: ['pods'] })
+          queryClient.invalidateQueries({ queryKey: ['allRoundsPods', eventId] })
         }
       )
       .on(
@@ -67,9 +68,17 @@ export function useEventChannel(eventId: string) {
         },
         () => {
           queryClient.invalidateQueries({ queryKey: ['pods'] })
+          queryClient.invalidateQueries({ queryKey: ['allRoundsPods', eventId] })
         }
       )
-      .subscribe()
+      .subscribe((status, err) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.error('[useEventChannel] Realtime channel error:', err?.message)
+        }
+        if (status === 'TIMED_OUT') {
+          console.warn('[useEventChannel] Realtime channel subscription timed out')
+        }
+      })
 
     return () => {
       supabase.removeChannel(channel)
