@@ -8,6 +8,7 @@ import { useEventChannel } from '@/hooks/useEventChannel'
 import { useVisibilityRefetch } from '@/hooks/useVisibilityRefetch'
 import { useDropPlayer } from '@/hooks/useDropPlayer'
 import { useCurrentRound } from '@/hooks/useCurrentRound'
+import { useTimer } from '@/hooks/useTimer'
 import { getStoredPlayerId, clearPlayerId, storePlayerId } from '@/lib/player-identity'
 import { useAdminAuth } from '@/hooks/useAdminAuth'
 import { JoinEventForm } from '@/components/JoinEventForm'
@@ -19,6 +20,8 @@ import { RoundDisplay } from '@/components/RoundDisplay'
 import { AdminControls } from '@/components/AdminControls'
 import { AdminPassphraseModal } from '@/components/AdminPassphraseModal'
 import { PreviousRounds } from '@/components/PreviousRounds'
+import { TimerDisplay } from '@/components/TimerDisplay'
+import { TimerControls } from '@/components/TimerControls'
 
 export function EventPage() {
   const { eventId } = useParams()
@@ -32,6 +35,7 @@ export function EventPage() {
   const { data: event, isLoading: eventLoading, error: eventError } = useEvent(eventId ?? '')
   const { data: players, isLoading: playersLoading } = useEventPlayers(eventId ?? '')
   const { data: currentRound } = useCurrentRound(eventId ?? '')
+  const { data: timer } = useTimer(eventId ?? '')
 
   // Wire up Realtime subscriptions
   useEventChannel(eventId ?? '')
@@ -235,6 +239,21 @@ export function EventPage() {
           >
             Skip for now
           </button>
+        </div>
+      )}
+
+      {/* Timer display + controls */}
+      {timer && timer.status !== 'cancelled' && (
+        <div className="w-full max-w-lg mb-4">
+          <TimerDisplay timer={timer} />
+          {isAdmin && !isEventEnded && passphrase && (
+            <TimerControls
+              eventId={eventId}
+              passphrase={passphrase}
+              timer={timer}
+              onPassphraseNeeded={handlePassphraseNeeded}
+            />
+          )}
         </div>
       )}
 

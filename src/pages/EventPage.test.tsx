@@ -22,6 +22,7 @@ const {
   mockUseVisibilityRefetch,
   mockUseDropPlayer,
   mockUseCurrentRound,
+  mockUseTimer,
 } = vi.hoisted(() => ({
   mockUseEvent: vi.fn(),
   mockUseEventPlayers: vi.fn(),
@@ -37,6 +38,7 @@ const {
   mockUseVisibilityRefetch: vi.fn(),
   mockUseDropPlayer: vi.fn(),
   mockUseCurrentRound: vi.fn(),
+  mockUseTimer: vi.fn(),
 }))
 
 // ---------------------------------------------------------------------------
@@ -72,6 +74,10 @@ vi.mock('@/hooks/useDropPlayer', () => ({
 
 vi.mock('@/hooks/useCurrentRound', () => ({
   useCurrentRound: (...args: unknown[]) => mockUseCurrentRound(...args),
+}))
+
+vi.mock('@/hooks/useTimer', () => ({
+  useTimer: (...args: unknown[]) => mockUseTimer(...args),
 }))
 
 vi.mock('@/lib/player-identity', () => ({
@@ -173,6 +179,14 @@ vi.mock('@/components/PreviousRounds', () => ({
   PreviousRounds: () => <div data-testid="previous-rounds" />,
 }))
 
+vi.mock('@/components/TimerDisplay', () => ({
+  TimerDisplay: () => <div data-testid="timer-display" />,
+}))
+
+vi.mock('@/components/TimerControls', () => ({
+  TimerControls: () => <div data-testid="timer-controls" />,
+}))
+
 vi.mock('@/components/AdminPassphraseModal', () => ({
   AdminPassphraseModal: ({
     isOpen,
@@ -248,6 +262,7 @@ function setDefaultMocks() {
   mockGetStoredPlayerId.mockReturnValue(null)
   mockUseDropPlayer.mockReturnValue({ mutate: mockDropMutate, isPending: false })
   mockUseCurrentRound.mockReturnValue({ data: null, isLoading: false })
+  mockUseTimer.mockReturnValue({ data: null, isLoading: false })
 }
 
 // ---------------------------------------------------------------------------
@@ -1044,6 +1059,7 @@ describe('EventPage', () => {
     expect(mockUseVisibilityRefetch).toHaveBeenCalledWith('')
     expect(mockUseAdminAuth).toHaveBeenCalledWith('')
     expect(mockUseDropPlayer).toHaveBeenCalledWith('')
+    expect(mockUseTimer).toHaveBeenCalledWith('')
   })
 
   // --- justJoinedRef guard (kills BlockStatement, ConditionalExpression, BooleanLiteral, MethodExpression mutations) ---

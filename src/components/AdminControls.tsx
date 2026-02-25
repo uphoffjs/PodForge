@@ -48,6 +48,7 @@ export function AdminControls({
 }: AdminControlsProps) {
   const [isGenerating, setIsGenerating] = useState(false)
   const [showEndConfirm, setShowEndConfirm] = useState(false)
+  const [selectedDuration, setSelectedDuration] = useState<number | null>(null)
 
   const generateRound = useGenerateRound(eventId)
   const endEvent = useEndEvent(eventId)
@@ -100,11 +101,12 @@ export function AdminControls({
 
       setIsGenerating(true)
       generateRound.mutate(
-        { passphrase, podAssignments },
+        { passphrase, podAssignments, timerDurationMinutes: selectedDuration ?? undefined },
         {
           onSuccess: () => {
             toast.success(`Round ${roundCount + 1} generated!`)
             setIsGenerating(false)
+            setSelectedDuration(null)
           },
           onError: () => {
             setIsGenerating(false)
@@ -160,6 +162,30 @@ export function AdminControls({
           {roundCount > 0 ? `Round ${roundCount}` : 'No rounds yet'}
         </span>
       </div>
+
+      {/* Timer duration picker */}
+      {!isEventEnded && (
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-sm text-text-secondary whitespace-nowrap">Timer:</span>
+          {[60, 90, 120].map((duration) => (
+            <button
+              key={duration}
+              type="button"
+              onClick={() =>
+                setSelectedDuration((prev) => (prev === duration ? null : duration))
+              }
+              data-testid={`timer-duration-${duration}`}
+              className={`flex-1 rounded-lg py-2 px-3 text-sm font-medium transition-colors min-h-[36px] ${
+                selectedDuration === duration
+                  ? 'bg-accent text-surface border border-accent'
+                  : 'bg-surface border border-border text-text-secondary hover:border-border-bright'
+              }`}
+            >
+              {duration} min
+            </button>
+          ))}
+        </div>
+      )}
 
       <button
         type="button"
