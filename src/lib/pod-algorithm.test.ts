@@ -761,6 +761,116 @@ describe('pod-algorithm', () => {
       })
     })
 
+    describe('comprehensive player count coverage (4-20)', () => {
+      const playerCounts = Array.from({ length: 17 }, (_, i) => i + 4) // [4, 5, 6, ..., 20]
+
+      it.each(playerCounts)('creates correct pod structure for %i players', (count) => {
+        const players = makePlayers(count)
+        const result = generatePods(players, [])
+        const expectedByes = count % 4
+        const expectedActivePods = Math.floor(count / 4)
+
+        // Correct number of active pods
+        const activePods = result.assignments.filter(a => !a.is_bye)
+        expect(activePods).toHaveLength(expectedActivePods)
+
+        // Each active pod has exactly 4 players
+        activePods.forEach(pod => expect(pod.players).toHaveLength(4))
+
+        // Bye pod structure
+        const byePods = result.assignments.filter(a => a.is_bye)
+        if (expectedByes > 0) {
+          expect(byePods).toHaveLength(1)
+          expect(byePods[0].players).toHaveLength(expectedByes)
+        } else {
+          expect(byePods).toHaveLength(0)
+        }
+
+        // All players accounted for
+        const allIds = result.assignments.flatMap(a => a.players.map(p => p.player_id))
+        expect(new Set(allIds).size).toBe(count)
+        expect(allIds).toHaveLength(count)
+
+        // Seat numbers correct
+        activePods.forEach(pod => {
+          const seats = pod.players.map(p => p.seat_number).sort((a, b) => a! - b!)
+          expect(seats).toEqual([1, 2, 3, 4])
+        })
+        byePods.forEach(pod => {
+          pod.players.forEach(p => expect(p.seat_number).toBeNull())
+        })
+      })
+    })
+
+    describe('high bye count warnings', () => {
+      it.each([7, 11, 15, 19])('warns about high bye count for %i players (3 byes)', (count) => {
+        const players = makePlayers(count)
+        const result = generatePods(players, [])
+        expect(result.warnings).toContainEqual(expect.stringContaining('High bye count'))
+        expect(result.warnings[0]).toContain(`3 of ${count}`)
+      })
+
+      it.each([4, 5, 6, 8, 9, 10, 12, 13, 14, 16, 17, 18, 20])('no high bye warning for %i players (0-2 byes)', (count) => {
+        const players = makePlayers(count)
+        const result = generatePods(players, [])
+        const highByeWarnings = result.warnings.filter(w => w.includes('High bye count'))
+        expect(highByeWarnings).toHaveLength(0)
+      })
+    })
+
+    describe('bye rotation for all non-divisible-by-4 counts', () => {
+      const countsWithByes = [5, 6, 7, 9, 10, 11, 13, 14, 15, 17, 18, 19]
+
+      it.each(countsWithByes)('rotates byes fairly across 5 rounds with %i players', (count) => {
+        const players = makePlayers(count)
+        const byesPerRound = count % 4
+        let previousRounds: RoundHistory[] = []
+        const byeCountMap = new Map<string, number>()
+        players.forEach(p => byeCountMap.set(p.id, 0))
+
+        for (let round = 0; round < 5; round++) {
+          const result = generatePods(players, previousRounds)
+          const roundHistory: RoundHistory = {
+            pods: result.assignments.map(a => ({
+              playerIds: a.players.map(p => p.player_id),
+              isBye: a.is_bye,
+            })),
+          }
+          previousRounds.push(roundHistory)
+
+          const byePod = result.assignments.find(a => a.is_bye)
+          if (byePod) {
+            byePod.players.forEach(p => {
+              byeCountMap.set(p.player_id, (byeCountMap.get(p.player_id) ?? 0) + 1)
+            })
+          }
+        }
+
+        const byeCounts = Array.from(byeCountMap.values())
+        const maxByes = Math.max(...byeCounts)
+        const minByes = Math.min(...byeCounts)
+        // Fair distribution: max-min difference should be at most 1
+        expect(maxByes - minByes).toBeLessThanOrEqual(1)
+      })
+    })
+
+    it('20 players produces exactly 5 pods of 4, no byes, no warnings', () => {
+      const players = makePlayers(20)
+      const result = generatePods(players, [])
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      const byePods = result.assignments.filter(a => a.is_bye)
+
+      expect(activePods).toHaveLength(5)
+      expect(byePods).toHaveLength(0)
+      expect(result.warnings).toEqual([])
+      activePods.forEach(pod => expect(pod.players).toHaveLength(4))
+
+      // All 20 players accounted for
+      const allIds = result.assignments.flatMap(a => a.players.map(p => p.player_id))
+      expect(new Set(allIds).size).toBe(20)
+    })
+
     describe('bye pod numbering', () => {
       it('bye pod has pod_number higher than all active pods', () => {
         const players = makePlayers(9) // 2 active pods + 1 bye
