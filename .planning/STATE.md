@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: unknown
-last_updated: "2026-02-25T18:27:22.545Z"
+milestone: v2.0
+milestone_name: Complete App
+status: completed
+last_updated: "2026-02-25T19:10:00.000Z"
 progress:
   total_phases: 3
   completed_phases: 3
@@ -15,26 +15,32 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-24)
+See: .planning/PROJECT.md (updated 2026-02-25)
 
-**Core value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone -- who they're playing with, what seat they're in, and how much time they have.
-**Current focus:** v2.0 Complete App — Phase 3 Timer System complete
+**Core value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone — who they're playing with, what seat they're in, and how much time they have.
+**Current focus:** v2.0 Complete App shipped. Phase 4 (Event Polish, Deployment) not yet planned.
 
 ## Current Position
 
-Phase: 03-timer-system (Plan 3 of 3 complete)
-Plan: 03-03 complete
-Status: Phase Complete
-Last activity: 2026-02-25 — Completed 03-03: Timer notifications (useTimerNotification hook, browser notification permission flow, iOS PWA graceful degradation)
+Phase: All v2.0 phases complete
+Plan: N/A
+Status: Milestone Complete
+Last activity: 2026-02-25 — v2.0 milestone archived
 
-Progress: Phase 3 Timer System ██████████ 100% (3/3 plans)
+Progress: v2.0 ██████████ 100% (11/11 plans)
 
 ## Performance Metrics
 
-**v1.0 Velocity:**
-- Total plans completed: 12
-- Average duration: 5 min
-- Total execution time: 0.87 hours
+**v2.0 Velocity:**
+- Total plans completed: 11
+- Timeline: 2 days (2026-02-24 → 2026-02-25)
+
+**Phase 2:**
+- 02-01: 3min, 2 tasks, 11 files
+- 02-02: 10min, 3 tasks, 2 files
+- 02-03: 4min, 2 tasks, 6 files
+- 02-04: ~5min, 2 tasks
+- 02-05: ~3min, 2 tasks
 
 **Phase 2.1:**
 - 02.1-01: 4min, 2 tasks, 5 files
@@ -50,42 +56,12 @@ Progress: Phase 3 Timer System ██████████ 100% (3/3 plans)
 
 ### Decisions
 
-- 02-01: Admin RPCs validate passphrase inline via crypt() with RAISE EXCEPTION (not calling validate_passphrase helper)
-- 02-01: generate_round accepts pre-computed JSONB pod assignments, keeping algorithm client-side
-- 02-01: Updated players RLS policy to allow both 'active' and 'dropped' status changes for admin reactivation
-- 02-02: Greedy algorithm with opponent history matrix (O(n*k)) for pod assignment, not optimal (NP-hard) or random
-- 02-02: Pure function design with zero external dependencies for maximum testability
-- 02-02: Fisher-Yates shuffle for all randomization (seats, tie-breaking, pool ordering)
-- 02-03: AdminControls builds round history from latest round's pods only (superseded by 02-05)
-- 02-03: PodCard uses 4-color cycling (blue, green, amber, red) for pod border colors
-- 02-03: Event ended state hides interactive elements but preserves pods and player list for historical viewing
-- 02-04: AdminPlayerActions injected as ReactNode prop to keep PlayerItem/PlayerList generic and decoupled from admin logic
-- 02-04: PreviousRounds lazy-fetches pod data only when a section is expanded (usePods called with roundId on expand)
-- 02-05: useAllRoundsPods fetches all rounds in a single Supabase query using .in('round_id', roundIds) for efficiency
-- 02-05: PodWithPlayers type import retained from usePods module; only the hook call was removed from AdminControls
-- 02.1-01: Differentiate useRounds vs useCurrentRound intercepts by checking URL for limit=1 query parameter
-- 02.1-01: Use .cy.js extension matching established Phase 1 pattern, overriding global .cy.ts preference
-- 02.1-01: Mock pods with full nested pod_players(*, players(*)) shape matching PostgREST select syntax
-- 02.1-02: Scoped pod-card assertions to within() previous-round sections to avoid collision with RoundDisplay elements
-- 02.1-02: Used URL pattern matching in route handlers to differentiate useCurrentRound (limit=1) from useRounds (full list)
-- 02.1-02: Verified lazy loading via intercept alias .all length assertion before expand and cy.wait after expand
-- 02.1-03: Adjusted opponent avoidance bounds to match actual greedy algorithm behavior (max pair count <= 4 for 12 players, <= 4 repeat pairs for 8 players)
-- 02.1-03: Deferred visual regression baseline updates as pre-existing issue unrelated to Phase 2.1
-- 03-01: Server-authoritative timer: clients compute remaining = expires_at - now(), no drift between clients
-- 03-01: Denormalized event_id on round_timers for efficient Realtime filtering (avoids join through rounds)
-- 03-01: GREATEST(0, ...) on pause to prevent negative remaining_seconds
-- 03-01: extend_timer works on both running (updates expires_at) and paused (updates remaining_seconds) timers
-- 03-02: useCountdown recomputes from expires_at - Date.now() each tick for zero client-side drift
-- 03-02: TimerDisplay (presentation) and TimerControls (admin) are separate components wired by EventPage
-- 03-02: Duration picker toggles on re-click (deselect) since timer is optional per TIMR-01
-- 03-02: TimerControls only renders when admin has passphrase already, avoiding repeated prompts
-- 03-03: Notification permission is explicit (user click), never auto-requested on mount
-- 03-03: Notification dedup uses useRef lastNotifiedTimerId + Notification tag 'timer-expired' for multi-tab safety
-- 03-03: iOS PWA: try/catch on requestPermission and Notification constructor; isSupported=false hides prompt
+See: .planning/PROJECT.md Key Decisions table (comprehensive list)
 
 ### Roadmap Evolution
 
 - v1.0: Phase 1.1 inserted (Cypress E2E), Phases 1.2-1.4 inserted (gap closures)
+- v2.0: Phase 2.1 inserted (E2E tests for Phase 2)
 
 ### Pending Todos
 
@@ -93,10 +69,10 @@ None.
 
 ### Blockers/Concerns
 
-- 6-7 player pod assignment resolved: warn admin, proceed anyway
+None — all v2.0 concerns resolved.
 
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 03-03-PLAN.md — Timer notifications: useTimerNotification hook, browser notification permission flow, iOS PWA graceful degradation (346 Vitest tests pass)
+Stopped at: v2.0 milestone archived
 Resume file: none

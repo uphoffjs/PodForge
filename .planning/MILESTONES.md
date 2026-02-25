@@ -21,3 +21,26 @@
 
 ---
 
+
+## v2.0 Complete App (Shipped: 2026-02-25)
+
+**Phases completed:** 3 phases (2, 2.1, 3), 11 plans, 22 tasks
+
+**Key accomplishments:**
+- Greedy pod generation algorithm with opponent history matrix, fair bye rotation, and 90.6% Stryker mutation score (40 tests)
+- Admin controls: passphrase-gated round generation, player remove/reactivate, end event with read-only view
+- Server-authoritative round timer with pause/resume/extend/cancel and Supabase Realtime sync across all clients
+- Countdown UI with urgency color transitions (yellow <10m, red <5m, flashing at 0:00) and overtime tracking
+- Browser notifications at timer expiry with explicit permission flow and graceful iOS PWA fallback
+- 75 Cypress E2E tests covering admin flow, pod display, player management, and sit-out fairness integration
+
+**Stats:**
+- Files changed: 71
+- Lines of code: 10,477 TypeScript/CSS
+- Tests: 346 Vitest + 75 Cypress E2E
+- Timeline: 2 days (2026-02-24 to 2026-02-25)
+- Git range: feat(02-01) → feat(03-03)
+- Tech debt: 5 items (none blocking)
+
+---
+
