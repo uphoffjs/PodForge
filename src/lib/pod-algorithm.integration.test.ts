@@ -137,6 +137,22 @@ describe('Pod Algorithm Integration — Multi-Round Fairness', () => {
     })
   })
 
+  describe('comprehensive sit-out fairness (all non-div-by-4 counts)', () => {
+    const countsWithByes = [5, 6, 7, 9, 10, 11, 13, 14, 15, 17, 18, 19]
+
+    it.each(countsWithByes)('distributes byes evenly for %i players over sufficient rounds', (count) => {
+      const roundCount = Math.max(5, count) // enough rounds to test fairness
+      const { rounds } = simulateRounds(count, roundCount)
+      const players = makePlayers(count)
+
+      const byeCounts = players.map(p => countByes(rounds, p.id))
+      const maxByes = Math.max(...byeCounts)
+      const minByes = Math.min(...byeCounts)
+
+      expect(maxByes - minByes).toBeLessThanOrEqual(1)
+    })
+  })
+
   describe('opponent avoidance across rounds', () => {
     it('minimizes repeat opponents for 8 players over 4 rounds', () => {
       // 8 players, 4 rounds, no byes
@@ -219,11 +235,41 @@ describe('Pod Algorithm Integration — Multi-Round Fairness', () => {
       // Allow up to 4 repeat pairs (well below the 12 possible).
       expect(repeatCount).toBeLessThanOrEqual(4)
     })
+
+    it('minimizes repeat opponents for 16 players over 5 rounds', () => {
+      const { rounds } = simulateRounds(16, 5)
+      const opponentHistory = buildOpponentHistory(rounds)
+
+      let maxPairCount = 0
+      for (const [, opponents] of opponentHistory) {
+        for (const [, count] of opponents) {
+          if (count > maxPairCount) maxPairCount = count
+        }
+      }
+
+      // With 16 players, 4 pods of 4, 5 rounds: greedy keeps repeats bounded
+      expect(maxPairCount).toBeLessThanOrEqual(3)
+    })
+
+    it('minimizes repeat opponents for 20 players over 5 rounds', () => {
+      const { rounds } = simulateRounds(20, 5)
+      const opponentHistory = buildOpponentHistory(rounds)
+
+      let maxPairCount = 0
+      for (const [, opponents] of opponentHistory) {
+        for (const [, count] of opponents) {
+          if (count > maxPairCount) maxPairCount = count
+        }
+      }
+
+      // With 20 players, 5 pods of 4, 5 rounds: ample players for good diversity
+      expect(maxPairCount).toBeLessThanOrEqual(3)
+    })
   })
 
   describe('multi-round structural correctness', () => {
     it('every round has correct pod structure for various player counts', () => {
-      const playerCounts = [4, 5, 8, 9, 12, 13, 16, 17, 20]
+      const playerCounts = Array.from({ length: 17 }, (_, i) => i + 4) // [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
 
       for (const playerCount of playerCounts) {
         const { results } = simulateRounds(playerCount, 3)
