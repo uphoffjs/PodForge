@@ -72,8 +72,8 @@ Plans:
 
 Plans:
 - [x] 03-01-PLAN.md — Database schema (round_timers table), timer RPC functions, TypeScript types, query/mutation hooks, Realtime updates
-- [ ] 03-02-PLAN.md — Timer display (useCountdown, TimerDisplay, urgency colors, overtime), admin timer controls (TimerControls, duration picker), EventPage integration
-- [ ] 03-03-PLAN.md — Browser notifications (useTimerNotification hook, permission flow, iOS PWA handling)
+- [x] 03-02-PLAN.md — Timer display (useCountdown, TimerDisplay, urgency colors, overtime), admin timer controls (TimerControls, duration picker), EventPage integration
+- [x] 03-03-PLAN.md — Browser notifications (useTimerNotification hook, permission flow, iOS PWA handling)
 
 ### Phase 4: Event Polish, Testing, and Deployment
 **Goal**: Event page shows full info bar with QR code and share link, all critical paths have test coverage, and the app is deployable to Vercel + Supabase
@@ -101,5 +101,5 @@ Plans:
 | 1.4 Sync Unit Tests | v1.0 | 1/1 | Complete | 2026-02-24 |
 | 2. Pod Generation and Admin Controls | v2.0 | 5/5 | Complete | 2026-02-24 |
 | 2.1 Phase 2 E2E and Integration Tests | v2.0 | 3/3 | Complete | 2026-02-25 |
-| 3. Timer System | — | 1/3 | In Progress | - |
+| 3. Timer System | — | 3/3 | Complete | 2026-02-25 |
 | 4. Event Polish, Testing, and Deployment | — | 0/2 | Not started | - |

@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-02-25T16:11:24.495Z"
+last_updated: "2026-02-25T18:22:00Z"
 progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 8
-  completed_plans: 8
+  total_phases: 3
+  completed_phases: 3
+  total_plans: 11
+  completed_plans: 11
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone -- who they're playing with, what seat they're in, and how much time they have.
-**Current focus:** v2.0 Complete App — Phase 3 Timer System in progress
+**Current focus:** v2.0 Complete App — Phase 3 Timer System complete
 
 ## Current Position
 
-Phase: 03-timer-system (Plan 2 of 3 complete)
-Plan: 03-02 complete
-Status: In Progress
-Last activity: 2026-02-25 — Completed 03-02: Timer display & controls (useCountdown hook, TimerDisplay, TimerControls, duration picker, EventPage integration)
+Phase: 03-timer-system (Plan 3 of 3 complete)
+Plan: 03-03 complete
+Status: Phase Complete
+Last activity: 2026-02-25 — Completed 03-03: Timer notifications (useTimerNotification hook, browser notification permission flow, iOS PWA graceful degradation)
 
-Progress: Phase 3 Timer System ██████░░░░ 67% (2/3 plans)
+Progress: Phase 3 Timer System ██████████ 100% (3/3 plans)
 
 ## Performance Metrics
 
@@ -44,6 +44,7 @@ Progress: Phase 3 Timer System ██████░░░░ 67% (2/3 plans)
 **Phase 3:**
 - 03-01: 2min, 2 tasks, 10 files
 - 03-02: 3min, 2 tasks, 7 files
+- 03-03: 2min, 2 tasks, 3 files
 
 ## Accumulated Context
 
@@ -78,6 +79,9 @@ Progress: Phase 3 Timer System ██████░░░░ 67% (2/3 plans)
 - 03-02: TimerDisplay (presentation) and TimerControls (admin) are separate components wired by EventPage
 - 03-02: Duration picker toggles on re-click (deselect) since timer is optional per TIMR-01
 - 03-02: TimerControls only renders when admin has passphrase already, avoiding repeated prompts
+- 03-03: Notification permission is explicit (user click), never auto-requested on mount
+- 03-03: Notification dedup uses useRef lastNotifiedTimerId + Notification tag 'timer-expired' for multi-tab safety
+- 03-03: iOS PWA: try/catch on requestPermission and Notification constructor; isSupported=false hides prompt
 
 ### Roadmap Evolution
 
@@ -94,5 +98,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Completed 03-02-PLAN.md — Timer display & controls: useCountdown hook, TimerDisplay, TimerControls, duration picker, EventPage integration (334 Vitest tests pass)
+Stopped at: Completed 03-03-PLAN.md — Timer notifications: useTimerNotification hook, browser notification permission flow, iOS PWA graceful degradation (346 Vitest tests pass)
 Resume file: none
