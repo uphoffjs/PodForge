@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   generatePods,
   buildOpponentHistory,
@@ -6,6 +6,18 @@ import {
   type PlayerInfo,
   type RoundHistory,
 } from './pod-algorithm'
+
+/**
+ * Seeds Math.random with a deterministic LCG (Linear Congruential Generator).
+ * Returns a vi.SpyInstance that must be restored after use.
+ */
+function seedRandom(seed: number) {
+  let state = seed
+  return vi.spyOn(Math, 'random').mockImplementation(() => {
+    state = (state * 1664525 + 1013904223) % 2 ** 32
+    return state / 2 ** 32
+  })
+}
 
 function makePlayers(count: number): PlayerInfo[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -457,46 +469,51 @@ describe('pod-algorithm', () => {
         // Over 4 rounds, no player should sit out more than 2 times (fair distribution).
         // Previously, the same players would sit out every round due to stale bye data
         // and a broken sort comparator using Math.random() - 0.5.
-        const players = makePlayers(7)
-        const byeCountMap = new Map<string, number>()
-        for (const p of players) {
-          byeCountMap.set(p.id, 0)
-        }
-
-        // Simulate 4 consecutive rounds, building history as we go
-        let previousRounds: RoundHistory[] = []
-        for (let round = 0; round < 4; round++) {
-          const result = generatePods(players, previousRounds)
-
-          // Build round history from result
-          const roundHistory: RoundHistory = {
-            pods: result.assignments.map((a) => ({
-              playerIds: a.players.map((p) => p.player_id),
-              isBye: a.is_bye,
-            })),
+        const spy = seedRandom(42 + 7)
+        try {
+          const players = makePlayers(7)
+          const byeCountMap = new Map<string, number>()
+          for (const p of players) {
+            byeCountMap.set(p.id, 0)
           }
-          previousRounds.push(roundHistory)
 
-          // Track bye counts
-          const byePod = result.assignments.find((a) => a.is_bye)
-          if (byePod) {
-            for (const p of byePod.players) {
-              byeCountMap.set(p.player_id, (byeCountMap.get(p.player_id) ?? 0) + 1)
+          // Simulate 4 consecutive rounds, building history as we go
+          const previousRounds: RoundHistory[] = []
+          for (let round = 0; round < 4; round++) {
+            const result = generatePods(players, previousRounds)
+
+            // Build round history from result
+            const roundHistory: RoundHistory = {
+              pods: result.assignments.map((a) => ({
+                playerIds: a.players.map((p) => p.player_id),
+                isBye: a.is_bye,
+              })),
+            }
+            previousRounds.push(roundHistory)
+
+            // Track bye counts
+            const byePod = result.assignments.find((a) => a.is_bye)
+            if (byePod) {
+              for (const p of byePod.players) {
+                byeCountMap.set(p.player_id, (byeCountMap.get(p.player_id) ?? 0) + 1)
+              }
             }
           }
+
+          // With 7 players, 3 byes per round, 4 rounds = 12 total sit-outs
+          // Fair distribution: each player sits out ~12/7 ~= 1.7 times
+          // No player should sit out more than 2 times (allowing for rounding)
+          const byeCounts = Array.from(byeCountMap.values())
+          const maxByes = Math.max(...byeCounts)
+          const minByes = Math.min(...byeCounts)
+
+          // Max bye count should not exceed 2 (with fair rotation)
+          expect(maxByes).toBeLessThanOrEqual(2)
+          // The spread between most and least should be at most 1
+          expect(maxByes - minByes).toBeLessThanOrEqual(1)
+        } finally {
+          spy.mockRestore()
         }
-
-        // With 7 players, 3 byes per round, 4 rounds = 12 total sit-outs
-        // Fair distribution: each player sits out ~12/7 ~= 1.7 times
-        // No player should sit out more than 2 times (allowing for rounding)
-        const byeCounts = Array.from(byeCountMap.values())
-        const maxByes = Math.max(...byeCounts)
-        const minByes = Math.min(...byeCounts)
-
-        // Max bye count should not exceed 2 (with fair rotation)
-        expect(maxByes).toBeLessThanOrEqual(2)
-        // The spread between most and least should be at most 1
-        expect(maxByes - minByes).toBeLessThanOrEqual(1)
       })
 
       it('never picks the highest-bye player for sit-out when lower-bye players exist (sort stability)', () => {
@@ -568,7 +585,7 @@ describe('pod-algorithm', () => {
         ]
 
         // Run multiple times to account for randomness in first pick
-        let totalOverlapScores: number[] = []
+        const totalOverlapScores: number[] = []
         for (let trial = 0; trial < 10; trial++) {
           const result = generatePods(players, previousRounds)
           const activePods = result.assignments.filter((a) => !a.is_bye)
@@ -817,34 +834,39 @@ describe('pod-algorithm', () => {
       const countsWithByes = [5, 6, 7, 9, 10, 11, 13, 14, 15, 17, 18, 19]
 
       it.each(countsWithByes)('rotates byes fairly across 5 rounds with %i players', (count) => {
-        const players = makePlayers(count)
-        let previousRounds: RoundHistory[] = []
-        const byeCountMap = new Map<string, number>()
-        players.forEach(p => byeCountMap.set(p.id, 0))
+        const spy = seedRandom(42 + count)
+        try {
+          const players = makePlayers(count)
+          const previousRounds: RoundHistory[] = []
+          const byeCountMap = new Map<string, number>()
+          players.forEach(p => byeCountMap.set(p.id, 0))
 
-        for (let round = 0; round < 5; round++) {
-          const result = generatePods(players, previousRounds)
-          const roundHistory: RoundHistory = {
-            pods: result.assignments.map(a => ({
-              playerIds: a.players.map(p => p.player_id),
-              isBye: a.is_bye,
-            })),
-          }
-          previousRounds.push(roundHistory)
+          for (let round = 0; round < 5; round++) {
+            const result = generatePods(players, previousRounds)
+            const roundHistory: RoundHistory = {
+              pods: result.assignments.map(a => ({
+                playerIds: a.players.map(p => p.player_id),
+                isBye: a.is_bye,
+              })),
+            }
+            previousRounds.push(roundHistory)
 
-          const byePod = result.assignments.find(a => a.is_bye)
-          if (byePod) {
-            byePod.players.forEach(p => {
-              byeCountMap.set(p.player_id, (byeCountMap.get(p.player_id) ?? 0) + 1)
-            })
+            const byePod = result.assignments.find(a => a.is_bye)
+            if (byePod) {
+              byePod.players.forEach(p => {
+                byeCountMap.set(p.player_id, (byeCountMap.get(p.player_id) ?? 0) + 1)
+              })
+            }
           }
+
+          const byeCounts = Array.from(byeCountMap.values())
+          const maxByes = Math.max(...byeCounts)
+          const minByes = Math.min(...byeCounts)
+          // Fair distribution: max-min difference should be at most 1
+          expect(maxByes - minByes).toBeLessThanOrEqual(1)
+        } finally {
+          spy.mockRestore()
         }
-
-        const byeCounts = Array.from(byeCountMap.values())
-        const maxByes = Math.max(...byeCounts)
-        const minByes = Math.min(...byeCounts)
-        // Fair distribution: max-min difference should be at most 1
-        expect(maxByes - minByes).toBeLessThanOrEqual(1)
       })
     })
 
