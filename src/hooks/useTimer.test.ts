@@ -6,12 +6,12 @@ import { useTimer } from './useTimer'
 
 const { mockFrom, mockSelect, mockEq, mockIn, mockOrder, mockLimit, mockMaybeSingle } = vi.hoisted(() => {
   const mockMaybeSingle = vi.fn()
-  const mockLimit = vi.fn((_n: number) => ({ maybeSingle: mockMaybeSingle }))
-  const mockOrder = vi.fn((_col: string, _opts: object) => ({ limit: mockLimit }))
-  const mockIn = vi.fn((_col: string, _vals: string[]) => ({ order: mockOrder }))
-  const mockEq = vi.fn((_col: string, _val: string) => ({ in: mockIn }))
-  const mockSelect = vi.fn((_sel: string) => ({ eq: mockEq }))
-  const mockFrom = vi.fn((_table: string) => ({ select: mockSelect }))
+  const mockLimit = vi.fn(() => ({ maybeSingle: mockMaybeSingle }))
+  const mockOrder = vi.fn(() => ({ limit: mockLimit }))
+  const mockIn = vi.fn(() => ({ order: mockOrder }))
+  const mockEq = vi.fn(() => ({ in: mockIn }))
+  const mockSelect = vi.fn(() => ({ eq: mockEq }))
+  const mockFrom = vi.fn(() => ({ select: mockSelect }))
   return { mockFrom, mockSelect, mockEq, mockIn, mockOrder, mockLimit, mockMaybeSingle }
 })
 

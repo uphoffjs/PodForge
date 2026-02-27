@@ -6,11 +6,11 @@ import { useCurrentRound } from './useCurrentRound'
 
 const { mockFrom, mockSelect, mockEq, mockOrder, mockLimit, mockMaybeSingle } = vi.hoisted(() => {
   const mockMaybeSingle = vi.fn()
-  const mockLimit = vi.fn((_n: number) => ({ maybeSingle: mockMaybeSingle }))
-  const mockOrder = vi.fn((_col: string, _opts: object) => ({ limit: mockLimit }))
-  const mockEq = vi.fn((_col: string, _val: string) => ({ order: mockOrder }))
-  const mockSelect = vi.fn((_sel: string) => ({ eq: mockEq }))
-  const mockFrom = vi.fn((_table: string) => ({ select: mockSelect }))
+  const mockLimit = vi.fn(() => ({ maybeSingle: mockMaybeSingle }))
+  const mockOrder = vi.fn(() => ({ limit: mockLimit }))
+  const mockEq = vi.fn(() => ({ order: mockOrder }))
+  const mockSelect = vi.fn(() => ({ eq: mockEq }))
+  const mockFrom = vi.fn(() => ({ select: mockSelect }))
   return { mockFrom, mockSelect, mockEq, mockOrder, mockLimit, mockMaybeSingle }
 })
 

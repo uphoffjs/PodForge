@@ -6,9 +6,9 @@ import { useRounds } from './useRounds'
 
 const { mockFrom, mockSelect, mockEq, mockOrder } = vi.hoisted(() => {
   const mockOrder = vi.fn()
-  const mockEq = vi.fn((_col: string, _val: string) => ({ order: mockOrder }))
-  const mockSelect = vi.fn((_sel: string) => ({ eq: mockEq }))
-  const mockFrom = vi.fn((_table: string) => ({ select: mockSelect }))
+  const mockEq = vi.fn(() => ({ order: mockOrder }))
+  const mockSelect = vi.fn(() => ({ eq: mockEq }))
+  const mockFrom = vi.fn(() => ({ select: mockSelect }))
   return { mockFrom, mockSelect, mockEq, mockOrder }
 })
 
