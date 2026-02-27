@@ -66,7 +66,8 @@ describe('Duplicate Name Rejection', () => {
       })
 
       // Clear the input and type a unique name
-      cy.getByTestId('join-name-input').clear().type('NewPlayer')
+      cy.getByTestId('join-name-input').clear()
+      cy.getByTestId('join-name-input').type('NewPlayer')
       cy.getByTestId('join-submit-btn').click()
 
       cy.wait('@joinSuccess')

@@ -20,7 +20,7 @@ export function AdminPassphraseModal({
   // Reset passphrase when modal opens/closes
   useEffect(() => {
     if (isOpen) {
-      setPassphrase('')
+      setPassphrase('') // eslint-disable-line react-hooks/set-state-in-effect -- Intentional: reset form state on modal open
     }
   }, [isOpen])
 

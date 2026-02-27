@@ -54,7 +54,7 @@ export function useCountdown(timer: RoundTimer | null): CountdownState | null {
 
     // Set initial remaining
     const initial = computeRemaining(timer)
-    setRemainingSeconds(initial)
+    setRemainingSeconds(initial) // eslint-disable-line react-hooks/set-state-in-effect -- Intentional: sync countdown with timer prop
 
     // Only tick when running
     if (timer.status === 'running') {

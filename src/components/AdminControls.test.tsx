@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
@@ -253,8 +253,6 @@ describe('AdminControls', () => {
   })
 
   it('handleGenerateRound returns early when event is ended (defensive guard)', async () => {
-    const user = userEvent.setup()
-
     // Render with isEventEnded=false first (buttons are enabled)
     const wrapper = createWrapper()
     const { rerender } = render(
@@ -596,7 +594,7 @@ describe('AdminControls', () => {
     const { toast } = await import('sonner')
     const user = userEvent.setup()
     mockGeneratePods.mockImplementation(() => {
-      throw 'string error' // eslint-disable-line no-throw-literal
+      throw 'string error'  
     })
 
     render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })

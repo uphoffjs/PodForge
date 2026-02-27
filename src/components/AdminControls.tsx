@@ -23,6 +23,7 @@ interface AdminControlsProps {
  * Build RoundHistory[] from fetched rounds and their pods data.
  * Transforms the database shape into the format expected by generatePods.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function buildRoundHistoryFromData(
   rounds: Round[],
   podsByRound: Map<string, PodWithPlayers[]>
