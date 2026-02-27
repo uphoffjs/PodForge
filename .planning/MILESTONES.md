@@ -44,3 +44,26 @@
 
 ---
 
+
+## v3.0 Event Polish & CI/CD (Shipped: 2026-02-27)
+
+**Phases completed:** 2 phases (4, 5), 6 plans, 11 tasks
+
+**Key accomplishments:**
+- EventInfoBar component with expandable QR code, share link with copy, player count, and round number
+- Comprehensive pod algorithm test suite covering all player counts 4-20 (115 tests, up from 54)
+- Deployment documentation for Vercel + Supabase with verified production build
+- Bulletproof CI/CD: GitHub Actions for lint, type-check, and 100% coverage enforcement on every push/PR
+- Stryker mutation testing as PR-only CI gate (80% break threshold, 100% score on all 8 critical hooks)
+- Husky pre-commit hooks with lint-staged for ESLint auto-fix on staged TypeScript
+
+**Stats:**
+- Files changed: 77
+- Lines of code: 16,227 TypeScript/CSS
+- Tests: 678 Vitest + 75 Cypress E2E
+- Timeline: 3 days (2026-02-25 to 2026-02-27)
+- Git range: test(04-02) → docs(quick-3)
+- Tech debt: 8 items (none blocking)
+
+---
+

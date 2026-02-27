@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A web app for casual Magic: The Gathering Commander playgroups to manage pod pairings during events. Players join via QR code or shareable link, see real-time pod assignments with seat order and round timers, and can self-drop. Admin actions (creating events, generating rounds, removing players, controlling timers) are protected behind a per-event passphrase. No user accounts or logins — just show up and play.
+A web app for casual Magic: The Gathering Commander playgroups to manage pod pairings during events. Players join via QR code or shareable link, see real-time pod assignments with seat order and round timers, and can self-drop. Admin actions (creating events, generating rounds, removing players, controlling timers) are protected behind a per-event passphrase. No user accounts or logins — just show up and play. Includes an event info bar, comprehensive test coverage, and a bulletproof CI/CD pipeline.
 
 ## Core Value
 
@@ -38,13 +38,15 @@ When an admin hits "Generate Next Round," every player instantly sees their pod 
 - ✓ Timer state stored server-side (server-authoritative) — v2.0
 - ✓ 75 Cypress E2E tests covering admin flow, pod display, player management, sit-out fairness — v2.0
 - ✓ 346 Vitest unit tests with 90.6% Stryker mutation score on pod algorithm — v2.0
+- ✓ Event info bar with expandable QR code, share link, player count, round number — v3.0
+- ✓ Deployment documentation for Vercel + Supabase — v3.0
+- ✓ 678 Vitest unit tests with 100% coverage and 100% mutation score on critical hooks — v3.0
+- ✓ Bulletproof CI/CD: GitHub Actions CI, Stryker PR gate, Husky pre-commit hooks — v3.0
 
 ### Active
 
-- [ ] Event info bar: name, QR code (expandable), shareable link with copy, player count, round number
 - [ ] Multiple simultaneous admins supported per event
 - [ ] Player joining mid-event enters pool for next round with empty history and 0 bye count
-- [ ] Deployment setup instructions for Vercel + Supabase
 
 ### Out of Scope
 
@@ -59,15 +61,14 @@ When an admin hits "Generate Next Round," every player instantly sees their pod 
 
 ## Context
 
-Shipped v2.0 with 10,477 LOC TypeScript/CSS. Pod generation, admin controls, and timer system all complete.
+Shipped v3.0 with 16,227 LOC TypeScript/CSS. All features complete: event creation, player flow, pod generation, admin controls, timer system, event info bar, and deployment docs.
 Tech stack: React 19 (Vite), Supabase (Postgres + Realtime), Tailwind CSS v4, TypeScript.
-Test coverage: 346 Vitest unit tests, 75 Cypress E2E tests, 15 visual regression baselines, 90.6% Stryker mutation score on pod algorithm.
+Test coverage: 678 Vitest unit tests (100% coverage all metrics), 75 Cypress E2E tests, 15 visual regression baselines, 100% Stryker mutation score on all 8 critical hooks.
+CI/CD: GitHub Actions for lint + type-check + tests on push/PR, Stryker mutation testing on PRs (80% break threshold), Husky pre-commit hooks with lint-staged.
 Supabase migrations: 00001 (schema), 00002 (rounds/pods/admin RPCs), 00003 (REPLICA IDENTITY FULL for Realtime).
 DB password stored in .env as SUPABASE_DB_PASSWORD (gitignored) for CLI push operations.
 
 6-7 player pod assignment UX resolved: warn admin about high bye count, proceed anyway. No 3-player pods or minimum player restriction.
-
-1 pre-existing flaky test in pod-algorithm (bye rotation tie-breaking) — non-blocking.
 
 ## Constraints
 
@@ -104,6 +105,14 @@ DB password stored in .env as SUPABASE_DB_PASSWORD (gitignored) for CLI push ope
 | Explicit notification permission (never auto-request) | Respects user agency, avoids browser permission fatigue | ✓ Good |
 | AdminPlayerActions as ReactNode prop | Keeps PlayerItem/PlayerList generic and decoupled from admin logic | ✓ Good |
 | PreviousRounds lazy-fetch on expand | Only loads pod data when user expands a round section | ✓ Good — reduces initial payload |
+| EventInfoBar as standalone component | Owns copy/QR logic, keeps EventPage simple | ✓ Good |
+| it.each parameterized pod tests (4-20 players) | Efficient coverage of all 17 player counts | ✓ Good — 115 tests |
+| Dynamic expires_at in timer E2E fixtures | Avoid wall-clock dependency in countdown tests | ✓ Good |
+| Vitest 100% coverage thresholds | Any new source file must have corresponding tests | ✓ Good — enforced in CI |
+| Single CI job with sequential steps | lint+tsc+test total <2min, avoids multi-runner overhead | ✓ Good |
+| PR-only Stryker mutation testing | Avoids wasteful CI runs on already-gated main pushes | ✓ Good |
+| Husky + lint-staged pre-commit | ESLint auto-fix on staged .ts/.tsx files before commit | ✓ Good |
+| Excluded src/types/** from coverage | Type-only files have no runtime code to instrument | ✓ Good |
 
 ---
-*Last updated: 2026-02-25 after v2.0 milestone complete*
+*Last updated: 2026-02-27 after v3.0 milestone complete*
