@@ -209,4 +209,78 @@ describe('Timer Display and Admin Controls', () => {
       })
     })
   })
+
+  describe('Timer admin controls - cancel action', () => {
+    it('shows ConfirmDialog and calls cancel_timer RPC on confirm', () => {
+      cy.fixture('timer.json').then((timerFixtures) => {
+        const runningTimer = {
+          ...timerFixtures.running,
+          expires_at: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
+        }
+        setupTimerPage({ timer: runningTimer, asAdmin: true })
+
+        // Intercept the cancel_timer RPC call
+        cy.intercept('POST', '**/rest/v1/rpc/cancel_timer', {
+          statusCode: 200,
+          body: null,
+        }).as('cancelTimer')
+
+        // Click cancel button — should open ConfirmDialog
+        cy.getByTestId('timer-cancel-btn').click()
+
+        // ConfirmDialog should appear
+        cy.getByTestId('confirm-dialog').should('be.visible')
+
+        // Confirm the cancellation
+        cy.getByTestId('confirm-dialog-confirm-btn').click()
+
+        // Should call the RPC
+        cy.wait('@cancelTimer')
+      })
+    })
+
+    it('dismisses ConfirmDialog without calling RPC on cancel', () => {
+      cy.fixture('timer.json').then((timerFixtures) => {
+        const runningTimer = {
+          ...timerFixtures.running,
+          expires_at: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
+        }
+        setupTimerPage({ timer: runningTimer, asAdmin: true })
+
+        // Click cancel button — should open ConfirmDialog
+        cy.getByTestId('timer-cancel-btn').click()
+
+        cy.getByTestId('confirm-dialog').should('be.visible')
+
+        // Click the dialog's cancel button to dismiss
+        cy.getByTestId('confirm-dialog-cancel-btn').click()
+
+        // Dialog should close
+        cy.getByTestId('confirm-dialog').should('not.exist')
+      })
+    })
+  })
+
+  describe('Timer admin controls - resume action', () => {
+    it('shows resume button for paused timer and calls resume_timer RPC', () => {
+      cy.fixture('timer.json').then((timerFixtures) => {
+        setupTimerPage({ timer: timerFixtures.paused, asAdmin: true })
+
+        // Intercept the resume_timer RPC call
+        cy.intercept('POST', '**/rest/v1/rpc/resume_timer', {
+          statusCode: 200,
+          body: null,
+        }).as('resumeTimer')
+
+        // Paused timer should show resume button instead of pause
+        cy.getByTestId('timer-resume-btn').should('be.visible')
+        cy.getByTestId('timer-pause-btn').should('not.exist')
+
+        // Click resume
+        cy.getByTestId('timer-resume-btn').click()
+
+        cy.wait('@resumeTimer')
+      })
+    })
+  })
 })

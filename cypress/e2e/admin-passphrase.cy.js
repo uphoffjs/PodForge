@@ -111,4 +111,115 @@ describe('Admin Passphrase Authentication', () => {
     // Admin should see remove button for active players
     cy.getByTestId('admin-remove-player-player-1').should('be.visible')
   })
+
+  describe('Admin Passphrase Modal Flow', () => {
+    /**
+     * Set up event page with empty passphrase in sessionStorage.
+     * isAdmin = true (passphrase !== null), but passphrase is falsy ("")
+     * so gated actions will trigger onPassphraseNeeded -> open modal.
+     */
+    function setupWithEmptyPassphrase() {
+      // Block Realtime WebSocket
+      cy.intercept('GET', '**/realtime/v1/websocket*', {
+        statusCode: 200,
+        body: {},
+      })
+
+      cy.intercept('GET', '**/rest/v1/events*', {
+        statusCode: 200,
+        body: event,
+        headers: {
+          'content-type': 'application/vnd.pgrst.object+json; charset=utf-8',
+        },
+      }).as('getEvent')
+
+      cy.intercept('GET', '**/rest/v1/players*', {
+        statusCode: 200,
+        body: players,
+      }).as('getPlayers')
+
+      cy.intercept('GET', '**/rest/v1/rounds*', {
+        statusCode: 200,
+        body: [],
+      }).as('getRounds')
+
+      cy.intercept('GET', '**/rest/v1/pods*', {
+        statusCode: 200,
+        body: [],
+      }).as('getPods')
+
+      cy.visit(`/event/${eventId}`, {
+        onBeforeLoad(win) {
+          win.localStorage.setItem(playerStorageKey, 'player-1')
+          // Set empty string: isAdmin = true ("" !== null), but !passphrase = true
+          win.sessionStorage.setItem(adminStorageKey, '')
+        },
+      })
+
+      cy.wait('@getEvent')
+      cy.wait('@getPlayers')
+    }
+
+    it('opens passphrase modal when gated action clicked without passphrase', () => {
+      setupWithEmptyPassphrase()
+
+      // Admin controls should be visible (isAdmin = true)
+      cy.getByTestId('admin-controls').should('be.visible')
+
+      // Click generate round which is gated on passphrase
+      cy.getByTestId('generate-round-btn').click()
+
+      // Modal should appear
+      cy.getByTestId('admin-passphrase-modal').should('be.visible')
+      cy.getByTestId('admin-passphrase-input').should('be.visible')
+    })
+
+    it('submits passphrase and closes modal', () => {
+      setupWithEmptyPassphrase()
+
+      cy.getByTestId('generate-round-btn').click()
+      cy.getByTestId('admin-passphrase-modal').should('be.visible')
+
+      // Type passphrase and submit
+      cy.getByTestId('admin-passphrase-input').type('newsecret')
+      cy.getByTestId('admin-passphrase-submit').click()
+
+      // Modal should close
+      cy.getByTestId('admin-passphrase-modal').should('not.exist')
+
+      // Passphrase should be stored in sessionStorage
+      cy.window().then((win) => {
+        expect(win.sessionStorage.getItem(adminStorageKey)).to.equal('newsecret')
+      })
+    })
+
+    it('submit button is disabled when input is empty', () => {
+      setupWithEmptyPassphrase()
+
+      cy.getByTestId('generate-round-btn').click()
+      cy.getByTestId('admin-passphrase-modal').should('be.visible')
+
+      // Submit button should be disabled with empty input
+      cy.getByTestId('admin-passphrase-submit').should('be.disabled')
+    })
+
+    it('cancel dismisses modal without storing passphrase', () => {
+      setupWithEmptyPassphrase()
+
+      cy.getByTestId('generate-round-btn').click()
+      cy.getByTestId('admin-passphrase-modal').should('be.visible')
+
+      // Type something then cancel
+      cy.getByTestId('admin-passphrase-input').type('willcancel')
+      cy.getByTestId('admin-passphrase-cancel').click()
+
+      // Modal should close
+      cy.getByTestId('admin-passphrase-modal').should('not.exist')
+
+      // Passphrase should still be empty string (not updated)
+      cy.window().then((win) => {
+        expect(win.sessionStorage.getItem(adminStorageKey)).to.equal('')
+      })
+    })
+  })
 })
