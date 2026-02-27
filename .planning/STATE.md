@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-last_updated: "2026-02-27T16:06:06.000Z"
+last_updated: "2026-02-27T16:11:00.000Z"
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -23,12 +23,12 @@ See: .planning/PROJECT.md (updated 2026-02-25)
 ## Current Position
 
 Phase: 05-bulletproof-ci-cd-pipeline
-Plan: 1 of 3
+Plan: 2 of 3
 Status: In Progress
-Last activity: 2026-02-27 - Completed 05-01 (npm scripts, coverage thresholds, Husky pre-commit)
+Last activity: 2026-02-27 - Completed 05-02 (GitHub Actions CI workflow)
 
 Progress: Phase 04 ██████████ 100% (3/3 plans)
-Progress: Phase 05 ███░░░░░░░  33% (1/3 plans)
+Progress: Phase 05 ██████░░░░  67% (2/3 plans)
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Progress: Phase 05 ███░░░░░░░  33% (1/3 plans)
 
 **Phase 5:**
 - 05-01: 7min, 2 tasks, 8 files
+- 05-02: 1min, 1 task, 2 files
 
 ## Accumulated Context
 
@@ -77,6 +78,8 @@ See: .planning/PROJECT.md Key Decisions table (comprehensive list)
 - [Quick-2]: Used React __reactProps workaround for testing disabled button defensive guards
 - [05-01]: Excluded src/types/** from coverage (type-only files, no runtime code)
 - [05-01]: Added tests for 4 uncovered query hooks to achieve genuine 100% coverage with explicit include/exclude patterns
+- [05-02]: Single CI job with sequential steps (lint+tsc+test <2min, avoids multi-runner overhead)
+- [05-02]: Node 22 in CI, npx tsc -b for type-check (avoids redundant Vite build)
 
 ### Roadmap Evolution
 
@@ -102,6 +105,6 @@ None — all v2.0 concerns resolved.
 ## Session Continuity
 
 Last session: 2026-02-27
-Stopped at: Completed 05-01-PLAN.md
+Stopped at: Completed 05-02-PLAN.md
 Resume file: none
-Next action: Execute 05-02-PLAN.md (GitHub Actions CI workflow)
+Next action: Execute 05-03-PLAN.md (branch protection / PR enforcement)
