@@ -197,6 +197,27 @@ describe('PodCard', () => {
       expect(screen.getByTestId('pod-player-p2')).not.toHaveClass('bg-accent/10')
     })
 
+    it('pod 2 has green border color (#10b981)', () => {
+      render(
+        <PodCard podNumber={2} isBye={false} players={[makePlayer()]} currentPlayerId={null} />
+      )
+      expect(screen.getByTestId('pod-card-2')).toHaveStyle({ borderLeftColor: '#10b981' })
+    })
+
+    it('pod 3 has amber border color (#f59e0b)', () => {
+      render(
+        <PodCard podNumber={3} isBye={false} players={[makePlayer()]} currentPlayerId={null} />
+      )
+      expect(screen.getByTestId('pod-card-3')).toHaveStyle({ borderLeftColor: '#f59e0b' })
+    })
+
+    it('pod 4 has red border color (#ef4444)', () => {
+      render(
+        <PodCard podNumber={4} isBye={false} players={[makePlayer()]} currentPlayerId={null} />
+      )
+      expect(screen.getByTestId('pod-card-4')).toHaveStyle({ borderLeftColor: '#ef4444' })
+    })
+
     it('cycles border color through POD_COLORS so pod 5 matches pod 1 (blue)', () => {
       const players = [makePlayer()]
 

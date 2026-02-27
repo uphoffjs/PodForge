@@ -211,6 +211,54 @@ describe('AdminPassphraseModal', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('passphrase is NOT reset when isOpen stays true (no close/open cycle)', async () => {
+    const user = userEvent.setup()
+
+    const { rerender } = render(
+      <AdminPassphraseModal {...defaultProps} isOpen={true} />
+    )
+
+    const input = screen.getByTestId('admin-passphrase-input')
+    await user.type(input, 'abc')
+    expect(input).toHaveValue('abc')
+
+    // Re-render with the same isOpen=true (no state change)
+    rerender(<AdminPassphraseModal {...defaultProps} isOpen={true} />)
+
+    // Passphrase should NOT be reset since isOpen did not change
+    expect(screen.getByTestId('admin-passphrase-input')).toHaveValue('abc')
+  })
+
+  it('removes keydown event listener on unmount', () => {
+    const onCancel = vi.fn()
+
+    const { unmount } = render(
+      <AdminPassphraseModal {...defaultProps} onCancel={onCancel} />
+    )
+
+    unmount()
+
+    // Fire Escape after unmount — should NOT call onCancel
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    expect(onCancel).not.toHaveBeenCalled()
+  })
+
+  it('handleSubmit does not call onSubmit when passphrase is whitespace-only (form bypass)', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+
+    render(<AdminPassphraseModal {...defaultProps} onSubmit={onSubmit} />)
+
+    await user.type(screen.getByTestId('admin-passphrase-input'), '   ')
+
+    // Directly submit the form (bypasses disabled button)
+    const form = screen.getByTestId('admin-passphrase-submit').closest('form')!
+    fireEvent.submit(form)
+
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
   it('handleSubmit does not call onSubmit when passphrase is empty (form submit bypass)', () => {
     const onSubmit = vi.fn()
 

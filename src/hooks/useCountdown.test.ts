@@ -277,6 +277,72 @@ describe('useCountdown', () => {
     expect(result.current!.isPaused).toBe(true)
   })
 
+  it('urgency is "warning" at exactly 600 seconds (boundary)', () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: 600 })
+    const { result } = renderHook(() => useCountdown(timer))
+    expect(result.current!.urgency).toBe('warning')
+  })
+
+  it('urgency is "normal" at 601 seconds (boundary)', () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: 601 })
+    const { result } = renderHook(() => useCountdown(timer))
+    expect(result.current!.urgency).toBe('normal')
+  })
+
+  it('urgency is "danger" at exactly 300 seconds (boundary)', () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: 300 })
+    const { result } = renderHook(() => useCountdown(timer))
+    expect(result.current!.urgency).toBe('danger')
+  })
+
+  it('urgency is "warning" at 301 seconds (boundary)', () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: 301 })
+    const { result } = renderHook(() => useCountdown(timer))
+    expect(result.current!.urgency).toBe('warning')
+  })
+
+  it('urgency is "danger" at 1 second remaining (boundary)', () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: 1 })
+    const { result } = renderHook(() => useCountdown(timer))
+    expect(result.current!.urgency).toBe('danger')
+  })
+
+  it('formats 120 seconds as "2:00"', () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: 120 })
+    const { result } = renderHook(() => useCountdown(timer))
+    expect(result.current!.display).toBe('2:00')
+  })
+
+  it('formats overtime -120 seconds as "+2:00"', () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: -120 })
+    const { result } = renderHook(() => useCountdown(timer))
+    expect(result.current!.display).toBe('+2:00')
+    expect(result.current!.isOvertime).toBe(true)
+  })
+
+  it('clears interval on timer change (spy on clearInterval)', () => {
+    const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval')
+
+    const expiresAt1 = new Date(Date.now() + 10 * 1000).toISOString()
+    const timer1 = makeTimer({ id: 'timer-1', status: 'running', expires_at: expiresAt1 })
+
+    const { rerender } = renderHook(
+      ({ timer }) => useCountdown(timer),
+      { initialProps: { timer: timer1 as RoundTimer | null } }
+    )
+
+    clearIntervalSpy.mockClear()
+
+    // Switch to a different timer
+    const expiresAt2 = new Date(Date.now() + 60 * 1000).toISOString()
+    const timer2 = makeTimer({ id: 'timer-2', status: 'running', expires_at: expiresAt2 })
+    rerender({ timer: timer2 })
+
+    expect(clearIntervalSpy).toHaveBeenCalled()
+
+    clearIntervalSpy.mockRestore()
+  })
+
   it('handles rapid timer changes without leaking intervals', () => {
     const expiresAt1 = new Date(Date.now() + 10 * 1000).toISOString()
     const timer1 = makeTimer({ id: 'timer-1', status: 'running', expires_at: expiresAt1 })

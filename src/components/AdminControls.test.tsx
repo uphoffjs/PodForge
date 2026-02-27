@@ -271,7 +271,7 @@ describe('AdminControls', () => {
     // Workaround: directly invoke onClick from React's internal props
     const reactPropsKey = Object.keys(generateBtn).find(k => k.startsWith('__reactProps'))
     if (reactPropsKey) {
-      const onClick = (generateBtn as Record<string, unknown>)[reactPropsKey] as { onClick?: () => void }
+      const onClick = (generateBtn as unknown as Record<string, unknown>)[reactPropsKey] as { onClick?: () => void }
       onClick?.onClick?.()
     }
 
@@ -326,7 +326,7 @@ describe('AdminControls', () => {
     // Directly invoke React's onClick handler bypassing disabled check
     const reactPropsKey = Object.keys(btn).find(k => k.startsWith('__reactProps'))
     if (reactPropsKey) {
-      const props = (btn as Record<string, unknown>)[reactPropsKey] as { onClick?: () => void }
+      const props = (btn as unknown as Record<string, unknown>)[reactPropsKey] as { onClick?: () => void }
       props?.onClick?.()
     }
 
@@ -629,6 +629,95 @@ describe('AdminControls', () => {
   })
 
   // --- isPending state ---
+
+  it('filters out dropped players from generatePods call', async () => {
+    const user = userEvent.setup()
+    const playersWithDropped: Player[] = [
+      ...mockPlayers,
+      { id: 'p9', event_id: 'evt1', name: 'Igor', status: 'dropped', created_at: '2026-01-01T00:00:00Z' },
+    ]
+    mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
+
+    render(
+      <AdminControls {...defaultProps} players={playersWithDropped} />,
+      { wrapper: createWrapper() }
+    )
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(mockGeneratePods).toHaveBeenCalledTimes(1)
+    const [activePlayers] = mockGeneratePods.mock.calls[0]
+    expect(activePlayers).toHaveLength(8)
+    expect(activePlayers.every((p: { id: string }) => p.id !== 'p9')).toBe(true)
+  })
+
+  it('buildRoundHistoryFromData preserves isBye flag', async () => {
+    const user = userEvent.setup()
+
+    mockRoundsData = [
+      { id: 'r1', event_id: 'evt1', round_number: 1, created_at: '2026-01-01T00:00:00Z' },
+    ]
+
+    mockAllPodsData = [
+      {
+        id: 'pod-r1-1', round_id: 'r1', pod_number: 1, is_bye: false,
+        pod_players: [
+          { id: 'pp1', pod_id: 'pod-r1-1', player_id: 'p1', seat_number: 1, players: { id: 'p1', event_id: 'evt1', name: 'Alice', status: 'active', created_at: '' } },
+          { id: 'pp2', pod_id: 'pod-r1-1', player_id: 'p2', seat_number: 2, players: { id: 'p2', event_id: 'evt1', name: 'Bob', status: 'active', created_at: '' } },
+          { id: 'pp3', pod_id: 'pod-r1-1', player_id: 'p3', seat_number: 3, players: { id: 'p3', event_id: 'evt1', name: 'Charlie', status: 'active', created_at: '' } },
+          { id: 'pp4', pod_id: 'pod-r1-1', player_id: 'p4', seat_number: 4, players: { id: 'p4', event_id: 'evt1', name: 'Diana', status: 'active', created_at: '' } },
+        ],
+      },
+      {
+        id: 'pod-r1-bye', round_id: 'r1', pod_number: 2, is_bye: true,
+        pod_players: [
+          { id: 'pp5', pod_id: 'pod-r1-bye', player_id: 'p5', seat_number: null, players: { id: 'p5', event_id: 'evt1', name: 'Eve', status: 'active', created_at: '' } },
+        ],
+      },
+    ]
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(mockGeneratePods).toHaveBeenCalledTimes(1)
+    const [, previousRounds] = mockGeneratePods.mock.calls[0]
+    expect(previousRounds).toHaveLength(1)
+    expect(previousRounds[0].pods[0].isBye).toBe(false)
+    expect(previousRounds[0].pods[1].isBye).toBe(true)
+  })
+
+  it('displays "No rounds yet" when rounds is undefined', () => {
+    mockRoundsData = undefined
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    expect(screen.getByText('No rounds yet')).toBeInTheDocument()
+  })
+
+  it('displays "Round 1" when exactly 1 round exists', () => {
+    mockRoundsData = [
+      { id: 'r1', event_id: 'evt1', round_number: 1, created_at: '2026-01-01T00:00:00Z' },
+    ]
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    expect(screen.getByText('Round 1')).toBeInTheDocument()
+  })
+
+  it('generate button shows "Generating..." immediately after click (local isGenerating state)', async () => {
+    const user = userEvent.setup()
+    // Make mutate a no-op (never calls onSuccess/onError)
+    mockMutate.mockImplementation(() => {})
+    mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    // Button should show Generating... from local isGenerating state
+    expect(screen.getByTestId('generate-round-btn')).toHaveTextContent('Generating...')
+  })
 
   it('shows "Generating..." text with Loader icon when isPending', () => {
     mockGenerateRoundIsPending = true

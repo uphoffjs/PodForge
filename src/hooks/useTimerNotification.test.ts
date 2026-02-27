@@ -141,6 +141,7 @@ describe('useTimerNotification', () => {
       "Time's Up!",
       expect.objectContaining({
         body: 'Round timer has expired',
+        icon: '/favicon.ico',
         tag: 'timer-expired',
       })
     )
@@ -324,6 +325,120 @@ describe('useTimerNotification', () => {
     const { result } = renderHook(() => useTimerNotification(null, null))
 
     expect(result.current.permission).toBe('unsupported')
+  })
+
+  it('does NOT fire notification when timer is null but countdown is expired', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    const expired = makeExpiredCountdown()
+
+    renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: null as RoundTimer | null, c: expired as CountdownState | null } }
+    )
+
+    expect(mockNotificationConstructor).not.toHaveBeenCalled()
+  })
+
+  it('does NOT fire notification when countdown is cancelled (isPaused=false, isCancelled=true)', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    const timer = makeTimer()
+    const cancelledCountdown = makeCountdown({
+      remainingSeconds: -5,
+      isOvertime: true,
+      isPaused: false,
+      isCancelled: true,
+      urgency: 'expired',
+    })
+
+    renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer, c: cancelledCountdown } }
+    )
+
+    expect(mockNotificationConstructor).not.toHaveBeenCalled()
+  })
+
+  it('fires notification when remainingSeconds is exactly 0 and isOvertime is true', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    const timer = makeTimer()
+    const countdown = makeCountdown({
+      remainingSeconds: 0,
+      isOvertime: true,
+      isPaused: false,
+      isCancelled: false,
+      urgency: 'expired',
+    })
+
+    renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer, c: countdown } }
+    )
+
+    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
+  })
+
+  it('does NOT fire notification when remainingSeconds is 0 but isOvertime is false', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    const timer = makeTimer()
+    const countdown = makeCountdown({
+      remainingSeconds: 0,
+      isOvertime: false,
+      isPaused: false,
+      isCancelled: false,
+      urgency: 'expired',
+    })
+
+    renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer, c: countdown } }
+    )
+
+    expect(mockNotificationConstructor).not.toHaveBeenCalled()
+  })
+
+  it('does NOT fire notification when remainingSeconds > 0 but isOvertime is true (edge state)', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    const timer = makeTimer()
+    const countdown = makeCountdown({
+      remainingSeconds: 300,
+      isOvertime: true,
+      isPaused: false,
+      isCancelled: false,
+      urgency: 'danger',
+    })
+
+    renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer, c: countdown } }
+    )
+
+    expect(mockNotificationConstructor).not.toHaveBeenCalled()
+  })
+
+  it('does NOT fire again when timer object changes but timer.id is the same', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    const timer1 = makeTimer({ id: 'timer-1' })
+    const expired = makeExpiredCountdown()
+
+    const { rerender } = renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer1, c: expired } }
+    )
+
+    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
+
+    // Create a new timer object with the same id (e.g., re-fetch)
+    const timer1Again = makeTimer({ id: 'timer-1', duration_minutes: 90 })
+    rerender({ t: timer1Again, c: expired })
+
+    // Should NOT fire again since timer.id is the same
+    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
   })
 
   it('resets lastNotifiedTimerId when timer changes, allowing notification for new timer', () => {

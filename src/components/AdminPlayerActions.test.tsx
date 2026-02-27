@@ -294,6 +294,46 @@ describe('AdminPlayerActions', () => {
     expect(mockRemoveMutate).not.toHaveBeenCalled()
   })
 
+  it('confirm button text is "Remove" for active player', async () => {
+    const user = userEvent.setup()
+
+    render(<AdminPlayerActions {...defaultActiveProps} />)
+
+    await user.click(screen.getByTestId('admin-remove-player-p1'))
+
+    expect(screen.getByTestId('confirm-dialog-confirm-btn')).toHaveTextContent('Remove')
+  })
+
+  it('confirm button text is "Reactivate" for dropped player', async () => {
+    const user = userEvent.setup()
+
+    render(<AdminPlayerActions {...defaultDroppedProps} />)
+
+    await user.click(screen.getByTestId('admin-reactivate-player-p1'))
+
+    expect(screen.getByTestId('confirm-dialog-confirm-btn')).toHaveTextContent('Reactivate')
+  })
+
+  it('ConfirmDialog shows dropped message for active player', async () => {
+    const user = userEvent.setup()
+
+    render(<AdminPlayerActions {...defaultActiveProps} />)
+
+    await user.click(screen.getByTestId('admin-remove-player-p1'))
+
+    expect(screen.getByText(/will be marked as dropped/)).toBeInTheDocument()
+  })
+
+  it('ConfirmDialog shows re-added message for dropped player', async () => {
+    const user = userEvent.setup()
+
+    render(<AdminPlayerActions {...defaultDroppedProps} />)
+
+    await user.click(screen.getByTestId('admin-reactivate-player-p1'))
+
+    expect(screen.getByText(/will be re-added to the active player list/)).toBeInTheDocument()
+  })
+
   it('clicking cancel button closes the confirm dialog', async () => {
     const user = userEvent.setup()
 
