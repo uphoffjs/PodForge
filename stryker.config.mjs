@@ -12,10 +12,13 @@ export default {
     '!src/vite-env.d.ts',
     '!src/main.tsx',
   ],
-  reporters: ['clear-text', 'progress'],
+  reporters: ['clear-text', 'progress', 'html'],
+  htmlReporter: {
+    fileName: 'reports/mutation/index.html',
+  },
   thresholds: {
-    high: 80,
-    low: 60,
+    high: 90,
+    low: 80,
     break: 80,
   },
 }
