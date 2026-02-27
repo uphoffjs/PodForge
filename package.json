@@ -8,6 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test": "vitest --run",
+    "test:coverage": "vitest --run --coverage",
+    "test:mutation": "npx stryker run",
     "cy:open": "cypress open",
     "cy:run": "cypress run",
     "cy:base": "CYPRESS_visualRegressionType=base cypress run --spec cypress/e2e/visual-regression.cy.js"
