@@ -60,7 +60,7 @@ Plans:
 | 2.1 Phase 2 E2E and Integration Tests | v2.0 | 3/3 | Complete | 2026-02-25 |
 | 3. Timer System | v2.0 | 3/3 | Complete | 2026-02-25 |
 | 4. Event Polish, Testing, and Deployment | — | 3/3 | Complete | 2026-02-25 |
-| 5. Bulletproof CI/CD Pipeline | — | 1/3 | In Progress | - |
+| 5. Bulletproof CI/CD Pipeline | — | 3/3 | Complete | 2026-02-27 |
 
 ### Phase 5: Bulletproof CI/CD Pipeline
 
@@ -78,5 +78,5 @@ Plans:
 
 Plans:
 - [x] 05-01-PLAN.md — npm scripts, coverage thresholds, Husky pre-commit hooks (CICD-01, CICD-02) [Wave 1]
-- [ ] 05-02-PLAN.md — GitHub Actions CI for unit tests, lint, type-check (CICD-03) [Wave 2]
-- [ ] 05-03-PLAN.md — Stryker mutation testing CI + kill surviving mutants (CICD-04, CICD-05) [Wave 2]
+- [x] 05-02-PLAN.md — GitHub Actions CI for unit tests, lint, type-check (CICD-03) [Wave 2]
+- [x] 05-03-PLAN.md — Stryker mutation testing CI + kill surviving mutants (CICD-04, CICD-05) [Wave 2]
