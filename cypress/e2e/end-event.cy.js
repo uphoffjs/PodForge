@@ -146,7 +146,7 @@ describe('End Event', () => {
     cy.getByTestId('event-ended-banner').should('contain', 'This event has ended')
 
     // Assert event status shows "ended"
-    cy.getByTestId('event-status').should('contain', 'ended')
+    cy.getByTestId('event-info-status').should('contain', 'ended')
   })
 
   it('cancels end event', () => {

@@ -59,7 +59,7 @@ describe('Event Creation', () => {
     // Wait for the API call and verify redirect
     cy.wait('@createEvent')
     cy.url().should('include', `/event/${eventId}`)
-    cy.getByTestId('event-name').should('contain', 'Friday Night Commander')
+    cy.getByTestId('event-info-name').should('contain', 'Friday Night Commander')
   })
 
   it('closes modal when close button is clicked', () => {
