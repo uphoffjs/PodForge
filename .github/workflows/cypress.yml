@@ -7,20 +7,65 @@ on:
     branches: [main]
 
 jobs:
-  cypress:
+  cypress-functional:
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        containers: [1, 2, 3]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Cypress run
+      - name: Cypress run (parallel, recorded)
         uses: cypress-io/github-action@v6
         with:
           build: npm run build
           start: npm run dev -- --host
           wait-on: 'http://127.0.0.1:5173'
           wait-on-timeout: 60
+          record: true
+          parallel: true
+          group: 'PodForge E2E'
+          spec: 'cypress/e2e/**/*.cy.js'
+          config: 'excludeSpecPattern=cypress/e2e/visual-regression.cy.js'
+        env:
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-screenshots-${{ matrix.containers }}
+          path: cypress/snapshots/actual
+          if-no-files-found: ignore
+
+      - name: Upload videos on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-videos-${{ matrix.containers }}
+          path: cypress/videos
+          if-no-files-found: ignore
+
+  cypress-visual:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cypress run (visual regression)
+        uses: cypress-io/github-action@v6
+        with:
+          build: npm run build
+          start: npm run dev -- --host
+          wait-on: 'http://127.0.0.1:5173'
+          wait-on-timeout: 60
+          spec: 'cypress/e2e/visual-regression.cy.js'
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
@@ -29,7 +74,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: cypress-screenshots
+          name: cypress-screenshots-visual
           path: cypress/snapshots/actual
           if-no-files-found: ignore
 
@@ -45,6 +90,6 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: cypress-videos
+          name: cypress-videos-visual
           path: cypress/videos
           if-no-files-found: ignore
