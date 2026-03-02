@@ -78,11 +78,12 @@ Plans:
   3. PodCard renders 3-player pods correctly (seats 1st-3rd only, no phantom 4th seat)
   4. With 5 players and toggle enabled, admin sees a warning and the algorithm falls back to 1x4 + 1 bye (no 5-player pod or broken partition)
   5. Cypress E2E test generates a round through the real Supabase RPC with pods-of-3 toggle ON and verifies 3-player pod cards appear
-**Plans**: TBD
+**Plans**: 3 plans in 3 waves
 
 Plans:
-- [ ] 07-01: TBD
-- [ ] 07-02: TBD
+- [ ] 07-01-PLAN.md -- computePodSizes + Algorithm Generalization (TDD)
+- [ ] 07-02-PLAN.md -- Admin Toggle UI + PodCard Rendering
+- [ ] 07-03-PLAN.md -- E2E Tests + Stryker Mutation Testing
 
 ## Progress
 
@@ -102,4 +103,4 @@ Phases execute in numeric order: 6 → 7
 | 4. Event Polish, Testing, and Deployment | v3.0 | 3/3 | Complete | 2026-02-25 |
 | 5. Bulletproof CI/CD Pipeline | v3.0 | 3/3 | Complete | 2026-02-27 |
 | 6. Opponent Diversity and Seat Verification | v4.0 | Complete    | 2026-03-02 | - |
-| 7. Pods of 3 | v4.0 | 0/? | Not started | - |
+| 7. Pods of 3 | v4.0 | 0/3 | Not started | - |
