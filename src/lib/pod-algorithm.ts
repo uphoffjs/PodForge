@@ -2,9 +2,9 @@
  * Pod Generation Algorithm
  *
  * Pure function that divides active players into pods of 4,
- * minimizing repeat opponents using a greedy algorithm with
- * opponent history matrix. Handles bye rotation fairly and
- * assigns random seat order.
+ * minimizing repeat opponents using a multi-start greedy algorithm
+ * with quadratic penalty scoring and post-greedy swap pass.
+ * Handles bye rotation fairly and assigns random seat order.
  */
 
 export interface PlayerInfo {
@@ -26,6 +26,12 @@ export interface PodAssignmentResult {
   assignments: PodAssignment[]
   warnings: string[]
 }
+
+/**
+ * Number of random orderings to try in the multi-start greedy.
+ * Higher values produce better assignments at the cost of computation.
+ */
+const NUM_STARTS = 20
 
 /**
  * Fisher-Yates shuffle (in-place). Returns a new shuffled array.
@@ -107,6 +113,8 @@ export function buildByeCounts(
 /**
  * Calculate the opponent overlap score for a candidate player
  * against players already placed in a pod.
+ * Uses quadratic penalty: encounters^2 to penalize repeat opponents
+ * superlinearly (2 encounters = 4x penalty, 3 = 9x).
  */
 export function getOpponentScore(
   candidate: string,
@@ -118,17 +126,146 @@ export function getOpponentScore(
   if (!candidateHistory) return 0
 
   for (const member of podMembers) {
-    score += candidateHistory.get(member) ?? 0
+    const encounters = candidateHistory.get(member) ?? 0
+    score += encounters * encounters
   }
   return score
+}
+
+/**
+ * Compute the penalty for a single pod: sum of encounters^2
+ * for all C(n,2) pairs of players in the pod.
+ */
+export function podPenalty(
+  pod: string[],
+  history: Map<string, Map<string, number>>
+): number {
+  let penalty = 0
+  for (let i = 0; i < pod.length; i++) {
+    for (let j = i + 1; j < pod.length; j++) {
+      const encounters = history.get(pod[i])?.get(pod[j]) ?? 0
+      penalty += encounters * encounters
+    }
+  }
+  return penalty
+}
+
+/**
+ * Compute the total penalty across all pods: sum of podPenalty
+ * for each pod in the assignment.
+ */
+export function totalPenalty(
+  pods: string[][],
+  history: Map<string, Map<string, number>>
+): number {
+  let total = 0
+  for (const pod of pods) {
+    total += podPenalty(pod, history)
+  }
+  return total
+}
+
+/**
+ * Single greedy assignment pass. Takes a pre-shuffled pool of player IDs
+ * and assigns them to pods, greedily minimizing opponent overlap score.
+ * Returns string[][] of pod assignments.
+ */
+export function greedyAssign(
+  pool: string[],
+  numPods: number,
+  history: Map<string, Map<string, number>>
+): string[][] {
+  const pods: string[][] = Array.from({ length: numPods }, () => [])
+  const remaining = [...pool]
+
+  for (let podIdx = 0; podIdx < numPods; podIdx++) {
+    // Pick first player from remaining (already shuffled)
+    pods[podIdx].push(remaining[0])
+    remaining.splice(0, 1)
+
+    // Fill positions 2-4 greedily
+    for (let slot = 1; slot < 4; slot++) {
+      let bestIdx = 0
+      let bestScore = getOpponentScore(
+        remaining[0],
+        pods[podIdx],
+        history
+      )
+
+      for (let i = 1; i < remaining.length; i++) {
+        const score = getOpponentScore(remaining[i], pods[podIdx], history)
+        if (score < bestScore) {
+          bestScore = score
+          bestIdx = i
+        }
+      }
+
+      pods[podIdx].push(remaining[bestIdx])
+      remaining.splice(bestIdx, 1)
+    }
+  }
+
+  return pods
+}
+
+/**
+ * Post-greedy swap pass. Iterates all pairs of players across different pods
+ * and swaps them if it reduces total penalty. Uses strict less-than comparison
+ * to guarantee monotonic improvement and termination.
+ */
+export function swapPass(
+  pods: string[][],
+  history: Map<string, Map<string, number>>
+): string[][] {
+  // Deep copy pods to avoid mutating input
+  const result = pods.map((pod) => [...pod])
+  let improved = true
+
+  while (improved) {
+    improved = false
+    const currentScore = totalPenalty(result, history)
+
+    for (let podA = 0; podA < result.length; podA++) {
+      for (let podB = podA + 1; podB < result.length; podB++) {
+        for (let iA = 0; iA < result[podA].length; iA++) {
+          for (let iB = 0; iB < result[podB].length; iB++) {
+            // Try swap
+            ;[result[podA][iA], result[podB][iB]] = [
+              result[podB][iB],
+              result[podA][iA],
+            ]
+            const swappedScore = totalPenalty(result, history)
+
+            if (swappedScore < currentScore) {
+              // Keep swap, restart outer loop
+              improved = true
+              break
+            } else {
+              // Undo swap
+              ;[result[podA][iA], result[podB][iB]] = [
+                result[podB][iB],
+                result[podA][iA],
+              ]
+            }
+          }
+          if (improved) break
+        }
+        if (improved) break
+      }
+      if (improved) break
+    }
+  }
+
+  return result
 }
 
 /**
  * Main pod generation function.
  *
  * Takes active players and their round history, produces pod
- * assignments that minimize repeat opponents, handle bye rotation
- * fairly, and assign random seat order.
+ * assignments that minimize repeat opponents using multi-start
+ * greedy with quadratic scoring and swap pass. Handles bye rotation
+ * fairly, and assigns random seat order.
  *
  * @throws Error when fewer than 4 active players
  */
@@ -183,47 +320,49 @@ export function generatePods(
     podPlayers = [...activePlayers]
   }
 
-  // 5. Assign remaining players to pods (greedy)
+  // 5. Multi-start assignment with swap pass
   const numPods = podPlayers.length / 4
-  const pods: string[][] = Array.from({ length: numPods }, () => [])
+  const podPlayerIds = podPlayers.map((p) => p.id)
 
-  // Shuffle the pool for initial randomness
-  let pool = shuffleArray(podPlayers.map((p) => p.id))
+  let bestPods: string[][] = []
+  let bestScore = Infinity
 
-  for (let podIdx = 0; podIdx < numPods; podIdx++) {
-    // Pick first player randomly from pool (already shuffled)
-    const firstPlayer = pool[0]
-    pods[podIdx].push(firstPlayer)
-    pool = pool.filter((id) => id !== firstPlayer)
+  for (let start = 0; start < NUM_STARTS; start++) {
+    const pool = shuffleArray(podPlayerIds)
+    let pods: string[][]
 
-    // Fill positions 2-4 greedily
-    for (let slot = 1; slot < 4; slot++) {
-      let bestCandidate = pool[0]
-      let bestScore = getOpponentScore(pool[0], pods[podIdx], opponentHistory)
+    if (start < NUM_STARTS / 2) {
+      // First half: greedy assignment (good local optimization)
+      pods = greedyAssign(pool, numPods, opponentHistory)
+    } else {
+      // Second half: random chunk assignment (diverse starting points)
+      // Split shuffled pool into consecutive chunks of 4
+      pods = Array.from({ length: numPods }, (_, i) =>
+        pool.slice(i * 4, (i + 1) * 4)
+      )
+    }
 
-      for (let i = 1; i < pool.length; i++) {
-        const score = getOpponentScore(pool[i], pods[podIdx], opponentHistory)
-        if (score < bestScore) {
-          bestScore = score
-          bestCandidate = pool[i]
-        }
-      }
-
-      pods[podIdx].push(bestCandidate)
-      pool = pool.filter((id) => id !== bestCandidate)
+    // Apply swap pass to each candidate
+    const improved = swapPass(pods, opponentHistory)
+    const score = totalPenalty(improved, opponentHistory)
+    if (score < bestScore) {
+      bestScore = score
+      bestPods = improved
     }
   }
+
+  const finalPods = bestPods
 
   // 6. Build result
   const assignments: PodAssignment[] = []
 
   // Add active pods
-  for (let i = 0; i < pods.length; i++) {
+  for (let i = 0; i < finalPods.length; i++) {
     const seatOrder = shuffleArray([1, 2, 3, 4])
     assignments.push({
       pod_number: i + 1,
       is_bye: false,
-      players: pods[i].map((playerId, idx) => ({
+      players: finalPods[i].map((playerId, idx) => ({
         player_id: playerId,
         seat_number: seatOrder[idx],
       })),
