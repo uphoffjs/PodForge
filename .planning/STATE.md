@@ -1,34 +1,31 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.0
-milestone_name: Event Polish & CI/CD
-status: complete
-last_updated: "2026-03-01T18:20:47.000Z"
+milestone: v4.0
+milestone_name: Pod Algorithm Improvements
+status: active
+last_updated: "2026-03-02T00:00:00.000Z"
 progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-27)
+See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone — who they're playing with, what seat they're in, and how much time they have.
-**Current focus:** Planning next milestone
+**Current focus:** Defining requirements for v4.0
 
 ## Current Position
 
-Phase: All phases complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Milestone v3.0 shipped
-Last activity: 2026-03-02 - Completed quick task 5: Investigate 5 survived fault injection faults
-
-Progress: Phase 04 ██████████ 100% (3/3 plans)
-Progress: Phase 05 ██████████ 100% (3/3 plans)
+Status: Defining requirements
+Last activity: 2026-03-02 — Milestone v4.0 started
 
 ## Performance Metrics
 

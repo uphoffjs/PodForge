@@ -45,6 +45,13 @@ When an admin hits "Generate Next Round," every player instantly sees their pod 
 
 ### Active
 
+#### v4.0 Pod Algorithm Improvements
+- [ ] Reduce repeat opponents — stricter pairing diversity across rounds
+- [ ] Fix seat order — randomize so players aren't stuck in same seats across rounds
+- [ ] Toggle to allow pods of 3 — per-round admin toggle (13 players → 1×4 + 3×3 instead of 3×4 + 1 bye)
+- [ ] Full automation tests for all new features (unit/integration/E2E)
+
+#### Carry-forward
 - [ ] Multiple simultaneous admins supported per event
 - [ ] Player joining mid-event enters pool for next round with empty history and 0 bye count
 
@@ -114,5 +121,15 @@ DB password stored in .env as SUPABASE_DB_PASSWORD (gitignored) for CLI push ope
 | Husky + lint-staged pre-commit | ESLint auto-fix on staged .ts/.tsx files before commit | ✓ Good |
 | Excluded src/types/** from coverage | Type-only files have no runtime code to instrument | ✓ Good |
 
+## Current Milestone: v4.0 Pod Algorithm Improvements
+
+**Goal:** Improve pod assignment quality — reduce repeat opponents, randomize seat order across rounds, and give admins a per-round toggle to allow pods of 3 (eliminating unnecessary byes).
+
+**Target features:**
+- Reduce repeat opponents across rounds (research optimal approach)
+- Randomize seat order so players aren't stuck in same seats round after round
+- Per-round admin toggle for pods of 3 (e.g., 13 players → 1×4 + 3×3 instead of 3×4 + 1 bye)
+- Full test coverage for all algorithm and UI changes
+
 ---
-*Last updated: 2026-02-27 after v3.0 milestone complete*
+*Last updated: 2026-03-02 after v4.0 milestone started*
