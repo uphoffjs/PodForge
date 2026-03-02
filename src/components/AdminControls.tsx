@@ -50,6 +50,7 @@ export function AdminControls({
   const [isGenerating, setIsGenerating] = useState(false)
   const [showEndConfirm, setShowEndConfirm] = useState(false)
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null)
+  const [allowPodsOf3, setAllowPodsOf3] = useState(false)
 
   const generateRound = useGenerateRound(eventId)
   const endEvent = useEndEvent(eventId)
@@ -90,7 +91,7 @@ export function AdminControls({
     }
 
     try {
-      const result = generatePods(activePlayers, previousRounds)
+      const result = generatePods(activePlayers, previousRounds, allowPodsOf3)
 
       // Show algorithm warnings
       for (const warning of result.warnings) {
@@ -108,6 +109,7 @@ export function AdminControls({
             toast.success(`Round ${roundCount + 1} generated!`)
             setIsGenerating(false)
             setSelectedDuration(null)
+            setAllowPodsOf3(false)
           },
           onError: () => {
             setIsGenerating(false)
@@ -186,6 +188,20 @@ export function AdminControls({
             </button>
           ))}
         </div>
+      )}
+
+      {/* Allow pods of 3 toggle */}
+      {!isEventEnded && (
+        <label className="flex items-center gap-2 mb-3 cursor-pointer" data-testid="pods-of-3-toggle">
+          <input
+            type="checkbox"
+            checked={allowPodsOf3}
+            onChange={(e) => setAllowPodsOf3(e.target.checked)}
+            data-testid="pods-of-3-checkbox"
+            className="w-4 h-4 rounded border-border bg-surface-raised text-accent cursor-pointer"
+          />
+          <span className="text-sm text-text-secondary">Allow pods of 3</span>
+        </label>
       )}
 
       <button
