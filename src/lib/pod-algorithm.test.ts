@@ -406,6 +406,20 @@ describe('pod-algorithm', () => {
               { playerIds: ['player-5'], isBye: true },
             ],
           },
+          {
+            pods: [
+              {
+                playerIds: [
+                  'player-1',
+                  'player-2',
+                  'player-3',
+                  'player-4',
+                ],
+                isBye: false,
+              },
+              { playerIds: ['player-5'], isBye: true },
+            ],
+          },
         ]
 
         const result = generatePods(players, previousRounds)
