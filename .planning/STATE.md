@@ -5,7 +5,7 @@ milestone_name: Pod Algorithm Improvements
 status: active
 last_updated: "2026-03-02T00:00:00.000Z"
 progress:
-  total_phases: 0
+  total_phases: 2
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,38 +17,30 @@ progress:
 
 See: .planning/PROJECT.md (updated 2026-03-02)
 
-**Core value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone — who they're playing with, what seat they're in, and how much time they have.
-**Current focus:** Defining requirements for v4.0
+**Core value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone -- who they're playing with, what seat they're in, and how much time they have.
+**Current focus:** Phase 6 - Opponent Diversity and Seat Verification
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-02 — Milestone v4.0 started
+Phase: 6 of 7 (Opponent Diversity and Seat Verification)
+Plan: 0 of ? in current phase (not yet planned)
+Status: Ready to plan
+Last activity: 2026-03-02 -- Roadmap created for v4.0 Pod Algorithm Improvements
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
-**v3.0 Velocity:**
+**v3.0 Velocity (reference):**
 - Total plans completed: 6
-- Timeline: 3 days (2026-02-25 → 2026-02-27)
+- Timeline: 3 days (2026-02-25 to 2026-02-27)
 
-**Phase 4:**
-- 04-01: 3min, 2 tasks, 4 files
-- 04-02: 2min, 2 tasks, 2 files
-- 04-03: 5min, 2 tasks, 8 files
+**v4.0:**
 
-**Phase 5:**
-- 05-01: 7min, 2 tasks, 8 files
-- 05-02: 1min, 1 task, 2 files
-- 05-03: 3min, 2 tasks, 15 files
-
-**Quick Tasks:**
-- quick-1: Update favicon to match app theme
-- quick-2: Get code coverage to 100%
-- quick-3: Address technical debt
-- quick-4: Set up Cypress Cloud with parallel CI runners
-- quick-5: Investigate 5 survived fault injection faults (9min, 2 tasks, 14 files)
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| 6 | 0/? | - | - |
+| 7 | 0/? | - | - |
 
 ## Accumulated Context
 
@@ -56,11 +48,10 @@ Last activity: 2026-03-02 — Milestone v4.0 started
 
 See: .planning/PROJECT.md Key Decisions table (comprehensive list)
 
-### Roadmap Evolution
-
-- v1.0: Phase 1.1 inserted (Cypress E2E), Phases 1.2-1.4 inserted (gap closures)
-- v2.0: Phase 2.1 inserted (E2E tests for Phase 2)
-- v3.0: Phase 5 added (Bulletproof CI/CD Pipeline)
+Recent decisions affecting current work:
+- [v4.0 Roadmap]: 2 phases -- opponent diversity + seat verification first (pure algorithm), then pods-of-3 (algorithm + UI + E2E)
+- [v4.0 Roadmap]: Test requirements distributed across phases (not a separate test phase)
+- [v4.0 Roadmap]: Feature branch `feature/v4.0-pod-improvements` -- create before starting Phase 6
 
 ### Pending Todos
 
@@ -68,7 +59,9 @@ None.
 
 ### Blockers/Concerns
 
-None — all milestones complete.
+- Seat randomization may already be correct (Fisher-Yates per pod). Phase 6 uses investigation-first approach.
+- Stryker 80% CI gate: new `computePodSizes` branch logic in Phase 7 is high-mutant-density territory.
+- Hardcoded `4` literals in `pod-algorithm.ts` must be audited before Phase 7.
 
 ### Quick Tasks Completed
 
@@ -83,6 +76,5 @@ None — all milestones complete.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed quick-5 (fault injection investigation)
-Resume file: none
-Next action: None -- all tasks complete
+Stopped at: Roadmap created for v4.0 milestone. Ready to plan Phase 6.
+Resume file: None

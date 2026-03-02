@@ -1,7 +1,7 @@
 # Requirements: Commander Pod Pairer
 
 **Defined:** 2026-03-02
-**Core Value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone — who they're playing with, what seat they're in, and how much time they have.
+**Core Value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone -- who they're playing with, what seat they're in, and how much time they have.
 
 ## v4.0 Requirements
 
@@ -9,7 +9,7 @@ Requirements for Pod Algorithm Improvements milestone.
 
 ### Opponent Diversity
 
-- [ ] **OPPO-01**: Pod algorithm uses quadratic penalty scoring (encounters²) to more aggressively avoid repeat opponents
+- [ ] **OPPO-01**: Pod algorithm uses quadratic penalty scoring (encounters^2) to more aggressively avoid repeat opponents
 - [ ] **OPPO-02**: Pod algorithm uses multi-start greedy (run N random starting orders, pick best result) to escape local optima
 - [ ] **OPPO-03**: Pod algorithm applies post-greedy swap pass to fix last-pod-gets-worst-pairings problem
 - [ ] **OPPO-04**: Unit tests validate improved opponent diversity with Stryker mutation score >=80%
@@ -17,9 +17,9 @@ Requirements for Pod Algorithm Improvements milestone.
 ### Pods of 3
 
 - [ ] **POD3-01**: Admin can enable a per-round "allow pods of 3" checkbox before generating a round
-- [ ] **POD3-02**: When enabled, algorithm produces pods of 3 instead of byes where mathematically possible (e.g., 13 players → 1×4 + 3×3)
+- [ ] **POD3-02**: When enabled, algorithm produces pods of 3 instead of byes where mathematically possible (e.g., 13 players -> 1x4 + 3x3)
 - [ ] **POD3-03**: `computePodSizes()` pure function handles all player counts 4-20 with correct partition math
-- [ ] **POD3-04**: For n=5 with toggle enabled, algorithm falls back to 1×4 + 1 bye with admin warning (no clean 3-player solution)
+- [ ] **POD3-04**: For n=5 with toggle enabled, algorithm falls back to 1x4 + 1 bye with admin warning (no clean 3-player solution)
 - [ ] **POD3-05**: Minimum player threshold relaxes from 4 to 3 when toggle is active
 - [ ] **POD3-06**: PodCard component renders 3-player pods correctly (seats 1st-3rd)
 - [ ] **POD3-07**: E2E tests cover toggle interaction, round generation with pods of 3, and edge cases
@@ -55,28 +55,28 @@ Requirements for Pod Algorithm Improvements milestone.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OPPO-01 | TBD | Pending |
-| OPPO-02 | TBD | Pending |
-| OPPO-03 | TBD | Pending |
-| OPPO-04 | TBD | Pending |
-| POD3-01 | TBD | Pending |
-| POD3-02 | TBD | Pending |
-| POD3-03 | TBD | Pending |
-| POD3-04 | TBD | Pending |
-| POD3-05 | TBD | Pending |
-| POD3-06 | TBD | Pending |
-| POD3-07 | TBD | Pending |
-| SEAT-01 | TBD | Pending |
-| SEAT-02 | TBD | Pending |
-| TEST-01 | TBD | Pending |
-| TEST-02 | TBD | Pending |
-| TEST-03 | TBD | Pending |
+| OPPO-01 | Phase 6 | Pending |
+| OPPO-02 | Phase 6 | Pending |
+| OPPO-03 | Phase 6 | Pending |
+| OPPO-04 | Phase 6 | Pending |
+| POD3-01 | Phase 7 | Pending |
+| POD3-02 | Phase 7 | Pending |
+| POD3-03 | Phase 7 | Pending |
+| POD3-04 | Phase 7 | Pending |
+| POD3-05 | Phase 7 | Pending |
+| POD3-06 | Phase 7 | Pending |
+| POD3-07 | Phase 7 | Pending |
+| SEAT-01 | Phase 6 | Pending |
+| SEAT-02 | Phase 6 | Pending |
+| TEST-01 | Phase 6 | Pending |
+| TEST-02 | Phase 7 | Pending |
+| TEST-03 | Phase 7 | Pending |
 
 **Coverage:**
 - v4.0 requirements: 16 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 16 ⚠️
+- Mapped to phases: 16/16
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-02*
-*Last updated: 2026-03-02 after initial definition*
+*Last updated: 2026-03-02 after roadmap creation*
