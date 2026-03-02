@@ -1,195 +1,224 @@
 # Project Research Summary
 
-**Project:** Commander Pod Pairer
-**Domain:** Real-time casual event management SPA (MTG Commander pod pairing)
-**Researched:** 2026-02-20
+**Project:** PodForge — Commander Pod Pairer v4.0 Pod Algorithm Improvements
+**Domain:** Casual MTG Commander event pod-pairing web app — algorithm milestone
+**Researched:** 2026-03-02
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Commander Pod Pairer is a zero-friction, no-account web app for casual MTG Commander nights. Experts build apps like this as a React SPA backed by Supabase — no custom server, no user auth, no SSR complexity. The recommended approach is a React 19 + Vite 7 + Tailwind CSS v4 frontend backed by Supabase for Postgres, Realtime (WebSocket subscriptions), and server-side passphrase validation via RPC functions. This is a well-established pattern for small real-time SPAs. The entire backend is Supabase's managed platform; the client-side stack is modern but stable.
+PodForge v4.0 is a focused algorithm improvement milestone on an already-shipped, production React/Supabase SPA. The three features — better repeat-opponent reduction, seat randomization verification, and a pods-of-3 toggle — all route through a single choke point: `src/lib/pod-algorithm.ts` and `AdminControls.tsx`. No new dependencies are needed. No database migrations are required. The entire milestone is pure TypeScript logic changes and one small UI addition.
 
-The competitive gap this app fills is real and documented: every existing tool requires either an account, an app install, or is focused on competitive play. The differentiators — zero-account joins, shared synced timer visible on every phone, browser notifications at timer expiry — are achievable with the recommended stack at low-to-medium complexity. The core algorithm (pod assignment with repeat-opponent avoidance) is the highest-complexity piece and should be built as a pure, exhaustively-tested function before being connected to any UI or database layer.
+The recommended implementation approach is sequential and algorithm-first. The highest-impact change is replacing the linear penalty scoring with quadratic penalty scoring in `getOpponentScore` (one-line change: `score += count * count`). This is followed by the pods-of-3 partition algorithm, which requires extracting a testable `computePodSizes()` helper and handling the edge case where n=5 cannot avoid a bye regardless of the toggle. The UI toggle is a simple `<input type="checkbox">` using Tailwind peer-modifier patterns, wired in only after the algorithm is solid. Seat randomization is investigation-first: run an empirical seat-frequency simulation before writing any code, because the current `shuffleArray([1,2,3,4])` per pod may already be correct.
 
-The primary risks are Supabase Realtime reliability on mobile (silent disconnections when apps are backgrounded) and RLS misconfiguration (exposed database in 83% of incidents involving no-auth Supabase apps). Both are preventable: Realtime reliability is addressed with a two-line client config change (`worker: true`, `heartbeatCallback`) and a Page Visibility API hook; RLS security is addressed by enabling RLS on every table at creation time and routing all admin writes through RPC functions. These mitigations must be applied during the infrastructure phase, not bolted on later.
+The key risk is the hardcoded assumption that pods always contain 4 players. This implicit invariant appears in literal `4`s, `shuffleArray([1,2,3,4])`, integration test assertions, and variable names throughout `pod-algorithm.ts` and its test files. A greedy audit of every literal `4` before writing pods-of-3 code is mandatory. Secondary risk: Stryker CI gates at 80% mutation score, and the new `computePodSizes` branch logic is high-mutant-density territory — exhaustive parameterized unit tests for all player counts 4-20 in both toggle states (34 test cases minimum) are non-negotiable.
+
+---
 
 ## Key Findings
 
 ### Recommended Stack
 
-The stack is modern, compatible, and stable. React 19, Vite 7, TypeScript 5.9, and Tailwind CSS v4 are all current stable releases with verified inter-compatibility. Supabase JS v2.95 is framework-agnostic and conflict-free. The testing stack — Vitest 4 + Testing Library 16 + jsdom — shares Vite's config and requires no separate setup. All package versions are pinned to production-ready releases; TypeScript 6.0 beta is explicitly excluded.
+No new dependencies. The existing stack (React 19, Vite, TypeScript, Tailwind CSS v4, Supabase, Vitest, Cypress, Stryker) is validated and sufficient for all three v4.0 features. Every considered external library was rejected: `socialgolfer.js` is CoffeeScript and 100x slower than reference implementations; LP solvers and genetic algorithm libraries target problems with 100+ variables; Headless UI is 30KB for a single toggle. The Tailwind `peer-checked:` pattern provides a fully accessible custom toggle with zero bundle cost.
 
-**Core technologies:**
-- React 19 + Vite 7: SPA framework and build tool — no SSR needed, sub-second HMR, native TypeScript support
-- Supabase JS v2.95: Backend-as-a-service — Postgres + Realtime + Row Level Security, no custom server needed
-- React Router v7 (Library Mode): Client-side routing — `createBrowserRouter`, import from `react-router` (not `react-router-dom`)
-- TanStack React Query v5: Server-state caching — React Query owns all data state; Realtime events trigger invalidation, not direct state mutation
-- Tailwind CSS v4 + `@tailwindcss/vite`: Utility-first CSS — CSS-first config via `@theme` directive, no `tailwind.config.js` needed
-- Vitest 4 + Testing Library: Unit and component tests — shares Vite config, Jest-compatible API
-- bcryptjs v3: Client-side passphrase hashing — pure JS, browser-compatible; passphrase hash stored in Supabase and compared server-side via RPC
-- qrcode.react v4.2: QR code generation — display-only; players scan with their phone's native camera, no in-app scanner needed
+**Core technologies (unchanged from v3.0):**
+- `src/lib/pod-algorithm.ts`: All algorithm changes isolated here — pure TypeScript, no I/O, no new deps
+- `AdminControls.tsx`: One new `useState` boolean and a toggle checkbox; passes options to algorithm
+- `PodCard.tsx`: Verify-only — `getOrdinal` already handles 1st/2nd/3rd; `sortedPlayers.sort` works for any pod size
+
+**Algorithm approach (no new libraries):**
+- Quadratic penalty scoring: `score += count * count` replaces `score += count` — penalizes repeat pairings exponentially
+- Multi-start greedy (5 iterations, keep best): cheap O(n²) improvement with no algorithm complexity increase
+- `computePodSizes(n, allowPodsOf3)`: pure function finding minimum k pods-of-3 such that `(n - 3k) % 4 === 0`
 
 ### Expected Features
 
-The MVP is well-defined. Every feature in the v1 list has direct precedent in the competitive landscape, and the feature dependency graph is explicit: Realtime is foundational, player registration gates pod generation, pod generation gates the timer, and the admin passphrase gates all mutating actions.
+**Must have (table stakes — all P1, all-or-nothing milestone):**
+- Quadratic penalty scoring for fewer repeat opponents — users expect "you shouldn't play the same people twice"
+- Pods-of-3 toggle eliminates unnecessary byes — 13 players should all play, not sit one out
+- Per-round toggle only (not event-wide) — player count changes round to round; event-wide gets this wrong
+- Pods of 3 visually distinct in PodCard — 3-player pod shows seats 1-3 only, no seat 4 badge
+- Algorithm warnings preserved — keep existing warning surface; add warning when diversity is impossible
 
-**Must have (table stakes):**
-- Event creation with shareable link + QR code — primary join mechanism; every competitor has this
-- Player self-registration (name only) — zero-friction entry is the core value proposition
-- Real-time player list — users expect to see who has joined
-- Pod generation with repeat-opponent avoidance — the entire purpose of the app
-- Random seat assignment (1st-4th) — eliminates first-player disputes
-- Bye handling for odd player counts — inevitable at casual events
-- Player self-drop and re-activation — players leave mid-event constantly
-- Round history — players check who they played in previous rounds
-- Admin passphrase protection — gates all destructive actions
-- Shared round timer with visual countdown — the primary differentiator from all competitors
-- Admin timer controls (start, pause, resume, +5min) — practical necessity at real events
-- Browser notifications on timer expiry — critical for backgrounded phones; degrades gracefully on iOS Safari
-- Mobile-first dark theme — 90%+ of users are on phones at an event
+**Should have (differentiators):**
+- Seat history tracking with avoidance — no casual Commander tool tracks seat position cross-round
+- Contextual hint when pods-of-3 toggle would eliminate a bye (show when n % 4 != 0)
+- "(3-player pod)" subtitle on PodCard so players do not mistake missing seat 4 for a display bug
 
-**Should have (competitive, add after validation):**
-- Event history / read-only mode for ended events
-- Multiple concurrent events support
-- Improved pod algorithm (configurable pod sizes)
-- Event info bar with expandable QR and round number
-
-**Defer (v2+):**
-- PWA install prompt (required for iOS notification support)
-- Event templates for repeat organizers
-- WCAG 2.2 accessibility audit
-- Analytics dashboard for organizers
-- Custom pod sizes (3-player, 5-player)
-
-**Anti-features to avoid:** user accounts, standings/leaderboards, deck registration, chat/messaging, in-app QR scanning, sound alerts, spectator mode, Swiss-style competitive pairings, online/remote play support.
+**Defer (not in v4.0 scope):**
+- Globally optimal algorithm (ILP/constraint solver) — NP-hard, impractical for browser TypeScript, no user-visible improvement at n<20
+- Event-wide "always use pods of 3" persistent setting — per-round is the correct UX
+- Fairness score display — adds UI complexity players do not need
+- Hard seat-repetition constraint ("never same seat back to back") — makes the problem unsolvable for small groups
 
 ### Architecture Approach
 
-The architecture is a React SPA with a clear separation between React Query (owns all server state), Supabase Realtime (triggers invalidation, does not own state), and Supabase RPC functions (handles all admin mutations with server-side passphrase validation). The timer is authoritative on the server side — stored as `started_at` timestamp + `duration_seconds` in Postgres — and each client independently calculates remaining time. This eliminates timer drift between clients entirely. Admin actions never hit Supabase tables directly; they go through SECURITY DEFINER RPC functions that validate the passphrase before performing mutations.
+All three v4.0 features modify only two source files (`pod-algorithm.ts` and `AdminControls.tsx`) and add tests. The Supabase RPC, database schema, all query hooks, and all other React components are confirmed unchanged via direct source inspection. The `generate_round` RPC already accepts JSONB pod assignments of any size via `jsonb_array_elements` — pods of 3 produce 3 rows instead of 4 with no migration. The `allowPodsOf3` toggle lives exclusively in `AdminControls` component state; it is a per-round algorithm input, not a persisted record.
 
-**Major components:**
-1. React Router layer — three routes: `/` (landing), `/event/:id` (player view), `/event/:id/admin` (same view with admin controls visible)
-2. Supabase client + React Query layer — single shared Supabase client; React Query for all reads; Realtime invalidation hook (`useEventChannel`) listening to `postgres_changes` filtered by `event_id`
-3. Pod algorithm — pure TypeScript function taking players + opponent history, producing pod assignments; must be independently tested before UI integration
-4. Admin action layer — RPC calls that pass passphrase to Postgres; session passphrase stored in `sessionStorage` per event for UX convenience
-5. Timer engine — `useTimer` hook computing `remaining = duration - (Date.now() - started_at)`; driven by `requestAnimationFrame`; recalculates on `visibilitychange`
-6. UI components — `PodCard` (hero element, large names, readable at arm's length), `TimerDisplay` (sticky, color-coded: white/yellow/red/flashing red), `AdminControls` (collapsed behind toggle)
-
-**Database schema:** 5 tables — `events`, `players`, `rounds`, `pods`, `pod_players`. RLS on all tables. Player removal via soft delete (`status = 'removed'`), not hard delete, to avoid Realtime DELETE payload limitation.
+**Major components and v4.0 changes:**
+1. `pod-algorithm.ts` — ADD `GeneratePodsOptions` interface, `computePodSizes()`, `scoreAssignment()`, `runGreedy()` extraction; MODIFY `generatePods()` signature (additive, backwards-compatible, all existing tests pass unchanged)
+2. `AdminControls.tsx` — ADD `allowPodsOf3` useState, toggle checkbox UI, pass `{ allowPodsOf3 }` to `generatePods()`
+3. `PodCard.tsx` — VERIFY ONLY; add component test for 3-player pod; no source changes expected
+4. `pod-algorithm.test.ts` / `.integration.test.ts` — ADD parameterized cases for all n=4-20 in both toggle states
+5. `AdminControls.test.tsx` — ADD toggle render and state tests
+6. `cypress/e2e/` — ADD E2E test generating a round with pods-of-3 enabled (13-player event)
 
 ### Critical Pitfalls
 
-1. **Supabase Realtime silent disconnections on mobile** — Mobile browsers throttle heartbeats in background tabs. Configure `{ realtime: { worker: true, heartbeatCallback: ... } }` at client init. Use Page Visibility API to re-fetch state on tab restore. Must be in initial client setup, not added later.
+1. **Greedy local-optimum trap** — The last pod filled absorbs disproportionate repeat opponents because early pods consume "easy" players. Fix requires a post-greedy swap pass: iterate all cross-pod player pairs, accept swaps that reduce global repeat score. Multi-start greedy alone improves but does not fully resolve this structural bias. The swap pass belongs in Phase 1 to meet the tighter `maxPairCount <= 2` threshold.
 
-2. **RLS misconfiguration exposes entire database** — Supabase disables RLS by default; 83% of no-auth app exploits involve RLS omission. Enable RLS on every table at creation time. Route all admin mutations through SECURITY DEFINER RPC functions. Never validate passphrase client-side and write directly to tables.
+2. **Pods of 3 invalidates all hardcoded 4-player invariants** — The literal `4` appears in `shuffleArray([1,2,3,4])`, `slot < 4` fill loop, integration test assertions of `pod.players.toHaveLength(4)`, and variable names. Every instance must be audited before writing any pods-of-3 code. Partial changes leave the codebase in an inconsistent state.
 
-3. **Realtime subscription leaks** — React's Strict Mode double-invokes `useEffect`; channels accumulate without cleanup. Always return `() => supabase.removeChannel(channel)` from every `useEffect`. Use one channel per event with multiple `.on()` handlers, not one channel per table. Test cleanup by navigating 10+ times and checking channel count.
+3. **Pod partition math has ambiguous solutions without a defined policy** — For some player counts (e.g., n=15: either `3×4+1×3` or `5×3`), multiple valid arrangements exist. Policy must be explicit and enforced by a standalone `computePodSizes()` function: "find minimum k pods-of-3 such that `(n - 3k) % 4 === 0`." Extract and unit-test exhaustively before wiring into `generatePods`.
 
-4. **Timer built with `setInterval` countdown** — `setInterval` drifts, is throttled in background tabs, and diverges across clients. Calculate timer remaining time from server-stored UTC timestamp on every render frame using `requestAnimationFrame`. Never store a "current remaining" value.
+4. **Seat randomization may already be implemented** — The current algorithm already calls `shuffleArray([1,2,3,4])` per pod. Before writing any seat-fix code, run an empirical simulation (20 rounds × 8 players, track per-player seat frequency). If distribution is roughly uniform (each seat ~25% of rounds), the fix is a no-op and all effort belongs in opponent reduction.
 
-5. **Pod algorithm edge cases with small/odd player counts** — Greedy repeat-avoidance has no valid solution for 4-7 players in round 2+. Set a maximum iteration count; degrade to "least repeated" rather than "zero repeats." Test every player count 4-20 for 5+ rounds before building any UI. Handle player drops (7 active players = 1 pod of 4 + 3 byes is terrible UX — needs a design decision).
+5. **Future defensive RPC code can silently break pods of 3** — The `generate_round` RPC accepts any pod size today, but adding a `!= 4` validation in a future migration would break pods-of-3 silently (unit tests mock the RPC). Add an explicit comment to the migration SQL documenting that pod sizes 3 and 4 are both valid. Add at least one E2E test that exercises the real RPC with a 3-player pod.
+
+---
 
 ## Implications for Roadmap
 
-Based on research, the build order follows hard data dependency chains. Each layer depends on the one before it. Six phases are suggested.
+Based on combined research, the natural phase structure follows data dependency direction: pure algorithm first, UI last, investigation before implementation.
 
-### Phase 1: Foundation and Infrastructure
-**Rationale:** Everything depends on the database schema and client infrastructure. RLS misconfiguration (Pitfall 3) must be addressed before any feature code exists. Timer timezone handling (Pitfall 12) requires `timestamptz` in the initial schema — not patchable later. Passphrase security (Pitfall 8) must be the architecture from day one.
-**Delivers:** Supabase project with all tables, RLS policies, and RPC function skeletons; Vite + React + TypeScript + Tailwind project scaffold; React Router routes; Supabase client with `worker: true` Realtime config; React Query provider
-**Addresses:** Event creation with admin passphrase (hashed)
-**Avoids:** Pitfall 3 (RLS), Pitfall 8 (passphrase security), Pitfall 12 (timezone), Pitfall 11 (soft deletes)
+### Phase 1: Algorithm Core — Quadratic Penalty + Multi-Start Greedy
 
-### Phase 2: Core Player Flow and Realtime
-**Rationale:** Player registration is the prerequisite for pod generation. Realtime subscriptions should be wired up early so all subsequent features inherit live updates automatically. Establishing the correct subscription pattern (cleanup, one channel per event, worker mode) in the first Realtime component forces every subsequent component to follow it.
-**Delivers:** Player join flow (name-only), real-time player list, duplicate name prevention, player self-drop, Realtime subscription via `useEventChannel` with proper cleanup
-**Uses:** Supabase Realtime postgres_changes, React Query invalidation pattern, sessionStorage passphrase pattern
-**Avoids:** Pitfall 1 (silent disconnections — heartbeat config), Pitfall 4 (subscription leaks — cleanup pattern), Pitfall 11 (DELETE payloads — soft deletes)
+**Rationale:** Highest-impact, lowest-risk change. Self-contained pure function with no React or Supabase dependencies. All existing 678+ unit tests pass unchanged because the public `generatePods` signature is unmodified. Gives a concrete, measurable win before touching UI or data shapes.
 
-### Phase 3: Pod Generation Algorithm and Admin Flow
-**Rationale:** The pod algorithm is the highest-risk, highest-complexity piece. It must be a pure TypeScript function with exhaustive unit tests before any UI or database integration. Passphrase-gated admin actions must be working before any admin feature is exposed. Race conditions in pod generation (Pitfall 6) require advisory locks in the Postgres RPC function, not client-side guards.
-**Delivers:** Pod algorithm (TypeScript pure function, tested for player counts 4-20, 5+ rounds each), admin passphrase modal, generate-round RPC with advisory lock, pod display UI (PodCard), seat assignments, bye handling, round history
-**Avoids:** Pitfall 6 (race conditions — Postgres advisory lock), Pitfall 7 (small player count edge cases — tested before UI build), Pitfall 8 (passphrase validation server-side)
+**Delivers:** Meaningfully fewer repeat opponents across all player counts. Integration test thresholds tighten from `maxPairCount <= 3` to `<= 2` for 8-player/4-round scenarios. `scoreAssignment()` and `runGreedy()` helpers extracted for multi-start loop.
 
-### Phase 4: Shared Timer
-**Rationale:** Timer depends on rounds existing (Phase 3). Timer must be built with the server-authoritative pattern from the start — a countdown-based setInterval timer would require a full rewrite.
-**Delivers:** Timer state in rounds table (timestamptz started_at, duration_seconds, paused_remaining), `useTimer` hook with requestAnimationFrame calculation, TimerDisplay component with color transitions, admin timer controls (start, pause, resume, +5min, cancel)
-**Avoids:** Pitfall 2 (setInterval timer — use requestAnimationFrame + server timestamps), Pitfall 12 (timezone — timestamptz, server-set started_at)
+**Addresses:** Quadratic penalty scoring (table stakes), multi-start greedy (differentiator), repeat-opponent reduction (core milestone goal)
 
-### Phase 5: Notifications and Event Info
-**Rationale:** Browser notifications are an enhancement on top of the timer (Phase 4). iOS limitations (Pitfall 5) require visual fallbacks to be the primary notification mechanism. QR code display and event sharing are low-complexity polish that can be done in any order but belongs after core flow is validated.
-**Delivers:** Notification API permission flow, timer-expiry visual fallback (full-screen color change), vibration API fallback, event info bar with QR code (display-only, no scanner), share link copy, Web Share API
-**Avoids:** Pitfall 5 (iOS PWA requirement — visual fallback is primary), Pitfall 9 (no in-app QR scanner)
+**Avoids:** Greedy local-optimum trap (Pitfall 1) — the swap pass or shuffle-fill-order fix resolves structural bias before the milestone ships
 
-### Phase 6: Admin Management, Edge Cases, and Deployment
-**Rationale:** Admin player management (remove, reactivate) and event ending are admin-layer operations that build on the passphrase system from Phase 3. Mid-event joins are a low-complexity edge case. Deployment is last because environment variables and CI config depend on the final Supabase project setup.
-**Delivers:** Remove player, reactivate dropped player, end event (read-only mode), mid-event player join, unit and integration test coverage of all critical paths, Vercel deployment config, Supabase migration scripts
-**Avoids:** Pitfall 10 (free tier limits — single channel per event, Supabase Pro for production)
+**Research flag:** Standard patterns — quadratic penalty scoring is well-documented in Social Golfer Problem literature and Good-Enough Golfers source code. No additional research needed.
+
+---
+
+### Phase 2: Pods-of-3 Algorithm (Pure Function, No UI)
+
+**Rationale:** Pure function change with zero React or Supabase dependencies. Establish all partition math, handle all n values 4-20, get exhaustive unit tests solid before wiring any UI. Isolating this step keeps Stryker runs focused and ensures algorithm bugs are caught before the UI integration layer obscures them.
+
+**Delivers:** `computePodSizes(n, allowPodsOf3)` tested for all 34 input combinations (n=4-20, both toggle states). `generatePods()` gains the `GeneratePodsOptions` interface and pods-of-3 branch. Seat generation dynamically uses `[1,2,3]` or `[1,2,3,4]` based on pod size. Minimum player threshold adjusted to 3 when toggle is active.
+
+**Addresses:** Pods-of-3 partition algorithm (table stakes), minimum player threshold adjustment, all P1 algorithm requirements
+
+**Avoids:** Pod partition math ambiguity (Pitfall 3) — `computePodSizes` is extracted as a standalone testable function before being wired in; Pods of 3 invalidates 4-player invariants (Pitfall 2) — full audit of hardcoded `4` literals precedes any code write
+
+**Research flag:** Standard patterns — the partition math and `computePodSizes` implementation are fully worked out in ARCHITECTURE.md. No additional research needed.
+
+---
+
+### Phase 3: Seat Randomization Investigation + Fix (If Needed)
+
+**Rationale:** Investigation-first, not implementation-first. The current algorithm already has Fisher-Yates shuffle per pod. Before writing code, run the empirical seat-frequency simulation. If distribution is uniform, this phase produces only a statistical assertion test with no algorithm change. If bias exists, the fix is localized to a specific shuffle call site.
+
+**Delivers:** Either (a) a statistical integration test confirming seat distribution is already uniform, plus a comment marking the feature verified, or (b) a targeted fix at the specific shuffle call site that produced bias, plus the statistical test.
+
+**Addresses:** Seat history avoidance (differentiator), seat randomization verification (milestone goal)
+
+**Avoids:** Seat randomization may already be implemented (Pitfall 4) — the empirical check is the explicit guard against building something that already works
+
+**Research flag:** Standard patterns — investigation approach is defined. The fix, if needed, is a targeted shuffle call change. No external research required.
+
+---
+
+### Phase 4: Admin UI Toggle
+
+**Rationale:** UI depends on Phase 2 algorithm being correct. The component test mocks `generatePods`, so algorithm bugs do not surface through UI, but the toggle needs the algorithm to have a confirmed, tested interface before wiring is meaningful.
+
+**Delivers:** Tailwind `peer-checked:` checkbox toggle in `AdminControls` with `data-testid="pods-of-3-toggle"`. Toggle resets to off after `onSuccess`. Contextual hint shown when pods-of-3 would eliminate a bye. Unit tests for toggle render, state change, and correct options passed to `generatePods`.
+
+**Addresses:** Per-round toggle UI (table stakes), toggle visibility only when n%4!=0 (anti-feature prevention), UX clarity on toggle label
+
+**Avoids:** allRoundsPods query key instability (Pitfall 6) — profile with React Query DevTools after adding toggle state before shipping; Adding allowPodsOf3 to the database (Architecture anti-pattern 1) — toggle stays in component state only
+
+**Research flag:** Standard patterns — Tailwind peer-modifier toggle is documented in official Tailwind UI blocks. Pattern matches existing `selectedDuration` state in the same component.
+
+---
+
+### Phase 5: PodCard Verification + E2E
+
+**Rationale:** Final validation layer. PodCard verification confirms no source changes are needed for 3-player pod rendering. E2E tests validate the full user-visible flow through the real Supabase RPC — the only layer that can catch a future defensive RPC validation bug (Pitfall 5). E2E is last because it is the slowest feedback loop and depends on all prior phases.
+
+**Delivers:** Component test for 3-player PodCard (1st/2nd/3rd badges, no 4th badge, no layout overflow). E2E test generating a round with pods-of-3 toggle ON for a 13-player event, asserting 3-player pod card appears. E2E test confirming toggle OFF reverts to bye behavior. Visual regression baselines updated if pod card layout changes. RPC migration comment added documenting valid pod sizes 3 and 4.
+
+**Addresses:** All E2E requirements from FEATURES.md, PodCard 3-player display (table stakes), RPC comment (Pitfall 5 prevention)
+
+**Avoids:** RPC defensive code breaking pods of 3 (Pitfall 5) — E2E test exercises real RPC; 3-player pod showing seat 4 badge (PITFALLS "looks done but isn't" checklist item)
+
+**Research flag:** Standard patterns — Cypress patterns follow established project conventions. No additional research needed.
+
+---
 
 ### Phase Ordering Rationale
 
-- **Schema before features** — RLS is impossible to retrofit safely; schema decisions (timestamptz, soft deletes, passphrase hash) affect every phase
-- **Realtime before pod generation** — pods need live updates; establishing the correct subscription pattern early prevents inconsistent patterns across components
-- **Algorithm before UI** — the pod algorithm has mathematical edge cases that produce incorrect behavior; these must be caught in unit tests, not discovered during UI development
-- **Timer after rounds** — timer state lives on the rounds table; rounds must exist before timer can be built
-- **Notifications after timer** — notification logic depends on timer expiry events
-- **Polish last** — event info bar, QR display, and admin player management are low-dependency, low-risk additions
+- Algorithm phases before UI phases: `generatePods` is a pure function with no React deps — fastest feedback loop, no noise from rendering or async
+- Phase 2 (pods-of-3 algorithm) before Phase 4 (UI toggle): the UI is a thin wrapper; wiring it to an untested algorithm produces confusing failures
+- Phase 3 (seat investigation) between the two algorithm phases and the UI phase: output is binary — either no code change (fast) or a targeted fix localized to one file already in scope
+- Phase 5 last: E2E tests depend on all prior phases, are the slowest feedback loop, and validate user-visible behavior rather than algorithm correctness
+
+---
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 3 (Pod Algorithm):** The greedy repeat-avoidance algorithm for small player counts (4-7) has documented edge cases with no clean solution. Research specific algorithm strategies (e.g., weighted round-robin, exhaustive backtracking with iteration cap) before implementation.
-- **Phase 4 (Timer):** Supabase RPC functions setting `started_at = NOW()` server-side is the correct pattern, but the exact RPC function signature for pause/resume/extend needs design validation against the React Query invalidation model.
+- None identified. All phases have well-defined implementation approaches from direct codebase inspection and established algorithm literature. The roadmapper can structure all five phases without additional research spikes.
 
-Phases with standard patterns (skip research-phase):
-- **Phase 1:** Supabase project setup, Vite scaffolding, and Tailwind v4 config are thoroughly documented. No novel patterns.
-- **Phase 2:** Player join flow with Realtime subscription is a documented Supabase pattern. Well-covered by official docs.
-- **Phase 5:** Notification API permission flow is well-documented. iOS limitation is a known constraint with a known workaround.
-- **Phase 6:** Vercel deployment for Vite React SPAs is standard. Supabase migration scripts are well-documented.
+Phases with standard patterns (skip `/gsd:research-phase`):
+- **Phase 1:** Algorithm modification of existing well-tested pure function — pattern established in literature and codebase
+- **Phase 2:** Partition math fully derived in research; `computePodSizes` implementation provided in ARCHITECTURE.md
+- **Phase 3:** Empirical investigation approach defined; fix (if needed) is a targeted shuffle change
+- **Phase 4:** Tailwind peer-modifier toggle is documented; component state pattern matches existing `selectedDuration` pattern in same component
+- **Phase 5:** Cypress patterns follow existing project conventions; component test pattern matches existing `AdminControls.test.tsx`
+
+---
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All packages verified via official npm/release pages. Versions pinned to current stable. No speculative choices. |
-| Features | MEDIUM-HIGH | Competitive landscape research relied on official product pages (MEDIUM) but WotC WPN guidance is HIGH. Feature dependencies are internally consistent. |
-| Architecture | MEDIUM-HIGH | Supabase Realtime and RPC patterns verified via official docs (HIGH). Timer sync and React Query invalidation patterns from multiple credible community sources (MEDIUM). RPC passphrase validation pattern is sound but lacks a canonical example for this exact use case. |
-| Pitfalls | HIGH | Critical pitfalls backed by official Supabase docs, Chrome documentation, and documented real-world incidents (2025 Lovable RLS breach). Moderate pitfalls backed by GitHub issues and community analysis. |
+| Stack | HIGH | No new dependencies. All decisions verified against official docs (Tailwind, Social Golfer Problem literature, Good-Enough Golfers source code). First-party codebase inspection confirms infrastructure compatibility. Existing package versions unchanged. |
+| Features | HIGH (algorithm theory), MEDIUM (UX patterns) | Algorithm theory is academically grounded and confirmed via the Good-Enough Golfers tool source code. UX patterns for the toggle label and contextual hints are best-practice recommendations — should be validated with actual admin users before Phase 4 ships. |
+| Architecture | HIGH | All findings from direct source inspection of the actual codebase. Zero speculation. Supabase RPC, PodCard, and all unchanged components confirmed by reading source files. File-level change map in ARCHITECTURE.md is based on inspected line numbers and function names. |
+| Pitfalls | HIGH | Pitfalls derived from direct codebase inspection plus algorithm analysis. Specific line numbers, existing test thresholds, and exact variable names cited. External sources confirm secondary pitfalls (TanStack Query key stability, Supabase RPC schema changes). |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **6-7 player pod assignment UX**: The spec defines pods of 4 as standard, but 6 active players = 1 pod of 4 + 2 byes (poor experience) and 7 active players = 1 pod of 4 + 3 byes (terrible). The spec does not address this design gap. Needs a product decision before Phase 3: either allow 3-player pods as a fallback, or display a warning to the admin, or define a minimum player count above which the experience is acceptable.
-- **pgcrypto availability in Supabase free tier**: The RPC passphrase validation pattern uses `pgcrypto`'s `crypt()` and `gen_salt('bf')` functions. Supabase enables pgcrypto by default on new projects, but this should be verified during Phase 1 database setup. If unavailable, the fallback is passing the passphrase to a Supabase Edge Function for bcrypt comparison.
-- **Pod generation algorithm choice**: Research identifies the approach (greedy, minimize repeats) and edge cases but does not prescribe the exact algorithm implementation. This gap should be resolved during Phase 3 planning with a short research spike.
+- **Seat randomization bias:** Must run empirical simulation before Phase 3 implementation begins. Whether a real bug exists cannot be determined from static analysis — requires runtime measurement.
+
+- **Multi-start greedy threshold:** Integration test threshold tightening (from `<= 3` to `<= 2`) needs empirical verification after Phase 1 ships. The improvement is expected but the exact achievable threshold depends on measured output.
+
+- **Toggle UX edge cases:** Two UX decisions require resolution during Phase 4: (a) what to show when pods-of-3 is toggled ON with exactly 5 players (toggle has no effect — warn or hide?); (b) whether the toggle resets to off after `onSuccess` or stays sticky. Both are low-stakes decisions that can be made during implementation.
+
+- **Stryker regression risk:** Every new branch in `computePodSizes` and the multi-start loop creates new mutation surface. The 80% CI gate is a hard block. Budget time for Stryker triage after each algorithm phase.
+
+---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [Supabase Realtime Postgres Changes](https://supabase.com/docs/guides/realtime/postgres-changes) — subscription patterns, filter syntax, DELETE payload behavior
-- [Supabase Handling Silent Disconnections](https://supabase.com/docs/guides/troubleshooting/realtime-handling-silent-disconnections-in-backgrounded-applications-592794) — `worker: true`, heartbeatCallback config
-- [Supabase Securing Your API](https://supabase.com/docs/guides/api/securing-your-api) — RLS without auth, anon key security
-- [Supabase Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security) — policy patterns
-- [Supabase Realtime Limits](https://supabase.com/docs/guides/realtime/limits) — free tier connection and message limits
-- [Chrome Timer Throttling in Chrome 88](https://developer.chrome.com/blog/timer-throttling-in-chrome-88) — setInterval background throttling
-- [Vite 7.0 announcement](https://vite.dev/blog/announcing-vite7) — Node.js requirements, version compatibility
-- [Tailwind CSS v4.0 blog](https://tailwindcss.com/blog/tailwindcss-v4) — v4 architecture, CSS-first config
-- [Vitest 4.0 announcement](https://vitest.dev/blog/vitest-4) — Vite 7 compatibility
-- [React Router v7 modes](https://reactrouter.com/start/modes) — Library Mode vs Framework Mode
-- [WPN: How to Run Successful Commander Events](https://wpn.wizards.com/en/news/how-to-run-successful-commander-events-and-grow-your-community) — casual event UX expectations
+- Direct codebase inspection — `src/lib/pod-algorithm.ts`, `AdminControls.tsx`, `PodCard.tsx`, `useGenerateRound.ts`, `supabase/migrations/00002_rounds_pods_admin.sql`, `pod-algorithm.integration.test.ts`, `src/types/database.ts`
+- [Social Golfer Problem — Wikipedia](https://en.wikipedia.org/wiki/Social_golfer_problem) — problem classification, known solution approaches
+- [Good-Enough Golfers — GitHub source](https://github.com/islemaster/good-enough-golfers) — quadratic penalty scoring pattern confirmed in open-source implementation
+- [Tailwind CSS Toggles — Official UI blocks](https://tailwindcss.com/plus/ui-blocks/application-ui/forms/toggles) — peer-checked pattern for custom toggle implementation
+- [NN/G Toggle Switch Guidelines](https://www.nngroup.com/articles/toggle-switch-guidelines/) — per-round vs. event-wide toggle UX decision basis
 
 ### Secondary (MEDIUM confidence)
-- [TanStack Query + Supabase Pattern (MakerKit)](https://makerkit.dev/blog/saas/supabase-react-query) — invalidation-based integration pattern
-- [Supabase Security Flaw: 170+ Apps Exposed](https://byteiota.com/supabase-security-flaw-170-apps-exposed-by-missing-rls/) — RLS misconfiguration real-world consequences
-- [PWA on iOS (2025)](https://brainhub.eu/library/pwa-on-ios) — iOS notification limitations
-- [Why Do Browsers Throttle JavaScript Timers?](https://nolanlawson.com/2025/08/31/why-do-browsers-throttle-javascript-timers/) — setInterval throttling analysis
-- [TopDeck.gg feature pages](https://topdeck.gg/features/tournament-operations) — competitive feature landscape
-- [supabase/realtime-js#169](https://github.com/supabase/realtime-js/issues/169) — React Strict Mode double subscription
+- [Good-Enough Golfers — live tool](https://goodenoughgolfers.com/) — empirical confirmation that squared-penalty greedy produces acceptable results for small casual groups
+- [Multiplayer MTG Addendum to MTR](https://juizes-mtg-portugal.github.io/multiplayer-addendum-mtr) — pod size rules: maximize pods of 4, allow pods of 3 to eliminate byes; repeat-opponent policy
+- [Running Commander Tournaments — TopDeck.gg](https://topdeck.gg/help/running-commander-tournament) — industry practice for mixed pod sizes
+- [An effective greedy heuristic for the Social Golfer Problem — Springer](https://link.springer.com/article/10.1007/s10479-011-0866-7) — academic confirmation greedy heuristics are practical for small n
+- [TanStack Query key stability discussion](https://github.com/TanStack/query/discussions/6953) — array reference equality and query key churn patterns
 
-### Tertiary (LOW confidence)
-- [EDH Tournament App Google Play listing](https://play.google.com/store/apps/details?id=com.lucaswmolin.edhtournament) — competitor feature reference
-- [MTG pod pairing algorithm discussions](https://apps.magicjudges.org/forum/topic/26928/) — algorithm edge cases
+### Tertiary (evaluated and rejected — LOW confidence not applicable)
+- `socialgolfer.js` — CoffeeScript, ~100x slower than C++ reference, not suitable for embedding; rejected
+- `javascript-lp-solver` — LP solver, wrong problem domain for combinatorial scheduling; rejected
+- `@headlessui/react` Switch — 30KB for one toggle; rejected in favor of Tailwind peer modifiers
+- All genetic algorithm / simulated annealing libraries — over-engineered for n<20 player counts; rejected
 
 ---
-*Research completed: 2026-02-20*
+*Research completed: 2026-03-02*
 *Ready for roadmap: yes*

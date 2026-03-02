@@ -1,402 +1,374 @@
-# Domain Pitfalls
+# Pitfalls Research
 
-**Domain:** Real-time event management web app (MTG Commander pod pairing)
-**Researched:** 2026-02-20
+**Domain:** Pod algorithm improvements — reduce repeat opponents, seat randomization, pods of 3 toggle (v4.0 milestone)
+**Researched:** 2026-03-02
+**Confidence:** HIGH (pitfalls derived from direct codebase inspection + algorithm analysis + verified external patterns)
+
+> Note: This document supersedes the original PITFALLS.md (v1-v3 pitfalls). That earlier document covered Supabase Realtime, RLS, timer drift, and iOS notifications — all of which are already solved in the shipped v3.0 codebase. This document focuses exclusively on pitfalls when ADDING algorithm improvements to the existing system.
 
 ---
 
 ## Critical Pitfalls
 
-Mistakes that cause rewrites, data exposure, or broken core functionality.
+### Pitfall 1: Greedy Local-Optimum Trap Worsens Repeat Opponents at Small Player Counts
+
+**What goes wrong:**
+The current greedy algorithm fills pods one at a time: pick first player from shuffled pool, then greedily fill remaining 3 slots by lowest opponent-overlap score. This means the first pod gets first pick of low-overlap players. The pool shrinks. By the last pod, remaining players have higher pairwise overlap with each other than with already-placed players. The repeat-opponent burden systematically falls on the final pod each round — not because the algorithm fails, but because it succeeds locally at the cost of global quality.
+
+Tightening the opponent-score penalty alone does not fix this. It shifts which pod absorbs the worst pairings, not whether the problem occurs. This is a structural property of greedy order-dependency.
+
+**Why it happens:**
+Greedy assignment is path-dependent. There is no look-ahead. Early pods consume "easy" players; late pods are forced to accept whatever remains. At 8-12 players over 3+ rounds, this produces one consistently worse pod regardless of how the scoring is tuned.
+
+**How to avoid:**
+Two approaches in order of complexity:
+
+1. **Shuffle pod-fill order** — instead of always filling pod 1 → pod 2 → pod 3, shuffle the order each round. This distributes the bias across pods rather than eliminating it, but is a fast win.
+
+2. **Post-greedy swap pass** — after initial greedy assignment, iterate over all pairs of players in different pods; swap any pair that reduces the total global repeat-opponent score. Accept swaps that improve global score. At n=20, O(n^2) is 400 comparisons — negligible. This is the correct fix for stricter repeat-opponent reduction.
+
+The swap pass is the target state. Start with shuffle-fill-order if time is constrained; the swap pass should be implemented in the same milestone.
+
+**Warning signs:**
+- Integration tests show pod N (last filled) consistently has higher repeat counts than pod 1 across 10+ simulation runs
+- After 4+ rounds with 8-12 players, one specific player pair appears together 3+ times while others appear 0-1 times
+- The current integration test threshold `expect(maxPairCount).toBeLessThanOrEqual(3)` was set to accommodate this bias — if it is tightened to `<= 2` for the v4.0 milestone and that test fails, this pitfall has been activated
+
+**Phase to address:**
+Algorithm core phase. Changes only to `src/lib/pod-algorithm.ts` and its tests. Must be solved before any UI or DB changes — the algorithm is a pure function with no external dependencies.
 
 ---
 
-### Pitfall 1: Supabase Realtime Silent Disconnections on Mobile
+### Pitfall 2: Pods of 3 Toggle Invalidates All Existing Four-Player Invariants
 
-**What goes wrong:** When a user backgrounds the app on their phone (switches to another app, locks screen, or even switches browser tabs), the browser throttles JavaScript timers. Supabase Realtime relies on heartbeat signals to maintain WebSocket connections. Throttled timers mean heartbeats stop reaching the server, which silently drops the connection. The client never receives an error -- it just stops getting updates. The player sits down at a table, checks their phone 10 minutes later, and still sees the old round assignment.
+**What goes wrong:**
+Adding pods-of-3 support is not a configuration flag — it requires auditing every hardcoded assumption about pod size. In the current codebase:
 
-**Why it happens:** Mobile browsers aggressively throttle `setInterval`/`setTimeout` in background tabs to once per minute (Chrome) or worse. Supabase's heartbeat mechanism runs on the main thread by default, so it gets throttled along with everything else. The server drops the connection after missing heartbeats, but the client-side status may not update to reflect this.
+- `generatePods` hardcodes `numByes = activePlayers.length % 4`
+- `generatePods` hardcodes `numPods = podPlayers.length / 4`
+- The inner fill loop hardcodes `slot < 4` (fills exactly 4 slots)
+- Seat generation: `shuffleArray([1, 2, 3, 4])` — produces seat 4 even for 3-player pods
+- Integration tests assert `expect(pod.players).toHaveLength(4)` for all non-bye pods
+- The `PodCard` `getOrdinal` function handles n=3 correctly ("3rd"), but `sortedPlayers` is never tested with only 3 elements
 
-**Consequences:** Players miss pod assignments. Timer displays freeze at stale values. Admin actions (new round, timer changes) don't propagate. The app appears "working" but is showing stale data with no visible error.
+The danger: fix only `generatePods`, run tests, see green. Tests pass because test mocks return 4-player pods. The algorithm produces 3-player pods; the tests never exercise them.
 
-**Prevention:**
-1. Enable Web Workers for Supabase Realtime to move heartbeats off the main thread:
-   ```typescript
-   const supabase = createClient(URL, KEY, {
-     realtime: { worker: true }
-   })
-   ```
-2. Implement `heartbeatCallback` as a fallback for network-level disconnections:
-   ```typescript
-   const supabase = createClient(URL, KEY, {
-     realtime: {
-       worker: true,
-       heartbeatCallback: (status) => {
-         if (status === 'disconnected') {
-           supabase.realtime.connect()
-         }
-       },
-     },
-   })
-   ```
-3. Use the Page Visibility API (`visibilitychange` event) to force a data re-fetch when the tab becomes visible again. Do NOT rely solely on the subscription reconnecting -- always re-query current state on visibility restore.
+**Why it happens:**
+The number 4 is an implicit invariant baked into comments, variable names, magic numbers, and test assertions throughout the codebase. Each instance is locally obvious, but the full audit requires grepping the entire algorithm + test surface before writing any code.
 
-**Detection:**
-- Test by backgrounding the app on a real phone for 5+ minutes, then returning
-- Monitor `channel.on('system', ...)` events for status changes
-- Add a "last updated" indicator (even debug-only) showing when the last Realtime message arrived
+**How to avoid:**
+Before writing pods-of-3 code:
+1. `grep -n '4\|\.length.*4\|< 4\|!= 4\|=== 4' src/lib/pod-algorithm.ts` — audit every literal `4`
+2. Update integration tests to assert `pod.players.length >= 3 && pod.players.length <= 4` for non-bye pods when toggle is on
+3. Change seat generation from `shuffleArray([1, 2, 3, 4])` to `shuffleArray(Array.from({ length: podSize }, (_, i) => i + 1))` where `podSize` is 3 or 4
+4. Write a `PodCard` component test with exactly 3 players — verify no layout breakage, no seat badge showing "4th"
 
-**Phase relevance:** Must be addressed in the initial Realtime infrastructure setup, not bolted on later. The `worker: true` and `heartbeatCallback` options are client initialization config.
+**Warning signs:**
+- Any test that asserts `.toHaveLength(4)` for non-bye pods without a toggle-off qualifier
+- Any pod_players row with `seat_number = 4` where the pod has only 3 players
+- The existing warning check `if (numByes >= 3)` — this condition changes meaning when pods-of-3 eliminates byes
 
-**Confidence:** HIGH -- documented in [Supabase official troubleshooting guide](https://supabase.com/docs/guides/troubleshooting/realtime-handling-silent-disconnections-in-backgrounded-applications-592794) and confirmed across [multiple](https://github.com/supabase/realtime-js/issues/121) [GitHub](https://github.com/supabase/realtime/issues/1088) [issues](https://github.com/orgs/supabase/discussions/27513).
+**Phase to address:**
+Pods of 3 implementation phase. Requires coordinated changes to algorithm, tests, and UI in a single PR. Partial changes produce inconsistent states where some code paths assume 4 and others assume 3.
 
 ---
 
-### Pitfall 2: Timer Display Using setInterval Instead of Server-Derived Calculation
+### Pitfall 3: Pod Partition Math Has Ambiguous Solutions Without a Defined Policy
 
-**What goes wrong:** Developers build countdown timers by storing a "remaining seconds" value and decrementing it with `setInterval(fn, 1000)`. This breaks in three ways: (1) browser throttles the interval to once per minute in background tabs, so the timer freezes; (2) `setInterval` drifts -- each tick accumulates small timing errors; (3) different clients show different remaining times because they started their local timers at slightly different moments.
+**What goes wrong:**
+For some player counts, multiple valid mixed-size arrangements exist:
 
-**Why it happens:** `setInterval` counting down feels like the obvious implementation. The PROJECT.md spec already addresses this correctly ("Timer state stored server-side: duration, started_at, paused_remaining; clients calculate independently"), but it is extremely common for developers to ignore this pattern and use a local countdown anyway.
+| Players | One valid arrangement | Another valid arrangement |
+|---------|-----------------------|--------------------------|
+| 15 | 3×4 + 1×3 | 5×3 |
+| 12 | 3×4 (no pods of 3 needed) | 4×3 |
+| 7 | 1×4 + 1×3 | only this one |
+| 11 | 1×4 + 2×3 | only this one |
 
-**Consequences:** One player sees "12:34 remaining" while another sees "12:28." Timer freezes when the tab is backgrounded. Timer shows negative values or wrong times after pause/resume cycles. Players lose trust in the timer.
+Without a policy, the algorithm will produce different pod distributions depending on how the loop terminates. Different developers or future changes will produce equally valid but surprising results.
 
-**Prevention:**
-1. Store timer state server-side as `{ duration_seconds, started_at (UTC timestamp), paused_remaining_seconds | null }`. Never store a "current remaining" value.
-2. On every render tick, calculate: `remaining = duration - (Date.now() - started_at)`. If paused, use `paused_remaining` directly.
-3. Use `requestAnimationFrame` for display updates (not `setInterval`), falling back to a 1-second `setInterval` only for background awareness.
-4. On `visibilitychange` to "visible," immediately recalculate from server state -- the display catches up instantly.
-5. Do NOT attempt to synchronize client clocks with NTP-like protocols. For a countdown timer with minute-level granularity, the few hundred milliseconds of client clock variance is irrelevant. The spec calls for mm:ss display, not sub-second precision.
+Additionally, the toggle changes which player counts require how many pods of 3. The function that computes pod sizes must be:
+- Deterministic (same input always produces same distribution)
+- Policy-documented ("minimize pods of 3 — maximize pods of 4")
+- Tested exhaustively for all counts 4-20 in both toggle states
 
-**Detection:**
-- Open the app on two phones side by side -- timers should match within 1 second
-- Background the app for 5 minutes, return -- timer should immediately show correct remaining time
-- Pause/resume the timer -- all clients should show identical values
+**Why it happens:**
+The mathematical problem of partitioning N into 3s and 4s has multiple solutions for many values of N. Without making a policy choice explicit, the implementation choice is arbitrary and can change silently with refactoring.
 
-**Phase relevance:** Timer implementation phase. Get the data model right from the start; refactoring a countdown-based timer to a calculated timer is a rewrite of the timer component.
+**How to avoid:**
+Extract a standalone pure function `computePodSizes(playerCount: number, allowPodsOf3: boolean): number[]` with documented policy: "find the minimum k >= 0 such that (playerCount - 3k) is divisible by 4 and (playerCount - 3k) >= 0."
 
-**Confidence:** HIGH -- browser timer throttling is [well-documented by Chrome](https://developer.chrome.com/blog/timer-throttling-in-chrome-88), [extensively analyzed](https://nolanlawson.com/2025/08/31/why-do-browsers-throttle-javascript-timers/), and the server-derived calculation pattern is standard practice.
+This gives a unique, deterministic, minimized-pods-of-3 result for every valid N:
+- k=0: `playerCount % 4 === 0` → all pods of 4
+- k=1: `(playerCount - 3) % 4 === 0` → 1 pod of 3, rest are 4s
+- k=2: `(playerCount - 6) % 4 === 0` → 2 pods of 3, rest are 4s
+- k=3: `(playerCount - 9) % 4 === 0` → 3 pods of 3, rest are 4s
 
----
+Unit-test this function for all counts 4-20 before wiring it into `generatePods`. Edge cases: N=3 is invalid, N=6 with toggle-on produces 2×3 (no byes — this is the win), N=7 with toggle-on produces 1×4 + 1×3.
 
-### Pitfall 3: RLS Misconfiguration Exposes All Event Data
+**Warning signs:**
+- The algorithm producing different pod distributions for the same player count across runs (beyond random assignment of which players go where)
+- Test failures at player counts 11, 13, 14, 15 showing unexpected pod counts
+- The partition logic inline in `generatePods` rather than in a dedicated testable function
 
-**What goes wrong:** With no user authentication (passphrase-only model), developers either: (a) forget to enable RLS entirely, exposing the entire database through the public anon key, or (b) create overly permissive RLS policies that let any client read/write any event's data, or (c) create policies that accidentally block Realtime subscriptions from working.
-
-**Why it happens:** This app intentionally has no Supabase Auth -- no `auth.uid()` to reference in RLS policies. Most Supabase RLS tutorials assume authenticated users. The passphrase model doesn't map to any standard Supabase pattern, so developers wing it and get it wrong. Additionally, Supabase RLS is disabled by default on new tables, and 83% of exposed Supabase databases involve RLS misconfigurations ([CVE-2025-48757](https://byteiota.com/supabase-security-flaw-170-apps-exposed-by-missing-rls/)).
-
-**Consequences:** Without RLS, anyone with the anon key (which is in client-side JavaScript, trivially extractable) can read every event, every player's name, every pod assignment across all events. They can also INSERT, UPDATE, and DELETE any row. This is not a theoretical risk -- it was exploited in 170+ apps in January 2025.
-
-**Prevention:**
-1. Enable RLS on EVERY table immediately upon creation. No exceptions.
-2. Design RLS policies that scope access by `event_id`:
-   - SELECT: Allow reading any event's public data (player lists, pods, rounds). This is fine -- the data is not sensitive, and the event URL/code is the access gate.
-   - INSERT: Allow adding players (with constraints), but NOT creating events without the admin passphrase.
-   - UPDATE/DELETE: Restrict to operations that pass a valid admin passphrase via RPC function, not direct table mutation.
-3. Move admin actions (generate round, remove player, timer controls) to Supabase Edge Functions or Postgres RPC functions that validate the passphrase server-side. Do NOT validate the passphrase client-side and then do a direct table write.
-4. Store the admin passphrase as a bcrypt hash, not plaintext.
-5. Critical Realtime gotcha: RLS policies are NOT applied to DELETE events in `postgres_changes`. Deleted records only send primary keys, not full row data. Design your Realtime listeners accordingly.
-
-**Detection:**
-- Try accessing the Supabase REST API directly with just the anon key and no filters -- if you get data from other events, RLS is wrong
-- Check that every table in the schema has RLS enabled: `SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname = 'public'`
-- Attempt admin actions without the passphrase -- they should fail
-
-**Phase relevance:** Database schema and RLS policies must be the FIRST thing built, before any feature code. Retrofitting RLS after building features with permissive access causes widespread breakage.
-
-**Confidence:** HIGH -- based on [official Supabase security docs](https://supabase.com/docs/guides/api/securing-your-api), [RLS documentation](https://supabase.com/docs/guides/database/postgres/row-level-security), and the [documented 2025 Lovable vulnerability](https://byteiota.com/supabase-security-flaw-170-apps-exposed-by-missing-rls/).
+**Phase to address:**
+Pods of 3 implementation phase — implement `computePodSizes` first, test it exhaustively, then wire into `generatePods`.
 
 ---
 
-### Pitfall 4: Realtime Subscription Leaks in React Components
+### Pitfall 4: Seat Randomization May Already Be Implemented — Investigate Before Building
 
-**What goes wrong:** Supabase Realtime channels are created in `useEffect` but not properly cleaned up on unmount. Each navigation or re-render creates a new subscription without removing the old one. After a few page transitions, the client has dozens of zombie subscriptions consuming memory and receiving duplicate events, causing state corruption (duplicate players in the list, duplicate pod cards, etc.).
+**What goes wrong:**
+The v4.0 goal says "fix seat order — randomize so players aren't stuck in same seats across rounds." But the current algorithm already randomizes seats per round:
 
-**Why it happens:** React Strict Mode in development calls `useEffect` twice, which doubles the subscriptions if cleanup is not implemented. Additionally, Supabase's channel API requires explicit `unsubscribe()` calls -- subscriptions do not auto-clean on component unmount. Developers forget the cleanup function or implement it incorrectly.
+```typescript
+const seatOrder = shuffleArray([1, 2, 3, 4])
+assignments.push({
+  pod_number: i + 1,
+  is_bye: false,
+  players: pods[i].map((playerId, idx) => ({
+    player_id: playerId,
+    seat_number: seatOrder[idx],  // randomized
+  })),
+})
+```
 
-**Consequences:** Memory leaks accumulate over time (significant on a phone held open during a 4-hour event). Duplicate event handlers fire, causing duplicate state updates and UI glitches. Eventually, the client hits Supabase's 100-channel-per-connection limit and stops receiving updates entirely.
+`seatOrder` is shuffled inside each pod's build, so seat numbers differ between rounds. The existing integration test "seat assignments are randomized (not always 1,2,3,4 in same order)" already passes.
 
-**Prevention:**
-1. Always return a cleanup function from `useEffect`:
-   ```typescript
-   useEffect(() => {
-     const channel = supabase
-       .channel(`event-${eventId}`)
-       .on('postgres_changes', { ... }, handler)
-       .subscribe()
+The actual complaint is likely one of two things:
+1. **Same opponents** feel like "same seats" because you're always sitting next to the same people — the real problem is repeat opponents, not seat assignment
+2. **First-player selection bias** — the greedy algorithm takes `pool[0]` as the first player of each pod after an initial shuffle. The same player can consistently end up in early pool positions (and thus get the same index and thus the same seat) if the shuffle produces similar orderings
 
-     return () => {
-       supabase.removeChannel(channel)
-     }
-   }, [eventId])
-   ```
-2. Use `supabase.removeChannel(channel)` (not just `channel.unsubscribe()`) to fully clean up.
-3. Centralize subscription management -- create ONE channel per event with multiple `.on()` handlers, rather than one channel per table. This reduces channel count and simplifies cleanup.
-4. Test with React Strict Mode enabled to catch double-subscription bugs during development.
+**Why it happens:**
+Players experience "I always sit next to the same person" as "I always get the same seat." These feel identical from a player's perspective but have different fixes. A developer might implement a second shuffle that has zero effect because the real problem is opponent repetition.
 
-**Detection:**
-- In browser DevTools, check `supabase.realtime.channels` length -- it should match expected count (typically 1 per event)
-- Monitor WebSocket frames in the Network tab for duplicate subscription messages
-- Navigate between pages 10 times rapidly, then check for memory growth in the Performance tab
+**How to avoid:**
+Before coding: run an empirical simulation of 20 rounds with 8 players, track per-player seat frequency. Expected: each seat ~25% of the time (5/20 rounds). If any player gets a specific seat more than 8/20 rounds (40%), there is a real bias worth fixing. If distribution is roughly uniform, the seat "fix" is a no-op and the effort should go entirely into opponent reduction.
 
-**Phase relevance:** Must be correct from the first Realtime integration. Establish the subscription pattern in the first component that uses Realtime, and every subsequent component follows that pattern.
+If bias exists: shuffle `pool` before selecting the first player for each pod (not just once at the start of all pod assignment). Currently `pool` is shuffled once before the pod-fill loop; pod 2's `pool[0]` is deterministic given that initial shuffle.
 
-**Confidence:** HIGH -- documented [Supabase/React Strict Mode issue](https://github.com/supabase/realtime-js/issues/169), confirmed in [multiple](https://drdroid.io/stack-diagnosis/supabase-realtime-client-side-memory-leak) [memory](https://www.codewalnut.com/insights/5-react-memory-leaks-that-kill-performance) leak analyses, and the [100-channel limit is documented](https://supabase.com/docs/guides/realtime/limits).
+**Warning signs:**
+- PR implements seat shuffling and the change to `pod-algorithm.ts` is a one-liner with no change to the core greedy loop — this is a sign the real problem was not diagnosed
+- The integration test "seat assignments are randomized" still passes after the change (because it was already passing)
+- Players continue reporting "same opponents" after the seat fix ships
 
----
-
-## Moderate Pitfalls
-
----
-
-### Pitfall 5: Browser Notification Permissions -- iOS Requires PWA Installation
-
-**What goes wrong:** The app requests browser notification permission via `Notification.requestPermission()`, and it works on Android Chrome and desktop browsers. But on iOS Safari -- which is the browser most iPhone users will use -- web push notifications only work when the site is installed as a PWA (added to home screen). A regular Safari tab cannot receive push notifications on iOS. Since the app is accessed via QR code (users scan and open in their browser), virtually no iOS user will have it installed as a PWA.
-
-**Why it happens:** Apple requires PWA installation (display: "standalone" in web manifest) for web push on iOS, a policy in place since iOS 16.4. This is a platform limitation, not a bug. Most developers building web apps don't realize this until they test on an actual iPhone.
-
-**Consequences:** Timer expiry notifications -- described as "critical" in the spec -- will not work for any iPhone user accessing the app via QR code link in Safari. This is likely 40-60% of users at a game store event.
-
-**Prevention:**
-1. Accept that push notifications will NOT work for iOS Safari tab users. Design the UX accordingly.
-2. Implement visual fallbacks that work WITHOUT notification permission:
-   - Full-screen color change when timer expires (red flash/pulse)
-   - Large, high-contrast timer that's readable at arm's length
-   - Vibration API as a secondary alert (works on Android without notification permission)
-3. For notification-capable browsers, request permission at the right moment (after the user joins an event and has context), not on page load. Chrome on Android will permanently deny permission if the user dismisses the prompt, and re-requesting requires the user to manually change settings.
-4. Show a clear UI indicator of notification status: "Notifications enabled" / "Notifications not available on this browser" / "Tap to enable notifications"
-5. Consider adding a PWA install prompt for iOS users, but do not make it a hard requirement.
-
-**Detection:**
-- Test on a real iPhone in Safari (not installed as PWA) -- notifications should gracefully degrade
-- Test permission denial flow -- the app should not show broken notification UI
-- Check `Notification.permission` before attempting to request it
-
-**Phase relevance:** Timer and notification implementation phase. The visual fallback must be designed alongside the timer UI, not as an afterthought.
-
-**Confidence:** HIGH -- iOS PWA push requirement documented by [Apple](https://firt.dev/ios-15.4b), confirmed by [multiple](https://www.mobiloud.com/blog/progressive-web-apps-ios) [sources](https://brainhub.eu/library/pwa-on-ios) and [integration guides](https://doc.batch.com/developer/technical-guides/how-to-guides/web/how-to-integrate-batchs-snippet-using-google-tag-manager/how-do-i-enable-ios-web-push-notifications-on-my-pwa-website).
+**Phase to address:**
+Algorithm investigation — before any implementation. Run simulation, measure seat frequency, decide empirically whether code changes are needed.
 
 ---
 
-### Pitfall 6: Race Condition in Concurrent Pod Generation
+### Pitfall 5: generate_round RPC Will Accept Pods of 3 Without Migration — But Future Defensive Code Will Break It
 
-**What goes wrong:** Two admins hit "Generate Next Round" at nearly the same time (or one admin double-taps the button). Without server-side locking, two rounds get created with overlapping or identical pod assignments. Players see a flicker of two different rounds. The round counter jumps. Historical data is corrupted.
+**What goes wrong:**
+The current `generate_round` RPC accepts `p_pod_assignments JSONB` without any pod-size validation. Pods of 3 will work on the server today without a migration. The risk is the opposite: if any future developer adds a "safety check" to the RPC function such as:
 
-**Why it happens:** The pod generation flow is: read active players -> run algorithm -> write round + pods + pod_players. Between reading players and writing pods, another request can start the same flow. Without a transaction or lock, both requests see the same "current state" and both write new rounds.
+```sql
+IF jsonb_array_length(v_pod->'players') != 4 THEN
+  RAISE EXCEPTION 'Invalid pod size';
+END IF;
+```
 
-**Consequences:** Duplicate rounds, players assigned to two pods simultaneously, broken opponent history for future rounds, confused players seeing assignments flicker.
+...this silently breaks pods-of-3 in production even though unit tests pass (because unit tests mock the RPC call via `useGenerateRound`).
 
-**Prevention:**
-1. Use a Postgres advisory lock or row-level lock in the pod generation function:
+**Why it happens:**
+RPC functions are changed in SQL migrations with no TypeScript type safety linking the migration to the calling code. A developer adding a "defensive" size check doesn't see the client-side feature that relies on flexible sizes. Unit tests don't catch it because they mock the RPC. Only E2E tests exercise the real RPC.
+
+**How to avoid:**
+1. Add a comment to the `generate_round` function documenting valid pod sizes explicitly:
    ```sql
-   -- At the start of the generate_round function:
-   PERFORM pg_advisory_xact_lock(event_id);
+   -- Pod players arrays may contain 3 or 4 players.
+   -- Pods of 3 are valid when admin enables allow_pods_of_3 toggle.
+   -- Do NOT add a strict pod-size = 4 validation here.
    ```
-   This ensures only one round generation runs per event at a time. The second request blocks until the first completes, then sees the updated state.
-2. Wrap the entire pod generation in a single Postgres transaction (ideally an RPC function). Do NOT read players in one API call and write pods in another -- the gap between calls is where races live.
-3. Add a UI-level guard: disable the "Generate Round" button immediately on click and show a loading state. Re-enable only after the response returns. This prevents accidental double-taps.
-4. Add a unique constraint or check in the RPC function: if a round with `round_number = current_max + 1` already exists, return the existing round instead of creating a duplicate.
+2. If adding server-side validation, use `BETWEEN 3 AND 4` not `= 4`
+3. Add at least one Cypress E2E test that calls the real RPC with a 3-player pod (e.g., generate a round with 13 players and pods-of-3 enabled, verify the 3-player pod card appears)
 
-**Detection:**
-- Rapidly click "Generate Round" 3 times in quick succession -- should produce exactly one new round
-- Open two browser tabs as admin, click "Generate Round" simultaneously -- should produce exactly one new round
-- Check the rounds table for gaps or duplicates in round_number
+**Warning signs:**
+- Unit tests pass but the Cypress E2E test for pods-of-3 fails with a Supabase error message about invalid pod size
+- A new migration appears that "strengthens" the RPC with a pod-size assertion
 
-**Phase relevance:** Pod generation algorithm implementation. The locking must be part of the database function, not added later.
-
-**Confidence:** MEDIUM -- race conditions in concurrent writes are a well-known pattern ([Supabase discussion](https://github.com/orgs/supabase/discussions/30334), [concurrent writes guide](https://bootstrapped.app/guide/how-to-handle-concurrent-writes-in-supabase)), but the specific advisory lock pattern for this use case is a standard recommendation, not something verified in a pod-pairing context specifically.
+**Phase to address:**
+Pods of 3 implementation phase. Add the comment to the migration; add the E2E test.
 
 ---
 
-### Pitfall 7: Pod Generation Algorithm Edge Cases with Small/Odd Player Counts
+### Pitfall 6: The allRoundsPods Query Key Is Unstable Under Common React Patterns
 
-**What goes wrong:** The greedy algorithm for pod assignment has edge cases that produce degenerate results:
-- **4 players, round 2+:** Every player has already played against every other player. The algorithm cannot avoid repeats, but may stall or produce unexpected assignments if it doesn't handle the "all opponents exhausted" case.
-- **5 players:** One pod of 4 + one bye. After round 1, the bye player gets priority, but the remaining 4 are the same pod as last round. With only 5 players, repeat opponents are guaranteed by round 2.
-- **8 players, many rounds:** With exactly 2 pods, the algorithm quickly runs out of novel pairings. By round 3-4, the "minimize repeats" objective becomes impossible and the algorithm needs to degrade gracefully rather than loop or crash.
-- **Players dropping mid-event:** A player drops, reducing the count from 8 to 7 (one pod of 4 + one pod of 3... but spec says pods must be 4). Now you have a pod of 4 + 3 byes, which is a terrible experience. Or worse, 5 active players: one pod of 4 + one bye, with 4 players getting the same opponents again.
+**What goes wrong:**
+`useAllRoundsPods` uses `queryKey: ['allRoundsPods', eventId, roundIds]` where `roundIds` is a `string[]`. Array references are compared by identity in React Query, not by value. If `AdminControls` computes `roundIds = rounds?.map(r => r.id) ?? []` directly in the render body (which it currently does), every render creates a new array reference. React Query sees a new key and re-fetches, even when the underlying round IDs haven't changed.
 
-**Why it happens:** The spec says "fewer than 4 players blocks round generation with error," but does not address what happens when exactly 4-7 players result in suboptimal pod sizes after accounting for byes. The greedy algorithm's "minimize repeats" objective has no good solution when the player pool is small relative to pod size.
+The current `staleTime: 30_000` mitigates the most obvious symptom (rapid re-fetches become no-ops due to staleness), but does not prevent query key churn. If the staleTime is ever reduced for freshness, the re-fetch storm becomes visible.
 
-**Consequences:** Players get the same opponents repeatedly and complain the algorithm is broken. Edge cases in the algorithm may cause infinite loops (searching for assignments that satisfy constraints that are mathematically impossible). Byes become disproportionately frequent at certain player counts (5, 6, 7 players).
+After adding the pods-of-3 toggle to `AdminControls`, the component will re-render on toggle state changes. Each toggle flicker triggers a new `roundIds` reference → new query key → potential re-fetch.
 
-**Prevention:**
-1. Cap the repeat-avoidance goal: after exhausting possibilities, accept the least-repeated pairing. The greedy approach should track a "repeat score" and minimize it, not require zero repeats.
-2. Handle the math explicitly for small player counts:
-   - 4 players: 1 pod, no byes. All subsequent rounds are identical. Consider warning the admin.
-   - 5 players: 1 pod + 1 bye. Repeats guaranteed by round 2. Consider 5-player pods as an option.
-   - 6 players: 1 pod + 2 byes (bad) OR allow 3-player pods. Spec says pods of 4, but this edge case needs a decision.
-   - 7 players: 1 pod + 3 byes (terrible). This is a design gap in the spec.
-3. Add test cases for every player count from 4 to 20, for at least 5 rounds each. Assert no infinite loops, no crashes, and reasonable repeat counts.
-4. Set a maximum iteration count on the greedy search to prevent infinite loops on unsolvable constraints.
+**Why it happens:**
+JavaScript array equality is reference-based. `['r1', 'r2'] !== ['r1', 'r2']`. React Query uses deep equality for query keys by default in v5 (uses structural equality), so this may not actually be a live bug in v5. But if the project uses v4 or if the staleTime behavior changes, the issue emerges.
 
-**Detection:**
-- Run the algorithm with 5 players for 4 rounds -- inspect output for sanity
-- Run with 4 players for 3 rounds -- should not crash or loop
-- Run with 8 players, have 3 drop, generate a new round -- should handle gracefully
-- Performance test: 20 players, 10 rounds -- should complete in under 100ms
+**How to avoid:**
+Verify via React Query DevTools whether `useAllRoundsPods` actually re-fetches on every render. If it does: stabilize the `roundIds` reference with `useMemo`:
 
-**Phase relevance:** Pod generation algorithm implementation and testing. Edge cases should be enumerated and tested BEFORE building the UI.
+```typescript
+const roundIds = useMemo(
+  () => rounds?.map(r => r.id) ?? [],
+  [rounds]
+)
+```
 
-**Confidence:** MEDIUM -- the edge cases are derived from mathematical analysis of the problem space and [general MTG pod pairing discussions](https://apps.magicjudges.org/forum/topic/26928/), but the specific algorithm behavior depends on the implementation.
+Do not add this unless the re-fetch is confirmed — premature memoization adds complexity for no benefit.
 
----
+**Warning signs:**
+- React Query DevTools showing `useAllRoundsPods` in "fetching" state on every `AdminControls` re-render
+- Network tab showing repeated requests to `pods?round_id=in.(...)` on every component re-render
+- Adding the pods-of-3 toggle causes visible latency before the generate button becomes active
 
-### Pitfall 8: Passphrase Validation Happens Client-Side
-
-**What goes wrong:** The admin passphrase is validated in the browser: JavaScript checks if the entered passphrase matches a stored value, and if so, enables admin actions that directly write to Supabase tables via the anon key. This means any user can bypass the passphrase check using browser DevTools and issue admin API calls directly.
-
-**Why it happens:** Client-side validation is simpler to implement. Without Supabase Auth, there's no built-in mechanism to tie "admin" status to a JWT claim. Developers store the passphrase (or its hash) in the client and compare locally.
-
-**Consequences:** Any user can generate rounds, remove players, modify timers, or end events by calling the Supabase REST API directly. The passphrase provides zero actual security -- it's just a UI gate.
-
-**Prevention:**
-1. ALL admin actions must go through Supabase RPC functions (Postgres functions) or Edge Functions that accept the passphrase as a parameter and validate it server-side.
-2. Store the passphrase as a bcrypt hash in the `events` table. The RPC function hashes the submitted passphrase and compares.
-3. RLS policies for admin mutations (INSERT on rounds, DELETE on players, UPDATE on events) should deny direct table access via the anon role. Only the RPC function (running as `security definer` or with elevated privileges) can perform these mutations.
-4. The client stores the passphrase in sessionStorage after first entry (as the spec describes), but this is purely for UX convenience -- the actual validation happens on every server call.
-
-**Detection:**
-- Open browser DevTools, call `supabase.from('rounds').insert(...)` directly -- should fail with an RLS error
-- Try admin actions with a wrong passphrase via the RPC function -- should return an error
-- Check that the events table does NOT store the passphrase in plaintext
-
-**Phase relevance:** Must be the architecture from day one. Building admin actions as direct table writes and later wrapping them in RPC functions is a significant refactor of every admin feature.
-
-**Confidence:** HIGH -- this is a fundamental web security principle, reinforced by [Supabase's own API security documentation](https://supabase.com/docs/guides/api/securing-your-api).
+**Phase to address:**
+Pods of 3 UI phase — when `AdminControls` gains new state, profile for excessive re-renders before shipping.
 
 ---
 
-## Minor Pitfalls
+### Pitfall 7: Mid-Event Player Rejoin Creates History Asymmetry That Confuses Improved Algorithm
+
+**What goes wrong:**
+When a player drops and is reactivated, they re-enter with their full history intact. This is correct. But a player who misses 2 rounds (dropped in round 2, rejoined in round 4) has sparse history — they appear as a "fresh" player to a stricter opponent-avoidance algorithm. The algorithm, seeing low opponent scores, prefers to pair this player with high-history players. But those high-history players may have built up significant history with each other in rounds 2-3, and the algorithm is blind to that from the rejoiner's perspective.
+
+This is not a bug in the algorithm logic — it is a correct representation of actual history. The rejoiner genuinely did not play against those players in the missed rounds. But it can produce counterintuitive results: the rejoiner gets paired with their round-1 opponents immediately on rejoin, because the algorithm treats them as the lowest-overlap candidate.
+
+**Why it happens:**
+The stricter opponent-avoidance algorithm v4.0 aims to build will weight opponent scores more heavily. Empty history = low score = preferred candidate. The asymmetry between rounds-played and rounds-missed is structurally embedded in how `buildOpponentHistory` works.
+
+**How to avoid:**
+Accept this as a documented limitation. The fix (inferring transitively missed history) is over-engineered for a casual app. Document it in `pod-algorithm.ts`:
+
+```typescript
+// NOTE: Players who drop and rejoin will have sparse history for rounds they missed.
+// This may cause them to be paired with previous opponents sooner than fresh players.
+// This is accepted behavior — the alternative (inferring missed-round history)
+// adds complexity not justified for casual play.
+```
+
+The admin UX note about reactivated players ("they will rejoin with their existing history") covers the user-facing expectation.
+
+**Warning signs:**
+- Test case where player A drops after round 1, rejoins in round 3, and gets paired with their round-1 opponents in round 3 — this is expected behavior, not a bug; do not "fix" it
+- Integration test failures when simulating drop/rejoin scenarios with the stricter algorithm — distinguish between algorithm failure and expected history behavior
+
+**Phase to address:**
+Documentation only. No code change. Add the comment to `pod-algorithm.ts` when the stricter algorithm is implemented.
 
 ---
 
-### Pitfall 9: QR Code Scanning UX -- Users Don't Need to Scan In-App
+## Technical Debt Patterns
 
-**What goes wrong:** Developers build an in-app QR code scanner using the camera API (e.g., `html5-qrcode`), which requires camera permissions, has cross-browser compatibility issues (Samsung devices with black screens, Firefox requiring "Always Allow"), and adds unnecessary complexity. Meanwhile, every modern phone has a built-in QR scanner in the camera app or a system-level scanner.
-
-**Why it happens:** The spec says "Players join by visiting event link or scanning QR code." Developers interpret this as needing to build a scanner. But the QR code is for *displaying*, not scanning in-app.
-
-**Consequences:** Wasted development time on camera integration. Permission dialogs confuse users. Camera initialization fails on some devices. Users who deny camera permission can't join (even though they could just use their phone's native camera).
-
-**Prevention:**
-1. The app displays a QR code (using `qrcode.react`). Players scan it with their phone's native camera app, which opens the event URL in the browser. Done.
-2. Do NOT build an in-app QR scanner. The shareable link + native camera scanning covers 100% of use cases.
-3. Include a "Copy Link" button and a "Share" button (using the Web Share API where available) as alternatives to the QR code.
-
-**Detection:**
-- If the project includes a camera permission request or a QR scanning library dependency, it's over-engineered
-- The only QR library needed is for *generating* QR codes, not reading them
-
-**Phase relevance:** Event info bar / sharing feature. Avoid scope creep by explicitly deciding this early.
-
-**Confidence:** HIGH -- this is a UX design decision, not a technical finding. The spec clearly states the QR code is for display.
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| Keep bye path (`numByes = n % 4`) and pods-of-3 path as separate branches in `generatePods` | Clear separation of behavior | Two partition code paths can diverge in bugs | Acceptable — explicit branching is better than complex unification |
+| Pass `allowPodsOf3` as a simple boolean parameter | Simple API | If more toggles appear, becomes unwieldy | Acceptable until ≥3 toggles exist |
+| Skip swap-pass optimization; only fix fill-order shuffle | Faster to ship | Greedy local-optimum remains; repeat opponents still occur at small counts | Acceptable only if mutation score confirms the fix is still real improvement; document the gap |
+| Keep `computePodSizes` inline in `generatePods` rather than extracting it | Less code | Harder to unit-test the partition math independently | Never — always extract; testability is critical for this logic |
+| Rely on `staleTime: 30_000` to mask query key instability | Works now | Any freshness requirement change exposes re-fetch storm | Only if React Query DevTools confirms no actual re-fetches today |
 
 ---
 
-### Pitfall 10: Supabase Free Tier Realtime Limits
+## Integration Gotchas
 
-**What goes wrong:** During development or a small deployment, the app hits Supabase free tier limits: 200 concurrent connections, 100 messages/second, and 100 channels per connection. A 16-player event with each player having a Realtime subscription is fine (16 connections), but if the developer leaves test connections open, has subscription leaks (Pitfall 4), or runs multiple events, limits get hit unexpectedly.
-
-**Why it happens:** The free tier is generous for development but has hard limits. The 100 messages/second limit is more likely to bite: generating a round for 16 players creates writes to rounds, pods, and pod_players tables -- potentially 20+ Realtime messages in rapid succession.
-
-**Consequences:** `too_many_connections` or `tenant_events` errors. Realtime stops working mid-event. No graceful degradation.
-
-**Prevention:**
-1. Use a single Realtime channel per event with multiple `.on()` handlers (not separate channels per table).
-2. For the MVP / free tier, batch writes or accept that Realtime messages may be throttled during round generation. Add a manual "refresh" button as a fallback.
-3. Monitor connection count during development. Clean up test subscriptions.
-4. Plan for the Pro tier ($25/month) for any production deployment with multiple concurrent events.
-
-**Detection:**
-- Check the Supabase dashboard Realtime metrics for connection and message counts
-- Watch for `too_many_channels` or `too_many_connections` WebSocket error frames
-
-**Phase relevance:** Infrastructure/deployment planning.
-
-**Confidence:** HIGH -- [limits are documented](https://supabase.com/docs/guides/realtime/limits) with specific numbers per tier.
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| `useAllRoundsPods` + `buildRoundHistoryFromData` | Removing the `if (!rounds \|\| !allPods) return` guard when refactoring `AdminControls` for the toggle | The guard is load-order dependent — `allPods` is undefined during initial fetch. Its removal causes `generatePods` to run with empty history (treating every round as round 1). |
+| Supabase `generate_round` parameter naming | Adding a `p_allow_pods_of_3 BOOLEAN` parameter to the RPC without updating the TypeScript call in `useGenerateRound` | Copy parameter names verbatim from the migration SQL into the TypeScript RPC call. The Supabase client uses exact parameter name matching. |
+| `AdminControls` toggle state | Storing the pods-of-3 toggle in `EventPage` to share with other components, then threading it back down as a prop | Keep toggle state in `AdminControls` — it is the natural owner; no other component needs it. If it needs to persist across rounds, use `sessionStorage` keyed by `eventId`. |
+| Stryker with `Math.random()` in algorithm | Writing new algorithm tests without seeding `Math.random()`, causing flaky mutant results | Use the existing `seedRandom(seed)` helper from `pod-algorithm.test.ts` for all new tests that need deterministic shuffle behavior. |
+| PodCard with 3-player pod | Not rendering a 3-player PodCard in any test, so UI breakage in the `sortedPlayers.sort()` or seat badge render is undetected | Add a Vitest component test for `PodCard` with exactly 3 players; verify `[1st, 2nd, 3rd]` seat badges render and no 4th appears. |
 
 ---
 
-### Pitfall 11: Realtime postgres_changes Does Not Deliver DELETE Payloads Through RLS
+## Performance Traps
 
-**What goes wrong:** When a player is removed (deleted from the players table), the Realtime DELETE event does not include the full row data when RLS is enabled. The client receives only the primary key of the deleted record. If the client-side player list is keyed by player name (not ID), or if the UI needs the player's name to show a "Player X was removed" toast, the information is not available in the Realtime payload.
-
-**Why it happens:** Postgres cannot verify RLS policies on deleted records (the row no longer exists to check against), so Supabase strips the payload down to primary keys only. Additionally, DELETE events are not filterable -- you cannot filter Realtime DELETE events by `event_id`, so the client receives DELETE notifications for all events.
-
-**Consequences:** Client-side state management breaks if it depends on the deleted record's data. Unfiltered DELETE events from other events could cause confusion if not handled correctly.
-
-**Prevention:**
-1. Use soft deletes instead of hard deletes: set `status = 'removed'` instead of deleting the row. This sends an UPDATE event with the full payload and respects RLS filters.
-2. Key all client-side state by primary key (UUID), not by display name.
-3. If hard deletes are required, maintain a client-side map of `id -> player data` so that when a DELETE event arrives with just the ID, the client can look up the name locally.
-4. Filter Realtime DELETE events client-side by checking the ID against the local state.
-
-**Phase relevance:** Database schema design and Realtime event handling. The soft-delete vs. hard-delete decision affects table design, RLS policies, and query patterns.
-
-**Confidence:** HIGH -- [documented in Supabase Realtime postgres_changes docs](https://supabase.com/docs/guides/realtime/postgres-changes): "RLS policies are not applied to DELETE statements."
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| Swap-pass O(n^2) implementation | Slow round generation | At n=20, O(n^2)=400 comparisons, ~0.1ms. Never a problem at this scale. Do not optimize prematurely. | Never at n≤20. |
+| Re-fetching all pods on every toggle change | Network requests on every UI interaction | Profile with React Query DevTools before optimizing. Current staleTime mitigates this. | Not a problem until staleTime is reduced. |
+| `buildOpponentHistory` iterating all rounds | Slow history build at many rounds | At 10 rounds × 5 pods × 6 pairs = 300 iterations. Negligible. | Not a problem until 100+ rounds (unrealistic for casual play). |
+| `pool.filter()` called on every candidate removal | Quadratic pool shrink | At n=20, 20 filter calls of O(n) each = 400 operations. Negligible. Switch to Set if this ever becomes visible in profiling. | Never at n≤20. |
 
 ---
 
-### Pitfall 12: Timezone and UTC Confusion in Timer Storage
+## Security Mistakes
 
-**What goes wrong:** The timer's `started_at` timestamp is stored using the server's local time, or using `new Date()` on the client (which uses the device's local timezone). Different clients in different timezones, or clients with incorrect clock settings, calculate different remaining times.
-
-**Why it happens:** JavaScript's `Date.now()` returns milliseconds since epoch (timezone-independent), but `new Date().toISOString()` vs `new Date().toString()` vs database `NOW()` can produce different timezone representations. Postgres `timestamp` vs `timestamptz` confusion compounds the issue.
-
-**Consequences:** Timer shows wrong remaining time for some users. If one admin is in a different timezone (e.g., remote admin), timer calculations break.
-
-**Prevention:**
-1. Use `timestamptz` (timestamp with time zone) for ALL timestamp columns in Postgres. Never use bare `timestamp`.
-2. Use Postgres `NOW()` (server-side) to set `started_at`, not a client-provided timestamp. This eliminates client clock variance entirely.
-3. On the client, calculate remaining time as: `remaining = duration_seconds - ((Date.now() - Date.parse(started_at_utc)) / 1000)`. `Date.parse` correctly handles ISO 8601 strings with timezone offsets.
-4. For the RPC function that starts/pauses timers, have the server set the timestamp.
-
-**Detection:**
-- Change your device clock forward by 30 minutes -- timer display should still be correct (because it's derived from server-set `started_at`)
-- Compare timer on two devices in different timezone settings
-
-**Phase relevance:** Timer data model design. The choice of `timestamptz` vs `timestamp` must be correct from the initial schema migration.
-
-**Confidence:** HIGH -- timezone handling in Postgres is [well-documented](https://www.postgresql.org/docs/current/datatype-datetime.html) and a perennial source of bugs.
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| Adding a `p_allow_pods_of_3` RPC parameter without passphrase validation | Any user could toggle pods-of-3 behavior without being admin | If the toggle is client-side only (passed as part of pod assignments), no new RPC parameter is needed. If stored server-side as event config, it must be gated by the existing passphrase check pattern. |
+| No server-side pod-size validation in the RPC | Malicious client sends pods with 0 or 100 players | Add `IF jsonb_array_length(v_pod->'players') NOT BETWEEN 3 AND 4 THEN RAISE EXCEPTION` to `generate_round` migration once pods-of-3 is implemented. |
+| No uniqueness constraint on `pod_players(player_id)` per round | A client bug or race condition sends the same player in two pods | Existing code has no unique constraint on `pod_players` at the pod or round level. Latent gap regardless of this milestone — consider adding `UNIQUE(pod_id, player_id)` at minimum. |
 
 ---
 
-## Phase-Specific Warnings
+## UX Pitfalls
 
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| Database schema + RLS | Pitfall 3 (RLS misconfiguration), Pitfall 8 (client-side passphrase), Pitfall 11 (DELETE payloads), Pitfall 12 (timezone) | Enable RLS on every table at creation. Use RPC functions for admin actions. Use `timestamptz`. Design soft deletes for player removal. |
-| Supabase Realtime setup | Pitfall 1 (silent disconnections), Pitfall 4 (subscription leaks), Pitfall 10 (free tier limits) | Configure `worker: true` + `heartbeatCallback` at client init. Establish the useEffect cleanup pattern in the first component. Use one channel per event. |
-| Pod generation algorithm | Pitfall 6 (race conditions), Pitfall 7 (small player edge cases) | Implement as a Postgres RPC function with advisory locks. Write exhaustive tests for player counts 4-20 before building UI. |
-| Timer implementation | Pitfall 2 (setInterval timer), Pitfall 12 (timezone) | Calculate from server-set UTC timestamps on every frame. Use `requestAnimationFrame` for display. Re-derive on `visibilitychange`. |
-| Notifications | Pitfall 5 (iOS PWA requirement) | Design visual timer-expiry alerts as the primary notification mechanism. Treat browser notifications as an enhancement, not a requirement. |
-| Event sharing / QR | Pitfall 9 (in-app scanner) | Display-only QR code. No camera API. Copy link + Web Share API as alternatives. |
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| Toggle is per-round but label says "allow pods of 3" without time context | Admin assumes it's a permanent setting; next round has no toggle active | Label: "This round: allow pods of 3" and reset to off after `onSuccess` — the toggle applies to the next round being generated, not all future rounds |
+| 3-player pod shows seats "1st, 2nd, 3rd" with no explanation | Players expect 4 seats; missing 4th looks like a display bug | Add "(3-player pod)" subtitle on the PodCard when `players.length === 3`, matching the visual treatment of the "Sitting Out" bye pod |
+| Generating with 13 players and pods-of-3 OFF shows 3×4 + 1 bye | Admin may not realize they could eliminate the bye | Show a contextual hint: "Enable pods of 3 to eliminate 1 bye (13 players → 1×4 + 3×3)" |
+| Current warning toast: "High bye count: 3 of 13 players sitting out" fires when toggle is off | Confusing — admin knows about the bye, they just chose not to toggle | Suppress the high-bye-count warning if `allowPodsOf3` is `false` and the bye count is only because the toggle is off; only warn if enabling pods-of-3 is not an option (e.g., fewer than 7 players total) |
+
+---
+
+## "Looks Done But Isn't" Checklist
+
+- [ ] **Pods of 3 seat numbers:** Verify no `seat_number: 4` appears in a 3-player pod's database row — a `shuffleArray([1,2,3,4])` call in the 3-player path produces invalid seat 4
+- [ ] **Seat randomization diagnosis:** Run empirical per-player seat frequency simulation (20 rounds × 8 players) and confirm distribution is roughly uniform before concluding the seat "fix" is needed or complete
+- [ ] **Repeat opponent reduction:** Run integration test with tighter threshold (`maxPairCount <= 2`) for 8 players / 4 rounds — this validates the improvement over v3.0 is real and not just noise
+- [ ] **Toggle state reset:** Confirm the pods-of-3 toggle resets to off after `onSuccess` in `AdminControls` — check the `setIsGenerating(false)` path vs the `setSelectedDuration(null)` pattern already used for the timer
+- [ ] **Stryker score maintained:** Run Stryker after algorithm changes — the project requires 80% threshold on PRs; algorithm code is high-mutant-density and any new branch (allowPodsOf3) doubles the mutation surface
+- [ ] **computePodSizes exhaustive tests:** Unit-test for all player counts 4-20 in both toggle states — 34 test cases minimum before wiring the function into `generatePods`
+- [ ] **PodCard with 3 players:** Component test renders a PodCard with 3 players — verify "1st/2nd/3rd" badge rendering, no "4th" badge, no layout overflow
+- [ ] **E2E test for pods-of-3:** At least one Cypress test generates a round with pods-of-3 enabled and verifies the 3-player pod card appears in the UI
+- [ ] **RPC comment added:** The `generate_round` migration has an explicit comment documenting that pod sizes 3 and 4 are both valid
+
+---
+
+## Recovery Strategies
+
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| Shipped greedy order bias; repeat opponents still poor | LOW | Algorithm is a pure function with no DB dependency. Fix `pod-algorithm.ts`, update tests, ship as patch. No migration needed. |
+| Shipped `seat_number: 4` in a 3-player pod row | MEDIUM | Write a migration to set `seat_number = NULL` for pod_players where the pod has 3 players and seat_number = 4. Fix the algorithm. Re-test. |
+| Future migration adds pod-size-4 validation to `generate_round` RPC | LOW | Write a migration updating the check from `= 4` to `BETWEEN 3 AND 4`. Test locally with Supabase CLI. The fix is a one-line migration. |
+| Toggle state persists when it should reset | LOW | State lives in `AdminControls` React component — no DB change. Fix `onSuccess` handler and redeploy. |
+| Stryker score drops below 80% after algorithm changes | MEDIUM (blocks merge) | Cannot merge PR. Identify surviving mutants via Stryker HTML report. Add targeted test cases for each surviving boundary condition. Typical fix: 2-4 additional assertion lines per surviving mutant in the partition math or score comparison logic. |
+| `allRoundsPods` query re-fetches on every render after toggle added | LOW | Add `useMemo` to stabilize `roundIds` in `AdminControls`. Verify with React Query DevTools. Five-minute fix. |
+
+---
+
+## Pitfall-to-Phase Mapping
+
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| Greedy local-optimum trap | Phase 1: Algorithm core (repeat opponent reduction) | Integration test with `maxPairCount <= 2` for 8 players / 4 rounds passes |
+| Pods of 3 invalidates 4-player invariants | Phase 2: Pods of 3 algorithm | All hardcoded `4` literals audited; integration tests use `players.length >= 3 && <= 4` |
+| Pod partition math ambiguity | Phase 2: Pods of 3 algorithm | `computePodSizes` unit tests cover all 4-20 in both toggle states (34 cases) |
+| Seat randomization may already work | Phase 1: Investigation | Empirical seat-frequency test run before any seat code is written |
+| RPC accepts pods of 3 but may get defensive check added | Phase 2: Pods of 3 RPC/migration | Comment added to migration; E2E test exercises real RPC with 3-player pod |
+| allRoundsPods query key instability | Phase 3: AdminControls UI | React Query DevTools check after adding toggle state — no re-fetches on toggle |
+| Mid-event player history asymmetry | No code fix — documentation | Comment added to `pod-algorithm.ts` when stricter algorithm is implemented |
+| Stryker score regression | Every phase | CI Stryker gate at 80% — must pass before merge on every PR |
 
 ---
 
 ## Sources
 
-### Official Documentation (HIGH confidence)
-- [Supabase: Handling Silent Disconnections in Backgrounded Applications](https://supabase.com/docs/guides/troubleshooting/realtime-handling-silent-disconnections-in-backgrounded-applications-592794)
-- [Supabase: Realtime Limits](https://supabase.com/docs/guides/realtime/limits)
-- [Supabase: Postgres Changes](https://supabase.com/docs/guides/realtime/postgres-changes)
-- [Supabase: Securing Your API](https://supabase.com/docs/guides/api/securing-your-api)
-- [Supabase: Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
-- [Chrome: Timer Throttling in Chrome 88](https://developer.chrome.com/blog/timer-throttling-in-chrome-88)
-- [MDN: Notification.requestPermission()](https://developer.mozilla.org/en-US/docs/Web/API/Notification/requestPermission_static)
-- [MDN: Page Visibility API](https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API)
+- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/src/lib/pod-algorithm.ts` — greedy structure, hardcoded `4` literals, `shuffleArray([1,2,3,4])` placement, pool fill order
+- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/src/lib/pod-algorithm.integration.test.ts` — existing thresholds (`maxPairCount <= 3`), bye fairness assertions, seat randomization test
+- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/src/components/AdminControls.tsx` — opponent history build pattern, `allPods` guard, `roundIds` derivation
+- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/src/components/PodCard.tsx` — `getOrdinal` function, 4-player assumptions in seat sorting
+- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/supabase/migrations/00002_rounds_pods_admin.sql` — RPC accepts JSONB with no pod-size validation
+- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/src/hooks/useAllRoundsPods.ts` — query key structure with `roundIds` array, `staleTime: 30_000`
+- Multiplayer Addendum to MTR — mixed pod size rules (minimize pods of 3 = maximize pods of 4), repeat opponent policy: https://juizes-mtg-portugal.github.io/multiplayer-addendum-mtr
+- TanStack Query invalidation race conditions and query key stability: https://github.com/TanStack/query/discussions/6953
+- Supabase RPC schema-change-breaks-client pitfall: https://github.com/supabase/supabase/issues/20123
+- Stryker mutation testing pitfalls for pure function coverage: https://dev.to/wintrover/the-pitfalls-of-test-coverage-introducing-mutation-testing-with-stryker-and-cosmic-ray-1kcg
 
-### GitHub Issues and Discussions (MEDIUM confidence)
-- [supabase/realtime-js#121: WebSocket loses connection in background tabs](https://github.com/supabase/realtime-js/issues/121)
-- [supabase/realtime#1088: Unable to reconnect after TIMED_OUT](https://github.com/supabase/realtime/issues/1088)
-- [supabase/realtime-js#169: React Strict Mode double subscription](https://github.com/supabase/realtime-js/issues/169)
-- [supabase discussions#30334: Race conditions with SERIALIZABLE isolation](https://github.com/orgs/supabase/discussions/30334)
-- [supabase discussions#27513: Auto reconnect after CLOSED](https://github.com/orgs/supabase/discussions/27513)
+---
 
-### Community and Analysis (MEDIUM confidence)
-- [Supabase Security Flaw: 170+ Apps Exposed by Missing RLS](https://byteiota.com/supabase-security-flaw-170-apps-exposed-by-missing-rls/)
-- [PWA on iOS: Current Status and Limitations (2025)](https://brainhub.eu/library/pwa-on-ios)
-- [Why Do Browsers Throttle JavaScript Timers?](https://nolanlawson.com/2025/08/31/why-do-browsers-throttle-javascript-timers/)
-- [Syncing Countdown Timers Across Multiple Clients](https://medium.com/@flowersayo/syncing-countdown-timers-across-multiple-clients-a-subtle-but-critical-challenge-384ba5fbef9a)
-- [Supabase Realtime Client-Side Memory Leak](https://drdroid.io/stack-diagnosis/supabase-realtime-client-side-memory-leak)
-- [How to Handle Concurrent Writes in Supabase](https://bootstrapped.app/guide/how-to-handle-concurrent-writes-in-supabase)
+*Pitfalls research for: Pod algorithm improvements — repeat opponents, seat randomization, pods of 3 toggle (v4.0)*
+*Researched: 2026-03-02*

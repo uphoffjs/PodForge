@@ -1,246 +1,198 @@
 # Feature Research
 
-**Domain:** Casual MTG Commander event pod-pairing web app
-**Researched:** 2026-02-20
-**Confidence:** MEDIUM-HIGH
+**Domain:** Casual MTG Commander event pod-pairing web app — v4.0 Pod Algorithm Improvements
+**Researched:** 2026-03-02
+**Confidence:** HIGH (algorithm theory), MEDIUM (UX patterns for toggles)
 
-## Competitive Landscape Summary
+---
 
-The Commander pod-pairing space has a clear gap. Existing tools fall into two categories:
+## Context: Subsequent Milestone
 
-1. **Full tournament platforms** (TopDeck.gg, Melee.gg, MTGEvent.com) -- built for competitive play with Swiss pairings, scoring systems, standings, registration flows, and account requirements. Overkill for "8 friends at a game store" casual nights.
-2. **Official WotC tools** (Companion app / EventLink) -- limited to 8 players without a Wizards account, primarily 1v1 focused, Commander pod support still in development and tightly coupled to the WPN store ecosystem.
+This file covers only the **new features** for v4.0. The original FEATURES.md (2026-02-20) covered the full v1-v3 feature landscape. This update narrows to three specific improvements being added to an already-shipped app:
 
-Neither category serves the specific use case: a casual playgroup organizer who wants to say "scan this QR code, we'll pair pods, go play." That is the gap this app fills.
+1. Reduce repeat opponents (stricter algorithm diversity)
+2. Fix seat randomization (avoid same seat across rounds)
+3. Per-round admin toggle for pods of 3
+
+Existing system: greedy opponent-avoidance with history matrix, bye rotation, Fisher-Yates seat shuffle per pod, 100% mutation score on algorithm tests.
+
+---
+
+## Background: What the Existing Algorithm Does
+
+The current `generatePods` in `src/lib/pod-algorithm.ts`:
+- Shuffles players randomly (Fisher-Yates) for initial pool ordering
+- Fills pods greedily: first player picked randomly, seats 2-4 pick the candidate with the lowest cumulative prior-opponent score against current pod members
+- Score = sum of how many times each pair has met in prior non-bye pods (linear count)
+- Seat assignment: shuffles [1,2,3,4] with Fisher-Yates, assigns to pod members by index
+- Pod size: always 4; remainder players go to bye pod
+- Minimum 4 players enforced (throws otherwise)
+
+Known limitation from PROJECT.md: "reduce repeat opponents — stricter pairing diversity across rounds" and "fix seat order — randomize so players aren't stuck in same seats across rounds." The greedy approach achieves 90.6% Stryker mutation score and is "good enough for <20 players" per key decisions, but produces suboptimal diversity when the pool is small (e.g., 8 players, 4+ rounds).
+
+---
 
 ## Feature Landscape
 
 ### Table Stakes (Users Expect These)
 
-Features users assume exist. Missing these = product feels incomplete or unusable.
+Features the admin/players will consider non-negotiable for the improved algorithm.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| **Event creation with shareable link** | Every event tool has this; it's how players join | LOW | Event name + passphrase, generates unique URL |
-| **QR code for event join** | Standard pattern in every event app (TopDeck, EventLink, WPN all use QR); players expect to scan and go | LOW | Client-side generation with `qrcode.react`; must be large enough to scan from a phone held at arm's length |
-| **Player self-registration (name entry only)** | No-friction join is the core value; TopDeck takes 30 seconds, this should take 10 | LOW | No accounts, just name + event association |
-| **Duplicate name prevention** | Without it, two "Jake"s cause confusion that breaks pod assignments | LOW | Unique constraint on (event_id, name); friendly error message |
-| **Real-time player list** | Every competitor shows who's in the event; players need to see their group | LOW | Supabase Realtime subscription; shows active + dropped |
-| **Pod generation (4-player pods)** | The entire point of the app; TopDeck, EDH Tournament app, and Companion all do this | HIGH | Greedy algorithm minimizing repeat opponents via history matrix; handle remainders with byes |
-| **Random seat assignment (1st-4th)** | Seat order eliminates "who goes first?" arguments; TopDeck assigns table positions | LOW | Random shuffle per pod; display clearly on pod cards |
-| **Bye handling for odd player counts** | Every serious pairing tool handles byes; without it, leftover players are stranded | MEDIUM | Prioritize players with fewest byes; ties broken randomly; bye players see "Bye" not a pod |
-| **Round history (previous rounds visible)** | Players want to check who they played; every tournament app shows round history | LOW | Collapsible sections, most recent first |
-| **Player self-drop** | TopDeck supports drop/re-entry; players need to leave mid-event without bugging the admin | LOW | Marks inactive; keeps current round visible; player enters pool for next round if re-activated |
-| **Admin passphrase protection** | Without access control, any player can generate rounds or remove people; every tournament tool gates admin actions | LOW | Per-event passphrase; session-stored after first entry; no user accounts needed |
-| **Real-time updates (pod assignments push to all phones)** | This is the core promise -- "every player instantly sees their pod assignment." TopDeck pushes pairings to phones; MTGEvent updates in real time | HIGH | Supabase Realtime channels; must handle reconnection gracefully |
-| **Mobile-first responsive design** | TopDeck has native apps; MTGEvent is fully responsive; 90%+ of users will be on phones at an event | MEDIUM | Dark theme, large touch targets, pod cards readable at arm's length |
+| **No repeated pod group** | With 8 players and 2+ rounds, the greedy algo can repeat the exact same 4-player group if it happens to be locally optimal each time. Users expect "you shouldn't play the same people twice." | MEDIUM | Squared-penalty scoring (cost = encounters²) discourages second meetings exponentially more than linear scoring. Proven pattern from Good-Enough Golfers tool and tournament literature. |
+| **No player stuck in same seat every round** | Seat 1 (first player, biggest political disadvantage in Commander) should rotate. With the current implementation, a player could draw seat 1 two rounds in a row. Players notice and complain. | LOW | Seat history tracking per player. When assigning seats, prefer seats not recently assigned. Seat history stored in `RoundHistory` or computed from previous assignments. |
+| **Pods of 3 as an alternative to byes** | 13 players currently produces 3×4 + 1×bye-pod (1 person sits out). With toggle enabled: 1×4 + 3×3 (all 13 play). Users expect this option exists once they know it's possible. | MEDIUM | Requires new partition logic: determine how many pods of 3 vs 4 to form. For n players: maximize pods of 4 first, use pods of 3 to absorb remainder without byes. |
+| **Toggle is per-round, not event-wide** | If round 1 had 12 players (clean 3×4), and a 13th joins for round 2, the admin needs to decide round-by-round. An event-wide setting gets this wrong. | LOW | Checkbox/toggle in AdminControls, applied only when the admin clicks "Generate Next Round." Does not persist across rounds. |
+| **Algorithm warnings still shown** | Existing behavior: algorithm returns warnings array surfaced via `toast.warning`. The improved algorithm should still warn on edge cases (e.g., "No new opponent combinations possible — some repeats required."). | LOW | Keep existing warning surface. Add new warning when perfect diversity is impossible (small group, many rounds). |
+| **Pods of 3 visually distinct** | Bye pods already use a visually distinct card. A 3-player pod is not a bye — it's an active game. But the UI needs to make clear it's a 3-player game (no seat 4). | LOW | 3-player pods show seats 1-3 only. Pod card adapts to `players.length`. PodCard component already maps by seat_number, so null seat_4 is handled. |
 
 ### Differentiators (Competitive Advantage)
 
-Features that set this app apart from TopDeck/Companion/MTGEvent. Not required, but these are why someone would choose this over alternatives.
+Features that meaningfully improve over existing casual pod tools and the current algorithm.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Zero-account, zero-install access** | TopDeck requires account creation + app install. MTGEvent requires accounts for self-signup. Companion requires Wizards account for >8 players. This app: scan QR, type name, done. The lowest friction entry in the space. | LOW | This is an architecture decision, not a feature to build -- it's the absence of auth that differentiates |
-| **Shared round timer with visual countdown** | TopDeck has timers but they're admin-side. Commander Clock is per-device. No competitor has a shared, server-synced timer that every player sees simultaneously on their phone with color-coded urgency states (green/yellow/red). | MEDIUM | Server-side timer state (duration, started_at, paused_remaining); clients calculate independently; color changes at 10min/5min/0:00 |
-| **Browser notifications on timer expiry** | No casual Commander tool sends push notifications when time runs out. Players background the app during games -- they need to know when time is up without watching the screen. | MEDIUM | Notification API permission flow; must handle iOS Safari limitations (requires PWA install on iOS 16.4+); graceful degradation to in-app visual alert |
-| **Admin timer controls (pause/resume/+5min)** | Games run long. Pods finish at different times. No casual tool gives the organizer granular timer control that syncs to all phones. | LOW | Pause stores remaining time; resume recalculates started_at; +5 adjusts duration; all broadcast via Realtime |
-| **Opponent history tracking across rounds** | TopDeck's Swiss algorithm does this for competitive play. No casual tool tracks who you've already played and avoids repeat matchups. For a 4-round night with 12 players, avoiding repeats matters. | MEDIUM | Opponent history matrix; stored per-event; feeds pod generation algorithm |
-| **Instant pod visibility (glanceable cards)** | TopDeck buries pairings in tournament structure. This app's pod cards should be the hero UI -- big names, clear seat numbers, visible from across a table. Designed for the "hold up phone to check" moment. | LOW | UI/UX priority, not technical complexity; large fonts, high contrast, minimal chrome |
-| **Multiple simultaneous admins** | Game stores often have multiple staff running events. No casual tool explicitly supports this -- most assume single organizer. | LOW | Any client with the correct passphrase gets admin controls; no admin "session" to conflict |
-| **Mid-event player joins** | Players arrive late to casual events constantly. TopDeck handles late registration but it's buried in settings. This should be seamless -- new player joins, gets paired next round with empty history and 0 bye count. | LOW | Insert player with null history; algorithm treats them as having played nobody |
+| **Squared-penalty scoring for repeat opponents** | Current linear scoring: playing A twice costs 2. Squared: playing A twice costs 4, playing A three times costs 9. Exponential discouragement of repeat pairings makes the algorithm strongly prefer any new opponent over a repeated one, even if the "new" option involves two players who've met once before. Proven pattern from Good-Enough Golfers (goodenoughgolfers.com). | LOW | Change `getOpponentScore` to square the encounter count: `score += (count * count)`. One-line change. Test impact on 8-16 player scenarios across 4+ rounds. |
+| **Seat history tracking with avoidance** | No existing casual tool tracks seat position history. Players in Commander care deeply about turn order (seat 1 = last player in round 1 of each round). Providing cross-round seat rotation is a concrete fairness improvement competitors don't offer. | MEDIUM | Track which seat each player had in each previous round. When shuffling seats for a new pod, sort candidates so players who haven't had seat 1 recently are preferred. Or: assign seat 1 to player with fewest prior seat-1 assignments. Store seat history as part of RoundHistory or derive from existing pod_players data. |
+| **Pods-of-3 toggle eliminates unnecessary byes** | Current: 13 players = 1 person sits out every round. With toggle: everyone plays. For small casual groups, sitting out is frustrating. No casual Commander tool offers this — TopDeck supports it but it's buried in competitive tournament settings and requires accounts. | MEDIUM | Mixed partition algorithm: given n players with allow3PlayerPods=true, determine optimal mix. For n % 4 == 1: one pod of 3 + (n-3)/4 pods of 4 is impossible since (n-3) must be divisible by 4. Correct formula: solve 3a + 4b = n to minimize a (pods of 3). For n=13: a=1, b=2.5 — doesn't work cleanly. Actual: a=3, b=1 (3+3+3+4=13). See partition notes below. |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
-Features that seem good but create problems for a casual Commander pod pairer.
-
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| **User accounts / authentication** | "Track my history across events" | Adds friction to the join flow which is the #1 value prop; requires password management, forgot-password flows, GDPR compliance; casual players don't want another account. TopDeck needs accounts because they track competitive records -- we don't. | Each event is standalone. Players type a name and play. No persistence needed. |
-| **Point tracking / standings / leaderboards** | "Make it competitive" | Commander is inherently casual for this app's audience. Point systems create toxic incentives in multiplayer (kingmaking, spite plays, salt). TopDeck's point modes exist for competitive REL -- our users aren't playing competitive REL. The WPN guide explicitly recommends participation rewards over competitive scoring for casual events. | If users want competitive Commander, TopDeck.gg exists and does it well. This app is for casual pod assignment only. |
-| **Deck registration / power level brackets** | "Match similar power levels" | Requires deck database integration (Moxfield/Archidekt API), power level is subjective and contentious, self-reported brackets are unreliable. WotC's bracket system is still in beta and controversial. This is a pairing app, not a deck management app. | Let the playgroup self-organize power levels socially. The app pairs pods; the humans handle deck selection. |
-| **Chat / messaging / social features** | "Coordinate with my pod" | Players are physically together at the event -- they can talk. Adding chat means moderation, abuse potential, notification spam, and feature bloat. Every tournament app that added chat regretted the moderation burden. | Players communicate in person. The app shows who's in your pod -- go find them. |
-| **Player profile persistence across events** | "Remember my name next time" | Requires device-local storage or accounts; creates confusion when multiple people use the same phone; adds complexity for a feature that saves typing 5 characters once per event. | Type your name each event. It takes 3 seconds. |
-| **Sound alerts on timer expiry** | "I need an audio notification" | Mobile browsers have aggressive autoplay policies; sounds fail silently on many devices; sounds in a game store are obnoxious and overlap with other noise. Multiple phones blaring simultaneously creates chaos. | Browser notification (vibration + banner) + visual color change on the timer. These work when the app is backgrounded, which is the actual use case. |
-| **Spectator mode / stream overlay** | "Let viewers watch the bracket" | No spectators at casual Commander night. This is 8-16 friends, not a streamed tournament. Spectator features add read-only view complexity for zero users. | The event page is already publicly viewable -- anyone with the link can see pods and rounds. |
-| **Swiss-style competitive pairings (by record)** | "Pair winners vs winners" | Swiss pairings make sense for 1v1 competitive formats. In casual 4-player Commander, there's no meaningful "record" -- one winner per pod of 4 means 75% of players "lose" each round. Swiss creates feel-bad pairings where the 0-3 player is stuck in the "losers pod." | Random pairing with repeat-opponent avoidance. Everyone gets varied opponents regardless of how their games went. |
-| **Online/remote play support** | "What about remote players?" | SpellTable already handles remote Commander play with webcam support and matchmaking. Building video/audio into a pairing app is scope explosion. This app is for in-person events. | If remote players want to play, they use SpellTable. This app is for people physically present at the same location. |
+| **Globally optimal algorithm (exact solver)** | "Why not just find the best pairing?" | The Social Golfer Problem is NP-hard in general. For 16 players in groups of 4, exact solvers require constraint programming (Prolog/Z3) or ILP — not appropriate for a browser-side TypeScript function generating results in <10ms. The greedy approach with squared penalties achieves near-optimal results for the n<20 player counts this app targets. | Squared-penalty greedy. Good-Enough Golfers (the most widely used casual group pairing tool) uses the same approach and is empirically well-regarded. |
+| **Genetic algorithm / simulated annealing** | "Use ML/AI to find better pairings" | Multiple-iteration stochastic search is computationally expensive, non-deterministic in ways that complicate testing, and over-engineered for 8-16 players. A greedy algorithm with squared penalties finds near-optimal solutions for small n without any of this complexity. | Keep greedy, improve scoring function. |
+| **Event-wide "always use pods of 3" setting** | "Set it once, forget it" | Player count changes round to round as players join/drop. An event-wide setting silently applies the wrong behavior when count changes make byes unnecessary or change the optimal partition. | Per-round toggle, shown only when pods of 3 would actually eliminate a bye (i.e., when n % 4 != 0). Hide the toggle when n % 4 == 0 (byes aren't needed anyway). |
+| **Seat 1 can never repeat for same player in consecutive rounds** | "Hard constraint: never same seat back to back" | Hard constraints make the problem significantly harder to solve and can make it unsolvable for small groups (e.g., 4 players, 5+ rounds — someone must repeat seat 1 since there are only 4 seats). | Soft preference: penalize/avoid same-seat repetition when alternatives exist, but don't enforce it as a hard constraint that can block pod generation. |
+| **Show "fairness score" to players** | "Display how well opponents were distributed" | Adds UI complexity players don't need. Players just want to know who they're playing with. Admins don't need a score to trust the algorithm is fair. | Algorithm produces results silently. Warnings surface edge cases (e.g., "some players will face a repeat opponent this round"). |
+
+---
 
 ## Feature Dependencies
 
 ```
-[Event Creation]
-    |-- requires --> [Admin Passphrase System]
-    |-- enables  --> [Shareable Link / QR Code]
-    |-- enables  --> [Player Self-Registration]
+[Squared-Penalty Scoring]
+    -- modifies --> [getOpponentScore function]
+    -- requires --> [Existing opponent history matrix] (already built)
+    -- no new DB schema needed
 
-[Player Self-Registration]
-    |-- requires --> [Real-time Player List]
-    |-- requires --> [Duplicate Name Prevention]
-    |-- enables  --> [Player Self-Drop]
-    |-- enables  --> [Pod Generation]
+[Seat History Tracking]
+    -- derives from --> [existing pod_players.seat_number + round data]
+    -- requires --> [RoundHistory shape expanded or seat history computed at call site]
+    -- feeds into --> [seat assignment step in generatePods]
 
-[Pod Generation Algorithm]
-    |-- requires --> [Player List (min 4 active)]
-    |-- requires --> [Opponent History Matrix]
-    |-- produces --> [Pod Assignments with Seat Order]
-    |-- produces --> [Bye Assignments]
-    |-- enables  --> [Round History]
+[Pods-of-3 Toggle (UI)]
+    -- requires --> [AdminControls component]
+    -- passes --> [allowPodsOf3: boolean] to generatePods call
+    -- shown only when --> [n % 4 != 0 AND n >= 7]
 
-[Real-time Updates (Supabase Realtime)]
-    |-- required by --> [Real-time Player List]
-    |-- required by --> [Pod Assignment Push]
-    |-- required by --> [Shared Timer Sync]
-    |-- required by --> [Player Drop/Remove Notifications]
+[Pods-of-3 Partition Logic (Algorithm)]
+    -- requires --> [Mixed partition solver: 3a + 4b = n]
+    -- replaces --> [current: numByes = n % 4, numPods = floor(n/4)]
+    -- requires --> [Updated PodAssignment type or same type with 3-player pods]
+    -- no new DB schema needed (pod_players supports variable player count per pod)
+    -- seat shuffle --> [assign [1,2,3] for 3-player pods, [1,2,3,4] for 4-player pods]
 
-[Shared Round Timer]
-    |-- requires --> [Real-time Updates]
-    |-- requires --> [Admin Timer Controls]
-    |-- enables  --> [Browser Notifications on Expiry]
-
-[Admin Passphrase System]
-    |-- gates --> [Pod Generation]
-    |-- gates --> [Timer Controls]
-    |-- gates --> [Player Removal]
-    |-- gates --> [Player Re-activation]
-    |-- gates --> [Event Ending]
-
-[Browser Notifications]
-    |-- requires --> [Shared Round Timer]
-    |-- requires --> [Notification API Permission Flow]
-    |-- degrades to --> [In-app Visual Alert]
+[Full test coverage]
+    -- requires --> [All three features above]
+    -- tests: --> [Vitest unit tests for all algorithm branches]
+    -- tests: --> [E2E for toggle visibility, toggle effect on pod count, seat display]
+    -- Stryker: --> [Must maintain >=80% mutation score, critical paths 100%]
 ```
 
 ### Dependency Notes
 
-- **Real-time Updates is foundational:** Nearly every user-facing feature depends on Supabase Realtime working correctly. This must be rock-solid before building features on top of it.
-- **Pod Generation requires Player Registration:** Cannot generate pods without a player list. Registration flow must be complete and tested before algorithm work.
-- **Timer requires Real-time:** The shared timer is meaningless without synchronized state across all clients. Timer work should come after Realtime is proven.
-- **Browser Notifications have platform constraints:** iOS Safari requires PWA installation (iOS 16.4+); Android Chrome works directly; must build graceful fallback for unsupported browsers.
-- **Admin Passphrase gates all admin actions:** This is a security boundary. Must be implemented before any admin action is exposed in the UI.
+- **Squared-penalty scoring has no external dependencies.** It modifies one internal function. It is the lowest-risk change and should be implemented and tested first.
+- **Seat history tracking derives from existing data.** `pod_players` already stores `seat_number` per player per pod. The algorithm already has access to `previousRounds` which includes player IDs. The gap is: `RoundHistory` shape currently does not carry seat assignments — only player IDs and `isBye`. Must either extend `RoundHistory.pods[]` to include seat assignments or compute seat history separately from the DB data before calling `generatePods`.
+- **Pods-of-3 toggle requires both UI and algorithm changes.** The UI toggle is simple (a checkbox in AdminControls). The algorithm change is more complex — the partition solver must correctly compute the number of 3-player and 4-player pods for any n, and the seating shuffle must handle 3-player pods (seats [1,2,3] not [1,2,3,4]).
+- **DB schema is NOT expected to need changes.** The `pods` and `pod_players` tables support variable player counts per pod already. The toggle value does not need to be persisted — it's a per-round input consumed at generation time.
 
-## MVP Definition
+---
 
-### Launch With (v1)
+## Pod-of-3 Partition Logic: The Math
 
-Minimum viable product -- what's needed to run one casual Commander night successfully.
+For n active players with pods-of-3 enabled, solve: `3a + 4b = n` with minimum a (minimize 3-player pods), both a,b >= 0.
 
-- [ ] **Event creation with name + passphrase** -- without this, nothing works
-- [ ] **Shareable link + QR code** -- the primary join mechanism
-- [ ] **Player self-registration (name only)** -- zero-friction entry
-- [ ] **Duplicate name prevention** -- avoid confusion
-- [ ] **Real-time player list** -- everyone sees who's joined
-- [ ] **Pod generation with repeat-opponent avoidance** -- the core algorithm
-- [ ] **Random seat assignment (1st-4th)** -- eliminates arguments
-- [ ] **Bye handling** -- odd player counts are inevitable
-- [ ] **Player self-drop** -- players leave mid-event
-- [ ] **Round history** -- check previous pods
-- [ ] **Admin passphrase protection** -- gate destructive actions
-- [ ] **Real-time pod assignment push** -- the moment of delight
-- [ ] **Shared round timer with visual countdown** -- the key differentiator
-- [ ] **Admin timer controls (pause/resume/+5min)** -- practical necessity
-- [ ] **Browser notifications on timer expiry** -- critical for backgrounded phones
-- [ ] **Mobile-first dark theme** -- 90%+ of users on phones
-- [ ] **Admin: remove player, re-activate dropped player, end event** -- basic admin toolkit
+| n (active) | a (pods of 3) | b (pods of 4) | Old behavior (byes) |
+|------------|---------------|---------------|---------------------|
+| 4 | 0 | 1 | 0 byes |
+| 5 | — | — | 1 bye (cannot form clean pods of 3) — show toggle? No, 5 players can't cleanly use pods-of-3 (5=3+2 doesn't work, 5=3a+4b: a=1,b=0.5 — not integer). Keep bye for n=5. |
+| 6 | — | — | 2 byes. No clean solution: 6=3*2, a=2,b=0. Two pods of 3! |
+| 7 | 1 | 1 | 3 byes. 7=3+4: a=1, b=1. One pod of 3, one pod of 4. |
+| 8 | 0 | 2 | 0 byes |
+| 9 | 3 | 0 | 1 bye. Or: 9=3*3, a=3,b=0. Three pods of 3. |
+| 10 | 2 | 1 | 2 byes. 10=3+3+4. |
+| 11 | 1 | 2 | 3 byes. 11=3+4+4. |
+| 12 | 0 | 3 | 0 byes |
+| 13 | 3 | 1 | 1 bye. 13=3+3+3+4. |
 
-### Add After Validation (v1.x)
+Pattern: For n where n%4 == 0: no toggle needed (already clean). For n%4 == 1: a=3, b=(n-9)/4. For n%4 == 2: a=2, b=(n-6)/4. For n%4 == 3: a=1, b=(n-3)/4.
 
-Features to add once the core loop is proven at real events.
+**Critical edge case:** n < 7 with toggle ON. For n=5: 3a+4b=5 has no non-negative integer solution. For n=6: a=2, b=0 (two pods of 3). For n=3: a=1, b=0 but minimum of 4 players rule — should the toggle allow 3-player pods with 3 players? Current behavior throws at n<4. With toggle: minimum becomes 3? The PROJECT.md says the minimum was "fewer than 4 active players blocks round generation." Decision needed: does enabling the toggle lower the minimum to 3? Recommend: yes, lower minimum to 3 when toggle is active and n>=3, since the user explicitly chose to allow 3-player games.
 
-- [ ] **Event history / read-only mode for ended events** -- triggered when users ask "what were the pods last week?"
-- [ ] **Multiple concurrent events** -- triggered when more than one group wants to use the app at the same time (e.g., game store running two pods simultaneously)
-- [ ] **Improved pod algorithm (configurable pod sizes, 3-player pods option)** -- triggered when users report edge cases the greedy algorithm handles poorly
-- [ ] **Event info bar with expandable QR, player count, round number** -- polish pass after core UX is validated
+---
 
-### Future Consideration (v2+)
+## MVP Definition for v4.0
 
-Features to defer until product-market fit is established.
+### Launch With (v4.0)
 
-- [ ] **PWA install prompt** -- makes browser notifications work on iOS; defer until user volume justifies the added UX flow
-- [ ] **Event templates / presets** -- for game stores running the same event weekly; defer until repeat organizers ask for it
-- [ ] **Accessibility audit (WCAG 2.2)** -- important but defer deep audit until UI is stable
-- [ ] **Analytics dashboard for organizers** -- how many players per event, average rounds, popular time slots; defer until organizers express interest
-- [ ] **Custom pod sizes (3-player, 5-player, 6-player)** -- defer until requested; 4-player is the Commander standard
+All three features plus full test coverage — this milestone is all-or-nothing per the PROJECT.md requirements.
+
+- [ ] **Squared-penalty scoring** — Change `getOpponentScore` to square encounter counts. Update all affected unit tests. Re-run Stryker.
+- [ ] **Seat history avoidance** — Extend `RoundHistory` or compute seat history at call site. Update `generatePods` signature and seat assignment step. Update all seat-related tests.
+- [ ] **Pods-of-3 toggle (algorithm)** — Mixed partition solver. Handle edge cases (n=5 has no clean solution). Update `generatePods` signature to accept `allowPodsOf3: boolean`. Update validation to allow n>=3 when toggle active.
+- [ ] **Pods-of-3 toggle (UI)** — Checkbox in AdminControls. Show only when toggle would change behavior (n%4 != 0). Pass flag through to algorithm. Display 3-player pods correctly in PodCard.
+- [ ] **Full unit tests** — Parameterized tests for new player counts (n=6,7,9,10,11,13 with toggle). Seat avoidance tests across multiple rounds. Squared-penalty tests confirming repeat opponents score higher than novel opponents.
+- [ ] **E2E tests** — Toggle visible/hidden at correct player counts. Toggle produces 3-player pods. Seat numbers render correctly on 3-player pods. Algorithm warnings shown when diversity is impossible.
+
+### Not in v4.0 Scope
+
+- Changing the algorithm to be globally optimal (ILP/constraint solver) — out of scope
+- Swiss-style competitive pairings — out of scope
+- Anything requiring DB schema changes — not expected, but confirm during implementation
+
+---
 
 ## Feature Prioritization Matrix
 
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| Event creation + shareable link + QR | HIGH | LOW | P1 |
-| Player self-registration (name only) | HIGH | LOW | P1 |
-| Real-time player list | HIGH | MEDIUM | P1 |
-| Pod generation algorithm | HIGH | HIGH | P1 |
-| Random seat assignment | HIGH | LOW | P1 |
-| Bye handling | HIGH | MEDIUM | P1 |
-| Real-time pod push to all clients | HIGH | MEDIUM | P1 |
-| Admin passphrase system | HIGH | LOW | P1 |
-| Player self-drop | MEDIUM | LOW | P1 |
-| Round history (collapsible) | MEDIUM | LOW | P1 |
-| Shared round timer | HIGH | MEDIUM | P1 |
-| Admin timer controls | HIGH | LOW | P1 |
-| Browser notifications (timer expiry) | HIGH | MEDIUM | P1 |
-| Mobile-first dark theme | HIGH | MEDIUM | P1 |
-| Admin player management (remove/reactivate) | MEDIUM | LOW | P1 |
-| Event ending (read-only mode) | MEDIUM | LOW | P1 |
-| Duplicate name prevention | MEDIUM | LOW | P1 |
-| Mid-event player joins | MEDIUM | LOW | P1 |
-| Multiple simultaneous admins | LOW | LOW | P2 |
-| Multiple concurrent events | MEDIUM | LOW | P2 |
-| PWA install flow | MEDIUM | MEDIUM | P3 |
-| Event templates | LOW | MEDIUM | P3 |
+| Feature | User Value | Implementation Cost | Priority | Risk |
+|---------|------------|---------------------|----------|------|
+| Squared-penalty scoring | HIGH (fewer repeat opponents) | LOW (one-line change, tests update) | P1 | LOW |
+| Seat history avoidance | MEDIUM (fairness improvement players notice) | MEDIUM (extend data shape, add avoidance logic) | P1 | MEDIUM |
+| Pods-of-3 toggle (UI) | HIGH (eliminates sitting out) | LOW (checkbox + conditional display) | P1 | LOW |
+| Pods-of-3 partition algorithm | HIGH (prerequisite for toggle) | MEDIUM (partition math, edge cases) | P1 | MEDIUM |
+| Pods-of-3 minimum player adjustment | HIGH (required for feature correctness) | LOW (change validation threshold) | P1 | LOW |
+| Updated unit tests | HIGH (100% coverage required by CI) | MEDIUM (parameterized cases, many branches) | P1 | LOW |
+| E2E tests for new UI/behavior | HIGH (required by global CLAUDE.md rules) | MEDIUM (new fixtures, toggle flows) | P1 | LOW |
 
-**Priority key:**
-- P1: Must have for launch -- the app cannot run a Commander night without these
-- P2: Should have, add when possible -- enhances the experience but not blocking
-- P3: Nice to have, future consideration -- only build when validated by user demand
+**Priority key:** All items are P1 — this is a cohesive milestone, not à la carte.
 
-## Competitor Feature Analysis
+---
 
-| Feature | TopDeck.gg | MTG Companion | MTGEvent.com | EDH Tournament App | **Pod Pairer (Ours)** |
-|---------|-----------|---------------|--------------|-------------------|----------------------|
-| Account required | Yes (free) | Yes (Wizards) | Yes | No | **No** |
-| App install required | Yes (iOS/Android) | Yes (iOS/Android) | No (web) | Yes (Android) | **No (web)** |
-| Commander pod pairing | Yes (5 algorithms) | Limited (8 players max without account) | Yes (basic) | Yes (Swiss) | **Yes (greedy anti-repeat)** |
-| Casual vs competitive focus | Competitive | Mixed | Competitive | Competitive | **Casual only** |
-| Shared synced timer | Admin-side only | No | No | No | **Yes (all clients)** |
-| Browser notifications | No (push via app) | No (push via app) | No | No | **Yes** |
-| QR code join | Yes | Yes (via EventLink) | No | No | **Yes** |
-| Zero-friction player join | No (account needed) | No (account needed) | No (account needed) | Manual entry by admin | **Yes (name only)** |
-| Seat assignment | Table assignment | No | No | No | **Yes (1st-4th)** |
-| Player self-drop | Yes | Yes | Unknown | No (admin only) | **Yes** |
-| Repeat opponent avoidance | Yes (Swiss) | Basic | Basic | Yes (Swiss) | **Yes (history matrix)** |
-| Price | Free tier + paid plans | Free | Free | Free | **Free** |
-| Offline support | Yes | Partial | No | Yes (local only) | **No (requires internet)** |
+## Implementation Order Recommendation
 
-### Competitive Positioning
+1. **Squared-penalty scoring first.** Lowest risk, self-contained, immediately improves algorithm quality. Gives a concrete win to test against before touching the data shape or UI.
 
-Our app is NOT competing with TopDeck.gg. TopDeck serves competitive Commander tournaments with Swiss pairings, scoring, top cuts, and Discord integration. That is a different product for a different audience.
+2. **Pods-of-3 partition algorithm second.** Pure function change, no UI yet. Establish the partition math, handle all n values, get the unit tests solid. Then wire up the UI.
 
-Our app competes with "the group chat" -- the current solution for casual Commander nights where someone texts "who's coming Saturday?" and then manually assigns pods with pen and paper or a spreadsheet. The competitors are:
+3. **Pods-of-3 UI toggle third.** Once algorithm handles it correctly, the UI change is straightforward: add a checkbox, pass the flag, adapt PodCard for seat 1-3.
 
-1. **Pen and paper** -- no repeat tracking, slow, error-prone
-2. **Random name picker websites** -- no pod-of-4 logic, no persistence, no timer
-3. **MTG Companion Home Tournament Organizer** -- limited to 8 players, requires Wizards account, 1v1 focused
-4. **A spreadsheet** -- functional but not real-time, not mobile-friendly, no timer
+4. **Seat history avoidance last.** Requires deciding how to pass seat history data into `generatePods` — this touches the `RoundHistory` shape or requires a new parameter. The impact on the existing 678 unit tests will be largest here. Do this last when the other two features are stable.
 
-We win by being faster to start, requiring nothing to install, and providing a shared timer that every phone displays simultaneously.
+---
 
 ## Sources
 
-- [TopDeck.gg Tournament Operations Features](https://topdeck.gg/features/tournament-operations) -- MEDIUM confidence (official product page)
-- [TopDeck.gg Player Experience Features](https://topdeck.gg/features/player-experience) -- MEDIUM confidence (official product page)
-- [TopDeck.gg Running Commander Tournaments](https://topdeck.gg/help/running-commander-tournament) -- MEDIUM confidence (official help docs)
-- [MTG Companion App - App Store](https://apps.apple.com/us/app/magic-the-gathering-companion/id1455161962) -- MEDIUM confidence (official listing)
-- [MTG Companion App - Magic: The Gathering](https://magic.wizards.com/en/products/companion-app) -- MEDIUM confidence (official product page)
-- [MTGEvent.com Tournament Software](https://www.mtgevent.com/mtg-tournament-software/) -- MEDIUM confidence (official product page)
-- [EDH Tournament App - Google Play](https://play.google.com/store/apps/details?id=com.lucaswmolin.edhtournament) -- LOW confidence (third-party app listing)
-- [Melee.gg Tournament Platform](https://melee.gg/) -- MEDIUM confidence (official product page)
-- [WPN: How to Run Successful Commander Events](https://wpn.wizards.com/en/news/how-to-run-successful-commander-events-and-grow-your-community) -- HIGH confidence (official WotC guidance)
-- [SpellTable - Remote Magic](https://spelltable.wizards.com/) -- MEDIUM confidence (official product)
-- [WPN EventLink Pod Pairing Updates](https://wpn.wizards.com/en/news/eventlink-beta-updates-15-october-2020-within-pod-pairing-and-more) -- MEDIUM confidence (official WPN blog)
-- [NN/g QR Code Usability Guidelines](https://www.nngroup.com/articles/qr-code-guidelines/) -- HIGH confidence (authoritative UX research)
-- [PWA Push Notification Best Practices](https://www.magicbell.com/blog/using-push-notifications-in-pwas) -- MEDIUM confidence (technical guide)
+- [Good-Enough Golfers — Social Golfer Problem Solver](https://goodenoughgolfers.com/) — HIGH confidence (actively maintained tool, uses squared-penalty approach, confirmed via WebFetch)
+- [Good-Enough Golfers — GitHub Source](https://github.com/islemaster/good-enough-golfers) — HIGH confidence (open source, algorithm confirmed)
+- [Social Golfer Problem — Wikipedia](https://en.wikipedia.org/wiki/Social_golfer_problem) — HIGH confidence (authoritative reference for problem classification)
+- [An effective greedy heuristic for the Social Golfer Problem — Springer](https://link.springer.com/article/10.1007/s10479-011-0866-7) — MEDIUM confidence (academic confirmation that greedy heuristics are practical for small n)
+- [TopDeck.gg MTR/IPG Addendum — Pod Size Rules](https://topdeck.gg/mtr-ipg-addendum) — MEDIUM confidence (competitive rules, confirmed priority for 4-player pods, one pod-of-3 max per round)
+- [Multiplayer MTG Addendum — Pairing Algorithm](https://juizes-mtg-portugal.github.io/multiplayer-addendum-mtr) — MEDIUM confidence (confirmed: "avoid matching between Players that have already played against each other during previous Rounds")
+- [NN/G Toggle Switch Guidelines](https://www.nngroup.com/articles/toggle-switch-guidelines/) — HIGH confidence (authoritative UX guidance; updated Jan 2025: toggles for immediate-effect, checkboxes when action requires submit button)
+- [Running Commander Tournaments — TopDeck.gg](https://topdeck.gg/help/running-commander-tournament) — MEDIUM confidence (industry practice: maximize pods of 4, allow pods of 3 to eliminate byes)
 
 ---
-*Feature research for: Casual MTG Commander event pod-pairing web app*
-*Researched: 2026-02-20*
+*Feature research for: v4.0 Pod Algorithm Improvements — Casual MTG Commander event pod-pairing web app*
+*Researched: 2026-03-02*
