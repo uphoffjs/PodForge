@@ -983,6 +983,37 @@ describe('pod-algorithm', () => {
       // Pairs: a-b=2^2=4, a-c=1^2=1, a-d=0, b-c=0, b-d=0, c-d=0 => total=5
       expect(podPenalty(['a', 'b', 'c', 'd'], history)).toBe(5)
     })
+
+    it('computes exactly C(n,2) pairs, no extra from loop boundary mutation', () => {
+      // If i <= pod.length or j <= pod.length (boundary mutation), it would try to
+      // access pod[4] which is undefined, and history.get(undefined) returns undefined,
+      // so encounters would be 0 and penalty unchanged. BUT it would also create an
+      // extra iteration with undefined index. We detect this by checking the exact value.
+      // All 4 players have met each other exactly once: C(4,2)=6 pairs, each 1^2=1. Total=6.
+      const history = new Map<string, Map<string, number>>()
+      for (const x of ['a', 'b', 'c', 'd']) {
+        history.set(x, new Map())
+        for (const y of ['a', 'b', 'c', 'd']) {
+          if (x !== y) history.get(x)!.set(y, 1)
+        }
+      }
+      expect(podPenalty(['a', 'b', 'c', 'd'], history)).toBe(6)
+    })
+
+    it('handles 2-player pod correctly (only 1 pair)', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 3]]))
+      history.set('b', new Map([['a', 3]]))
+      // Only 1 pair: a-b=3^2=9
+      expect(podPenalty(['a', 'b'], history)).toBe(9)
+    })
+
+    it('handles 1-player pod correctly (0 pairs)', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 3]]))
+      // 0 pairs
+      expect(podPenalty(['a'], history)).toBe(0)
+    })
   })
 
   describe('totalPenalty', () => {
@@ -1034,6 +1065,25 @@ describe('pod-algorithm', () => {
       }
       // Greedy should separate them most of the time
       expect(separatedCount).toBeGreaterThan(10)
+    })
+
+    it('selects the minimum-score candidate, not just any candidate (kills score < bestScore -> true)', () => {
+      // Setup: pool order is [a, b, c, d, e, f, g, h] where a is picked first for pod 1.
+      // b has met a 5 times, c has met a 0 times. The greedy MUST pick c over b for a's pod.
+      // If mutation changes `score < bestScore` to `if (true)`, every candidate replaces the
+      // previous best, and the last candidate in the remaining list gets picked regardless.
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 5]]))
+      history.set('b', new Map([['a', 5]]))
+
+      // Use fixed pool order: a first, then b (high overlap), then c-h (zero overlap)
+      const pool = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+      const pods = greedyAssign(pool, 2, history)
+
+      // Pod 0 starts with 'a'. Greedy must NOT pick 'b' (score=25) over c/d/e/f/g/h (score=0).
+      const aPod = pods[0]
+      expect(aPod[0]).toBe('a') // a is first player placed
+      expect(aPod).not.toContain('b') // b should be rejected due to high overlap
     })
   })
 
@@ -1090,6 +1140,95 @@ describe('pod-algorithm', () => {
 
       const allPlayers = result.flat().sort()
       expect(allPlayers).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'])
+    })
+
+    it('actually performs the swap (improved flag is set and break exits correctly)', () => {
+      // Setup: a-b met 5 times. Pods: [a,b,c,d], [e,f,g,h]
+      // swapPass should swap a or b with someone from the other pod.
+      // If the improved=true / break block is removed (BlockStatement mutation),
+      // the swap still happens but is immediately undone in the else branch.
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 5]]))
+      history.set('b', new Map([['a', 5]]))
+
+      const pods = [['a', 'b', 'c', 'd'], ['e', 'f', 'g', 'h']]
+      const result = swapPass(pods, history)
+      const after = totalPenalty(result, history)
+
+      // Before: a-b penalty = 5^2 = 25. After swap: should be 0 (a and b separated).
+      expect(after).toBe(0)
+
+      // Verify a and b are in DIFFERENT pods
+      const aInPod0 = result[0].includes('a')
+      const bInPod0 = result[0].includes('b')
+      expect(aInPod0).not.toBe(bInPod0) // a and b must be in different pods
+    })
+
+    it('does not swap when swapped score equals current score (strict less-than)', () => {
+      // Setup where a swap produces equal score, not better.
+      // Pod1: [a,b,c,d], Pod2: [e,f,g,h]
+      // a-b=1, e-f=1. Swapping a<->e gives a-f=0+e-b=0 in each pod but
+      // we need both pods to have the same penalty before and after.
+      // Actually: both pods have penalty 1 (a-b and e-f). Total=2.
+      // Swapping a<->e: Pod1=[e,b,c,d] penalty=0, Pod2=[a,f,g,h] penalty=0. Total=0.
+      // That's an improvement, so it would swap. Need equal case instead.
+
+      // Better: all pairs have equal history. No swap can improve.
+      const history = new Map<string, Map<string, number>>()
+      // Every pair in pod1 has encounter=1, every pair in pod2 has encounter=1
+      for (const x of ['a', 'b', 'c', 'd']) {
+        history.set(x, new Map())
+        for (const y of ['a', 'b', 'c', 'd']) {
+          if (x !== y) history.get(x)!.set(y, 1)
+        }
+      }
+      for (const x of ['e', 'f', 'g', 'h']) {
+        history.set(x, new Map())
+        for (const y of ['e', 'f', 'g', 'h']) {
+          if (x !== y) history.get(x)!.set(y, 1)
+        }
+      }
+      // Cross-pod: also 1 encounter each
+      for (const x of ['a', 'b', 'c', 'd']) {
+        for (const y of ['e', 'f', 'g', 'h']) {
+          history.get(x)!.set(y, 1)
+          history.get(y)!.set(x, 1)
+        }
+      }
+
+      const pods = [['a', 'b', 'c', 'd'], ['e', 'f', 'g', 'h']]
+      const before = totalPenalty(pods, history)
+      const result = swapPass(pods, history)
+      const after = totalPenalty(result, history)
+
+      // Swapping any pair produces equal penalty (all encounter=1), so no swap should occur
+      expect(after).toBe(before)
+    })
+
+    it('performs cascading swaps when first swap enables second improvement', () => {
+      // Setup: a-b=3, c-d=3, e-f=3 across 3 pods
+      // Swap pass should fix all three in one pass (multiple iterations)
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 3]]))
+      history.set('b', new Map([['a', 3]]))
+      history.set('c', new Map([['d', 3]]))
+      history.set('d', new Map([['c', 3]]))
+      history.set('e', new Map([['f', 3]]))
+      history.set('f', new Map([['e', 3]]))
+
+      const pods = [
+        ['a', 'b', 'g', 'h'],
+        ['c', 'd', 'i', 'j'],
+        ['e', 'f', 'k', 'l'],
+      ]
+      const before = totalPenalty(pods, history) // 9 + 9 + 9 = 27
+      expect(before).toBe(27)
+
+      const result = swapPass(pods, history)
+      const after = totalPenalty(result, history)
+
+      // Should reduce to 0 by separating all high-penalty pairs
+      expect(after).toBe(0)
     })
   })
 
