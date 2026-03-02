@@ -16,12 +16,12 @@ Requirements for Pod Algorithm Improvements milestone.
 
 ### Pods of 3
 
-- [ ] **POD3-01**: Admin can enable a per-round "allow pods of 3" checkbox before generating a round
+- [x] **POD3-01**: Admin can enable a per-round "allow pods of 3" checkbox before generating a round
 - [x] **POD3-02**: When enabled, algorithm produces pods of 3 instead of byes where mathematically possible (e.g., 13 players -> 1x4 + 3x3)
 - [x] **POD3-03**: `computePodSizes()` pure function handles all player counts 4-20 with correct partition math
 - [x] **POD3-04**: For n=5 with toggle enabled, algorithm falls back to 1x4 + 1 bye with admin warning (no clean 3-player solution)
 - [x] **POD3-05**: Minimum player threshold relaxes from 4 to 3 when toggle is active
-- [ ] **POD3-06**: PodCard component renders 3-player pods correctly (seats 1st-3rd)
+- [x] **POD3-06**: PodCard component renders 3-player pods correctly (seats 1st-3rd)
 - [ ] **POD3-07**: E2E tests cover toggle interaction, round generation with pods of 3, and edge cases
 
 ### Seat Randomization
@@ -59,12 +59,12 @@ Requirements for Pod Algorithm Improvements milestone.
 | OPPO-02 | Phase 6 | Complete |
 | OPPO-03 | Phase 6 | Complete |
 | OPPO-04 | Phase 6 | Complete |
-| POD3-01 | Phase 7 | Pending |
+| POD3-01 | Phase 7 | Complete |
 | POD3-02 | Phase 7 | Complete |
 | POD3-03 | Phase 7 | Complete |
 | POD3-04 | Phase 7 | Complete |
 | POD3-05 | Phase 7 | Complete |
-| POD3-06 | Phase 7 | Pending |
+| POD3-06 | Phase 7 | Complete |
 | POD3-07 | Phase 7 | Pending |
 | SEAT-01 | Phase 6 | Complete |
 | SEAT-02 | Phase 6 | Complete |
