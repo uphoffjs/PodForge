@@ -34,7 +34,7 @@ export interface PodAssignmentResult {
 const NUM_STARTS = 20
 
 /**
- * Fisher-Yates shuffle (in-place). Returns a new shuffled array.
+ * Fisher-Yates shuffle. Returns a new shuffled copy of the input array.
  */
 function shuffleArray<T>(arr: T[]): T[] {
   const shuffled = [...arr]
