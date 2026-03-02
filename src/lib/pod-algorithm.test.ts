@@ -8,6 +8,7 @@ import {
   totalPenalty,
   greedyAssign,
   swapPass,
+  computePodSizes,
   type PlayerInfo,
   type RoundHistory,
 } from './pod-algorithm'
@@ -1037,7 +1038,7 @@ describe('pod-algorithm', () => {
     it('produces valid pod assignments with correct sizes', () => {
       const pool = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
       const history = new Map<string, Map<string, number>>()
-      const pods = greedyAssign(pool, 2, history)
+      const pods = greedyAssign(pool, [4, 4], history)
 
       expect(pods).toHaveLength(2)
       expect(pods[0]).toHaveLength(4)
@@ -1059,7 +1060,7 @@ describe('pod-algorithm', () => {
       let separatedCount = 0
       for (let i = 0; i < 20; i++) {
         const pool = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
-        const pods = greedyAssign(pool, 2, history)
+        const pods = greedyAssign(pool, [4, 4], history)
         const aPod = pods.find(p => p.includes('a'))!
         if (!aPod.includes('b')) separatedCount++
       }
@@ -1078,12 +1079,39 @@ describe('pod-algorithm', () => {
 
       // Use fixed pool order: a first, then b (high overlap), then c-h (zero overlap)
       const pool = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
-      const pods = greedyAssign(pool, 2, history)
+      const pods = greedyAssign(pool, [4, 4], history)
 
       // Pod 0 starts with 'a'. Greedy must NOT pick 'b' (score=25) over c/d/e/f/g/h (score=0).
       const aPod = pods[0]
       expect(aPod[0]).toBe('a') // a is first player placed
       expect(aPod).not.toContain('b') // b should be rejected due to high overlap
+    })
+
+    it('produces variable pod sizes with mix of 3s and 4s', () => {
+      const pool = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
+      const history = new Map<string, Map<string, number>>()
+      const pods = greedyAssign(pool, [4, 3], history)
+
+      expect(pods).toHaveLength(2)
+      expect(pods[0]).toHaveLength(4)
+      expect(pods[1]).toHaveLength(3)
+
+      // All players accounted for
+      const allPlayers = pods.flat().sort()
+      expect(allPlayers).toEqual(pool.slice().sort())
+    })
+
+    it('produces two pods of 3 when given [3, 3]', () => {
+      const pool = ['a', 'b', 'c', 'd', 'e', 'f']
+      const history = new Map<string, Map<string, number>>()
+      const pods = greedyAssign(pool, [3, 3], history)
+
+      expect(pods).toHaveLength(2)
+      expect(pods[0]).toHaveLength(3)
+      expect(pods[1]).toHaveLength(3)
+
+      const allPlayers = pods.flat().sort()
+      expect(allPlayers).toEqual(pool.slice().sort())
     })
   })
 
@@ -1460,6 +1488,265 @@ describe('pod-algorithm', () => {
       expect(counts.get('b')).toBe(0)
       // The dropped player gets a count entry via the ?? 0 fallback on line 99
       expect(counts.get('dropped-player')).toBe(1)
+    })
+  })
+
+  describe('computePodSizes', () => {
+    describe('allowPodsOf3=false (legacy behavior)', () => {
+      it('computePodSizes(8, false) -> { podSizes: [4, 4], byeCount: 0 }', () => {
+        expect(computePodSizes(8, false)).toEqual({ podSizes: [4, 4], byeCount: 0 })
+      })
+
+      it('computePodSizes(9, false) -> { podSizes: [4, 4], byeCount: 1 }', () => {
+        expect(computePodSizes(9, false)).toEqual({ podSizes: [4, 4], byeCount: 1 })
+      })
+
+      it('computePodSizes(10, false) -> { podSizes: [4, 4], byeCount: 2 }', () => {
+        expect(computePodSizes(10, false)).toEqual({ podSizes: [4, 4], byeCount: 2 })
+      })
+
+      it('computePodSizes(4, false) -> { podSizes: [4], byeCount: 0 }', () => {
+        expect(computePodSizes(4, false)).toEqual({ podSizes: [4], byeCount: 0 })
+      })
+
+      it('computePodSizes(5, false) -> { podSizes: [4], byeCount: 1 }', () => {
+        expect(computePodSizes(5, false)).toEqual({ podSizes: [4], byeCount: 1 })
+      })
+
+      it('computePodSizes(20, false) -> { podSizes: [4,4,4,4,4], byeCount: 0 }', () => {
+        expect(computePodSizes(20, false)).toEqual({ podSizes: [4, 4, 4, 4, 4], byeCount: 0 })
+      })
+
+      it.each(Array.from({ length: 17 }, (_, i) => i + 4))(
+        'allowPodsOf3=false with %i players: all podSizes are 4, byeCount == n %% 4',
+        (n) => {
+          const result = computePodSizes(n, false)
+          expect(result.podSizes.every(s => s === 4)).toBe(true)
+          expect(result.byeCount).toBe(n % 4)
+          expect(result.podSizes.reduce((a, b) => a + b, 0) + result.byeCount).toBe(n)
+        }
+      )
+    })
+
+    describe('allowPodsOf3=true', () => {
+      it('computePodSizes(3, true) -> { podSizes: [3], byeCount: 0 }', () => {
+        expect(computePodSizes(3, true)).toEqual({ podSizes: [3], byeCount: 0 })
+      })
+
+      it('computePodSizes(4, true) -> { podSizes: [4], byeCount: 0 }', () => {
+        expect(computePodSizes(4, true)).toEqual({ podSizes: [4], byeCount: 0 })
+      })
+
+      it('computePodSizes(5, true) -> { podSizes: [4], byeCount: 1 } (special case)', () => {
+        expect(computePodSizes(5, true)).toEqual({ podSizes: [4], byeCount: 1 })
+      })
+
+      it('computePodSizes(6, true) -> { podSizes: [3, 3], byeCount: 0 }', () => {
+        expect(computePodSizes(6, true)).toEqual({ podSizes: [3, 3], byeCount: 0 })
+      })
+
+      it('computePodSizes(7, true) -> { podSizes: [4, 3], byeCount: 0 }', () => {
+        expect(computePodSizes(7, true)).toEqual({ podSizes: [4, 3], byeCount: 0 })
+      })
+
+      it('computePodSizes(9, true) -> { podSizes: [3, 3, 3], byeCount: 0 }', () => {
+        expect(computePodSizes(9, true)).toEqual({ podSizes: [3, 3, 3], byeCount: 0 })
+      })
+
+      it('computePodSizes(10, true) -> { podSizes: [4, 3, 3], byeCount: 0 }', () => {
+        expect(computePodSizes(10, true)).toEqual({ podSizes: [4, 3, 3], byeCount: 0 })
+      })
+
+      it('computePodSizes(13, true) -> { podSizes: [4, 3, 3, 3], byeCount: 0 }', () => {
+        expect(computePodSizes(13, true)).toEqual({ podSizes: [4, 3, 3, 3], byeCount: 0 })
+      })
+
+      it('computePodSizes(12, true) -> { podSizes: [4, 4, 4], byeCount: 0 }', () => {
+        expect(computePodSizes(12, true)).toEqual({ podSizes: [4, 4, 4], byeCount: 0 })
+      })
+
+      it('computePodSizes(16, true) -> { podSizes: [4, 4, 4, 4], byeCount: 0 }', () => {
+        expect(computePodSizes(16, true)).toEqual({ podSizes: [4, 4, 4, 4], byeCount: 0 })
+      })
+
+      it('computePodSizes(17, true) -> { podSizes: [4, 4, 3, 3, 3], byeCount: 0 }', () => {
+        expect(computePodSizes(17, true)).toEqual({ podSizes: [4, 4, 3, 3, 3], byeCount: 0 })
+      })
+
+      it('computePodSizes(20, true) -> { podSizes: [4, 4, 4, 4, 4], byeCount: 0 }', () => {
+        expect(computePodSizes(20, true)).toEqual({ podSizes: [4, 4, 4, 4, 4], byeCount: 0 })
+      })
+
+      it.each(Array.from({ length: 18 }, (_, i) => i + 3))(
+        'allowPodsOf3=true with %i players: sum of podSizes + byeCount == playerCount',
+        (n) => {
+          const result = computePodSizes(n, true)
+          expect(result.podSizes.reduce((a, b) => a + b, 0) + result.byeCount).toBe(n)
+          // All pod sizes are 3 or 4
+          expect(result.podSizes.every(s => s === 3 || s === 4)).toBe(true)
+          // Only n=5 has byes
+          if (n !== 5) {
+            expect(result.byeCount).toBe(0)
+          }
+        }
+      )
+    })
+  })
+
+  describe('generatePods with allowPodsOf3', () => {
+    it('generatePods(7_players, [], true) -> 2 pods (one of 4, one of 3), 0 byes', () => {
+      const players = makePlayers(7)
+      const result = generatePods(players, [], true)
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      const byePods = result.assignments.filter(a => a.is_bye)
+
+      expect(activePods).toHaveLength(2)
+      expect(byePods).toHaveLength(0)
+
+      const podSizes = activePods.map(p => p.players.length).sort((a, b) => b - a)
+      expect(podSizes).toEqual([4, 3])
+
+      // All 7 players accounted for
+      const allIds = result.assignments.flatMap(a => a.players.map(p => p.player_id))
+      expect(new Set(allIds).size).toBe(7)
+    })
+
+    it('generatePods(7_players, [], false) -> 1 pod of 4, 3 byes (existing behavior)', () => {
+      const players = makePlayers(7)
+      const result = generatePods(players, [], false)
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      const byePods = result.assignments.filter(a => a.is_bye)
+
+      expect(activePods).toHaveLength(1)
+      expect(activePods[0].players).toHaveLength(4)
+      expect(byePods).toHaveLength(1)
+      expect(byePods[0].players).toHaveLength(3)
+    })
+
+    it('generatePods(5_players, [], true) -> 1 pod of 4, 1 bye, warning message', () => {
+      const players = makePlayers(5)
+      const result = generatePods(players, [], true)
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      const byePods = result.assignments.filter(a => a.is_bye)
+
+      expect(activePods).toHaveLength(1)
+      expect(activePods[0].players).toHaveLength(4)
+      expect(byePods).toHaveLength(1)
+      expect(byePods[0].players).toHaveLength(1)
+      expect(result.warnings).toContainEqual(
+        expect.stringContaining('5 players cannot be split into pods of 3 and 4')
+      )
+    })
+
+    it('generatePods(3_players, [], true) -> 1 pod of 3, 0 byes (lowered threshold)', () => {
+      const players = makePlayers(3)
+      const result = generatePods(players, [], true)
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      const byePods = result.assignments.filter(a => a.is_bye)
+
+      expect(activePods).toHaveLength(1)
+      expect(activePods[0].players).toHaveLength(3)
+      expect(byePods).toHaveLength(0)
+    })
+
+    it('generatePods(3_players, [], false) -> throws "Fewer than 4 active players"', () => {
+      const players = makePlayers(3)
+      expect(() => generatePods(players, [], false)).toThrow('Fewer than 4 active players')
+    })
+
+    it('generatePods(8_players, [], false) -> identical to current behavior (backward compatible)', () => {
+      const players = makePlayers(8)
+      const result = generatePods(players, [], false)
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      const byePods = result.assignments.filter(a => a.is_bye)
+
+      expect(activePods).toHaveLength(2)
+      activePods.forEach(pod => expect(pod.players).toHaveLength(4))
+      expect(byePods).toHaveLength(0)
+    })
+
+    it('3-player pods have seat numbers [1, 2, 3] (not [1, 2, 3, 4])', () => {
+      const players = makePlayers(7)
+      const result = generatePods(players, [], true)
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      for (const pod of activePods) {
+        const seats = pod.players.map(p => p.seat_number).sort((a, b) => a! - b!)
+        if (pod.players.length === 3) {
+          expect(seats).toEqual([1, 2, 3])
+        } else {
+          expect(seats).toEqual([1, 2, 3, 4])
+        }
+      }
+    })
+
+    it('4-player pods have seat numbers [1, 2, 3, 4]', () => {
+      const players = makePlayers(8)
+      const result = generatePods(players, [], true)
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      for (const pod of activePods) {
+        const seats = pod.players.map(p => p.seat_number).sort((a, b) => a! - b!)
+        expect(seats).toEqual([1, 2, 3, 4])
+      }
+    })
+
+    it('default (no third param) behaves like allowPodsOf3=false', () => {
+      const players = makePlayers(7)
+      const result = generatePods(players, [])
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      const byePods = result.assignments.filter(a => a.is_bye)
+
+      // Without allowPodsOf3, 7 players => 1 pod of 4 + 3 byes
+      expect(activePods).toHaveLength(1)
+      expect(activePods[0].players).toHaveLength(4)
+      expect(byePods).toHaveLength(1)
+      expect(byePods[0].players).toHaveLength(3)
+    })
+
+    it('bye pod_number is correct with variable pod sizes', () => {
+      const players = makePlayers(5)
+      const result = generatePods(players, [], true)
+
+      // 1 active pod + 1 bye
+      const byePod = result.assignments.find(a => a.is_bye)
+      expect(byePod).toBeDefined()
+      expect(byePod!.pod_number).toBe(2) // 1 active pod + 1 = 2
+    })
+
+    it.each([
+      [6, [3, 3]],
+      [9, [3, 3, 3]],
+      [10, [4, 3, 3]],
+      [11, [4, 4, 3]],
+      [13, [4, 3, 3, 3]],
+      [14, [4, 4, 3, 3]],
+      [15, [4, 4, 4, 3]],
+      [17, [4, 4, 3, 3, 3]],
+      [18, [4, 4, 4, 3, 3]],
+      [19, [4, 4, 4, 4, 3]],
+    ])('allowPodsOf3=true with %i players: correct pod sizes %j, 0 byes', (count, expectedSizes) => {
+      const players = makePlayers(count)
+      const result = generatePods(players, [], true)
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      const byePods = result.assignments.filter(a => a.is_bye)
+
+      expect(byePods).toHaveLength(0)
+
+      const actualSizes = activePods.map(p => p.players.length).sort((a, b) => b - a)
+      const sortedExpected = [...expectedSizes].sort((a, b) => b - a)
+      expect(actualSizes).toEqual(sortedExpected)
+
+      // All players accounted for
+      const allIds = result.assignments.flatMap(a => a.players.map(p => p.player_id))
+      expect(new Set(allIds).size).toBe(count)
     })
   })
 })

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   generatePods,
   buildOpponentHistory,
+  computePodSizes,
   totalPenalty,
   greedyAssign,
   type PlayerInfo,
@@ -25,14 +26,15 @@ function makePlayers(count: number): PlayerInfo[] {
  */
 function simulateRounds(
   playerCount: number,
-  roundCount: number
+  roundCount: number,
+  allowPodsOf3: boolean = false
 ): { rounds: RoundHistory[]; results: PodAssignmentResult[] } {
   const players = makePlayers(playerCount)
   const previousRounds: RoundHistory[] = []
   const results: PodAssignmentResult[] = []
 
   for (let r = 0; r < roundCount; r++) {
-    const result = generatePods(players, previousRounds)
+    const result = generatePods(players, previousRounds, allowPodsOf3)
     results.push(result)
 
     // Convert PodAssignmentResult to RoundHistory entry
@@ -206,7 +208,7 @@ describe('Pod Algorithm Integration — Multi-Round Fairness', () => {
       const singleTrials = 20
       for (let i = 0; i < singleTrials; i++) {
         const pool = [...playerIds].sort(() => Math.random() - 0.5)
-        const pods = greedyAssign(pool, 2, history)
+        const pods = greedyAssign(pool, [4, 4], history)
         singleStartTotal += totalPenalty(pods, history)
       }
       const singleAvg = singleStartTotal / singleTrials
@@ -218,7 +220,7 @@ describe('Pod Algorithm Integration — Multi-Round Fairness', () => {
         let bestScore = Infinity
         for (let s = 0; s < 5; s++) {
           const pool = [...playerIds].sort(() => Math.random() - 0.5)
-          const pods = greedyAssign(pool, 2, history)
+          const pods = greedyAssign(pool, [4, 4], history)
           const score = totalPenalty(pods, history)
           if (score < bestScore) bestScore = score
         }
@@ -494,6 +496,133 @@ describe('Pod Algorithm Integration — Multi-Round Fairness', () => {
       // Assert that not all seat orders are identical
       const uniqueOrders = new Set(seatOrders)
       expect(uniqueOrders.size).toBeGreaterThan(1)
+    })
+  })
+
+  describe('allowPodsOf3=false structural correctness (parameterized)', () => {
+    it.each(Array.from({ length: 17 }, (_, i) => i + 4))(
+      'allowPodsOf3=false with %i players: pods all have 4 players, byes == count %% 4',
+      (count) => {
+        const { results } = simulateRounds(count, 3, false)
+
+        for (const result of results) {
+          const activePods = result.assignments.filter(a => !a.is_bye)
+          const byePods = result.assignments.filter(a => a.is_bye)
+
+          // Non-bye pods have exactly 4 players each
+          for (const pod of activePods) {
+            expect(pod.players).toHaveLength(4)
+          }
+
+          const expectedByes = count % 4
+          if (expectedByes > 0) {
+            expect(byePods).toHaveLength(1)
+            expect(byePods[0].players).toHaveLength(expectedByes)
+          } else {
+            expect(byePods).toHaveLength(0)
+          }
+
+          // All players accounted for
+          const totalPlayers = result.assignments.reduce((sum, a) => sum + a.players.length, 0)
+          expect(totalPlayers).toBe(count)
+
+          // Seat numbers correct for 4-player pods
+          for (const pod of activePods) {
+            const seats = pod.players.map(p => p.seat_number).sort((a, b) => a! - b!)
+            expect(seats).toEqual([1, 2, 3, 4])
+          }
+        }
+      }
+    )
+  })
+
+  describe('allowPodsOf3=true structural correctness (parameterized)', () => {
+    it.each(Array.from({ length: 17 }, (_, i) => i + 4))(
+      'allowPodsOf3=true with %i players: total assigned == count, pods have 3 or 4 players, byes match computePodSizes',
+      (count) => {
+        const { results } = simulateRounds(count, 3, true)
+        const expected = computePodSizes(count, true)
+
+        for (const result of results) {
+          const activePods = result.assignments.filter(a => !a.is_bye)
+          const byePods = result.assignments.filter(a => a.is_bye)
+
+          // All pods have 3 or 4 players
+          for (const pod of activePods) {
+            expect(pod.players.length).toBeGreaterThanOrEqual(3)
+            expect(pod.players.length).toBeLessThanOrEqual(4)
+          }
+
+          // Total assigned == count
+          const totalPlayers = result.assignments.reduce((sum, a) => sum + a.players.length, 0)
+          expect(totalPlayers).toBe(count)
+
+          // Bye count matches computePodSizes expectation
+          if (expected.byeCount > 0) {
+            expect(byePods).toHaveLength(1)
+            expect(byePods[0].players).toHaveLength(expected.byeCount)
+          } else {
+            expect(byePods).toHaveLength(0)
+          }
+
+          // Number of active pods matches
+          expect(activePods).toHaveLength(expected.podSizes.length)
+
+          // Seat numbers correct for variable-sized pods
+          for (const pod of activePods) {
+            const seats = pod.players.map(p => p.seat_number).sort((a, b) => a! - b!)
+            const expectedSeats = Array.from({ length: pod.players.length }, (_, j) => j + 1)
+            expect(seats).toEqual(expectedSeats)
+          }
+        }
+      }
+    )
+
+    it('player count 3 with allowPodsOf3=true: 1 pod of 3, 0 byes', () => {
+      const players = makePlayers(3)
+      const result = generatePods(players, [], true)
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      const byePods = result.assignments.filter(a => a.is_bye)
+
+      expect(activePods).toHaveLength(1)
+      expect(activePods[0].players).toHaveLength(3)
+      expect(byePods).toHaveLength(0)
+
+      const seats = activePods[0].players.map(p => p.seat_number).sort((a, b) => a! - b!)
+      expect(seats).toEqual([1, 2, 3])
+    })
+  })
+
+  describe('opponent diversity with variable pod sizes', () => {
+    it('multi-start + swap pass reduces repeat opponents with 7 players (allowPodsOf3=true)', () => {
+      // 7 players, 4 rounds with pods of 3 and 4
+      const { rounds } = simulateRounds(7, 4, true)
+      const opponentHistory = buildOpponentHistory(rounds)
+
+      let maxPairCount = 0
+      for (const [, opponents] of opponentHistory) {
+        for (const [, count] of opponents) {
+          if (count > maxPairCount) maxPairCount = count
+        }
+      }
+
+      // With 7 players and mixed pod sizes, repeats should be bounded
+      expect(maxPairCount).toBeLessThanOrEqual(4)
+    })
+
+    it('multi-start + swap pass reduces repeat opponents with 10 players (allowPodsOf3=true)', () => {
+      const { rounds } = simulateRounds(10, 4, true)
+      const opponentHistory = buildOpponentHistory(rounds)
+
+      let maxPairCount = 0
+      for (const [, opponents] of opponentHistory) {
+        for (const [, count] of opponents) {
+          if (count > maxPairCount) maxPairCount = count
+        }
+      }
+
+      expect(maxPairCount).toBeLessThanOrEqual(4)
     })
   })
 
