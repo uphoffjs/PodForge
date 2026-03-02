@@ -1,10 +1,14 @@
 /**
  * Pod Generation Algorithm
  *
- * Pure function that divides active players into pods of 4,
- * minimizing repeat opponents using a greedy algorithm with
- * opponent history matrix. Handles bye rotation fairly and
- * assigns random seat order.
+ * Pure function that divides active players into pods of 3 or 4,
+ * minimizing repeat opponents using a multi-start greedy algorithm
+ * with quadratic penalty scoring and post-greedy swap pass.
+ * Handles bye rotation fairly and assigns random seat order.
+ *
+ * Supports variable pod sizes via allowPodsOf3 toggle:
+ * - false (default): all pods size 4, remainder become byes
+ * - true: mix of 3s and 4s to minimize byes (only n=5 unsolvable)
  */
 
 export interface PlayerInfo {
@@ -28,7 +32,13 @@ export interface PodAssignmentResult {
 }
 
 /**
- * Fisher-Yates shuffle (in-place). Returns a new shuffled array.
+ * Number of random orderings to try in the multi-start greedy.
+ * Higher values produce better assignments at the cost of computation.
+ */
+const NUM_STARTS = 20
+
+/**
+ * Fisher-Yates shuffle. Returns a new shuffled copy of the input array.
  */
 function shuffleArray<T>(arr: T[]): T[] {
   const shuffled = [...arr]
@@ -107,8 +117,10 @@ export function buildByeCounts(
 /**
  * Calculate the opponent overlap score for a candidate player
  * against players already placed in a pod.
+ * Uses quadratic penalty: encounters^2 to penalize repeat opponents
+ * superlinearly (2 encounters = 4x penalty, 3 = 9x).
  */
-function getOpponentScore(
+export function getOpponentScore(
   candidate: string,
   podMembers: string[],
   history: Map<string, Map<string, number>>
@@ -118,27 +130,222 @@ function getOpponentScore(
   if (!candidateHistory) return 0
 
   for (const member of podMembers) {
-    score += candidateHistory.get(member) ?? 0
+    const encounters = candidateHistory.get(member) ?? 0
+    score += encounters * encounters
   }
   return score
+}
+
+/**
+ * Compute the penalty for a single pod: sum of encounters^2
+ * for all C(n,2) pairs of players in the pod.
+ */
+export function podPenalty(
+  pod: string[],
+  history: Map<string, Map<string, number>>
+): number {
+  let penalty = 0
+  for (let i = 0; i < pod.length; i++) {
+    for (let j = i + 1; j < pod.length; j++) {
+      const encounters = history.get(pod[i])?.get(pod[j]) ?? 0
+      penalty += encounters * encounters
+    }
+  }
+  return penalty
+}
+
+/**
+ * Compute the total penalty across all pods: sum of podPenalty
+ * for each pod in the assignment.
+ */
+export function totalPenalty(
+  pods: string[][],
+  history: Map<string, Map<string, number>>
+): number {
+  let total = 0
+  for (const pod of pods) {
+    total += podPenalty(pod, history)
+  }
+  return total
+}
+
+/**
+ * Single greedy assignment pass. Takes a pre-shuffled pool of player IDs
+ * and assigns them to pods of specified sizes, greedily minimizing
+ * opponent overlap score. Returns string[][] of pod assignments.
+ */
+export function greedyAssign(
+  pool: string[],
+  podSizes: number[],
+  history: Map<string, Map<string, number>>
+): string[][] {
+  const pods: string[][] = Array.from({ length: podSizes.length }, () => [])
+  const remaining = [...pool]
+
+  for (let podIdx = 0; podIdx < podSizes.length; podIdx++) {
+    // Pick first player from remaining (already shuffled)
+    pods[podIdx].push(remaining[0])
+    remaining.splice(0, 1)
+
+    // Fill remaining positions greedily (up to target pod size)
+    for (let slot = 1; slot < podSizes[podIdx]; slot++) {
+      let bestIdx = 0
+      let bestScore = getOpponentScore(
+        remaining[0],
+        pods[podIdx],
+        history
+      )
+
+      for (let i = 1; i < remaining.length; i++) {
+        const score = getOpponentScore(remaining[i], pods[podIdx], history)
+        if (score < bestScore) {
+          bestScore = score
+          bestIdx = i
+        }
+      }
+
+      pods[podIdx].push(remaining[bestIdx])
+      remaining.splice(bestIdx, 1)
+    }
+  }
+
+  return pods
+}
+
+/**
+ * Post-greedy swap pass. Iterates all pairs of players across different pods
+ * and swaps them if it reduces total penalty. Uses strict less-than comparison
+ * to guarantee monotonic improvement and termination.
+ */
+export function swapPass(
+  pods: string[][],
+  history: Map<string, Map<string, number>>
+): string[][] {
+  // Deep copy pods to avoid mutating input
+  const result = pods.map((pod) => [...pod])
+  let improved = true
+
+  while (improved) {
+    improved = false
+    const currentScore = totalPenalty(result, history)
+
+    for (let podA = 0; podA < result.length; podA++) {
+      for (let podB = podA + 1; podB < result.length; podB++) {
+        for (let iA = 0; iA < result[podA].length; iA++) {
+          for (let iB = 0; iB < result[podB].length; iB++) {
+            // Try swap
+            ;[result[podA][iA], result[podB][iB]] = [
+              result[podB][iB],
+              result[podA][iA],
+            ]
+            const swappedScore = totalPenalty(result, history)
+
+            if (swappedScore < currentScore) {
+              // Keep swap, restart outer loop
+              improved = true
+              break
+            } else {
+              // Undo swap
+              ;[result[podA][iA], result[podB][iB]] = [
+                result[podB][iB],
+                result[podA][iA],
+              ]
+            }
+          }
+          if (improved) break
+        }
+        if (improved) break
+      }
+      if (improved) break
+    }
+  }
+
+  return result
+}
+
+/**
+ * Compute optimal pod sizes for a given player count.
+ *
+ * When allowPodsOf3 is false (legacy): all pods are size 4, remainder become byes.
+ * When allowPodsOf3 is true: mix of 3s and 4s to minimize byes.
+ * Only n=5 with allowPodsOf3=true still requires 1 bye (unsolvable).
+ */
+export function computePodSizes(
+  playerCount: number,
+  allowPodsOf3: boolean
+): { podSizes: number[]; byeCount: number } {
+  if (!allowPodsOf3) {
+    const numPods = Math.floor(playerCount / 4)
+    return {
+      podSizes: Array(numPods).fill(4),
+      byeCount: playerCount % 4,
+    }
+  }
+
+  // Special cases for allowPodsOf3=true
+  if (playerCount === 3) {
+    return { podSizes: [3], byeCount: 0 }
+  }
+
+  if (playerCount === 5) {
+    // Only unsolvable case: 5 cannot be split into 3s and 4s
+    return { podSizes: [4], byeCount: 1 }
+  }
+
+  // General case for n >= 4, n != 5
+  const remainder = playerCount % 4
+  const numFours = Math.floor(playerCount / 4)
+
+  if (remainder === 0) {
+    // All 4s
+    return { podSizes: Array(numFours).fill(4), byeCount: 0 }
+  } else if (remainder === 1) {
+    // (floor(n/4) - 2) fours + 3 threes = 4*floor(n/4) - 8 + 9 = n
+    const foursCount = numFours - 2
+    const threesCount = 3
+    return {
+      podSizes: [...Array(foursCount).fill(4), ...Array(threesCount).fill(3)],
+      byeCount: 0,
+    }
+  } else if (remainder === 2) {
+    // (floor(n/4) - 1) fours + 2 threes = 4*floor(n/4) - 4 + 6 = n
+    const foursCount = numFours - 1
+    const threesCount = 2
+    return {
+      podSizes: [...Array(foursCount).fill(4), ...Array(threesCount).fill(3)],
+      byeCount: 0,
+    }
+  } else {
+    // remainder === 3: floor(n/4) fours + 1 three = 4*floor(n/4) + 3 = n
+    return {
+      podSizes: [...Array(numFours).fill(4), 3],
+      byeCount: 0,
+    }
+  }
 }
 
 /**
  * Main pod generation function.
  *
  * Takes active players and their round history, produces pod
- * assignments that minimize repeat opponents, handle bye rotation
- * fairly, and assign random seat order.
+ * assignments that minimize repeat opponents using multi-start
+ * greedy with quadratic scoring and swap pass. Handles bye rotation
+ * fairly, and assigns random seat order.
  *
- * @throws Error when fewer than 4 active players
+ * When allowPodsOf3 is true, pods can be size 3 or 4, reducing byes.
+ * When false (default), all pods are size 4 (legacy behavior).
+ *
+ * @throws Error when fewer than minPlayers active players (3 if allowPodsOf3, 4 otherwise)
  */
 export function generatePods(
   activePlayers: PlayerInfo[],
-  previousRounds: RoundHistory[]
+  previousRounds: RoundHistory[],
+  allowPodsOf3: boolean = false
 ): PodAssignmentResult {
   // 1. Validation
-  if (activePlayers.length < 4) {
-    throw new Error('Fewer than 4 active players')
+  const minPlayers = allowPodsOf3 ? 3 : 4
+  if (activePlayers.length < minPlayers) {
+    throw new Error(`Fewer than ${minPlayers} active players`)
   }
 
   const warnings: string[] = []
@@ -152,8 +359,19 @@ export function generatePods(
     activePlayers.map((p) => p.id)
   )
 
-  // 4. Select bye players (if needed)
-  const numByes = activePlayers.length % 4
+  // 4. Compute pod sizes and select bye players (if needed)
+  const { podSizes, byeCount: numByes } = computePodSizes(
+    activePlayers.length,
+    allowPodsOf3
+  )
+
+  // Add warning for 5 players with allowPodsOf3
+  if (allowPodsOf3 && activePlayers.length === 5) {
+    warnings.push(
+      '5 players cannot be split into pods of 3 and 4. Using 1 pod of 4 with 1 bye.'
+    )
+  }
+
   let byePlayers: PlayerInfo[] = []
   let podPlayers: PlayerInfo[]
 
@@ -183,47 +401,53 @@ export function generatePods(
     podPlayers = [...activePlayers]
   }
 
-  // 5. Assign remaining players to pods (greedy)
-  const numPods = podPlayers.length / 4
-  const pods: string[][] = Array.from({ length: numPods }, () => [])
+  // 5. Multi-start assignment with swap pass
+  const podPlayerIds = podPlayers.map((p) => p.id)
 
-  // Shuffle the pool for initial randomness
-  let pool = shuffleArray(podPlayers.map((p) => p.id))
+  let bestPods: string[][] = []
+  let bestScore = Infinity
 
-  for (let podIdx = 0; podIdx < numPods; podIdx++) {
-    // Pick first player randomly from pool (already shuffled)
-    const firstPlayer = pool[0]
-    pods[podIdx].push(firstPlayer)
-    pool = pool.filter((id) => id !== firstPlayer)
+  for (let start = 0; start < NUM_STARTS; start++) {
+    const pool = shuffleArray(podPlayerIds)
+    let pods: string[][]
 
-    // Fill positions 2-4 greedily
-    for (let slot = 1; slot < 4; slot++) {
-      let bestCandidate = pool[0]
-      let bestScore = getOpponentScore(pool[0], pods[podIdx], opponentHistory)
+    if (start < NUM_STARTS / 2) {
+      // First half: greedy assignment (good local optimization)
+      pods = greedyAssign(pool, podSizes, opponentHistory)
+    } else {
+      // Second half: random chunk assignment (diverse starting points)
+      // Split shuffled pool into consecutive chunks using podSizes
+      let offset = 0
+      pods = podSizes.map((size) => {
+        const chunk = pool.slice(offset, offset + size)
+        offset += size
+        return chunk
+      })
+    }
 
-      for (let i = 1; i < pool.length; i++) {
-        const score = getOpponentScore(pool[i], pods[podIdx], opponentHistory)
-        if (score < bestScore) {
-          bestScore = score
-          bestCandidate = pool[i]
-        }
-      }
-
-      pods[podIdx].push(bestCandidate)
-      pool = pool.filter((id) => id !== bestCandidate)
+    // Apply swap pass to each candidate
+    const improved = swapPass(pods, opponentHistory)
+    const score = totalPenalty(improved, opponentHistory)
+    if (score < bestScore) {
+      bestScore = score
+      bestPods = improved
     }
   }
+
+  const finalPods = bestPods
 
   // 6. Build result
   const assignments: PodAssignment[] = []
 
-  // Add active pods
-  for (let i = 0; i < pods.length; i++) {
-    const seatOrder = shuffleArray([1, 2, 3, 4])
+  // Add active pods with dynamic seat numbers based on pod size
+  for (let i = 0; i < finalPods.length; i++) {
+    const seatOrder = shuffleArray(
+      Array.from({ length: finalPods[i].length }, (_, j) => j + 1)
+    )
     assignments.push({
       pod_number: i + 1,
       is_bye: false,
-      players: pods[i].map((playerId, idx) => ({
+      players: finalPods[i].map((playerId, idx) => ({
         player_id: playerId,
         seat_number: seatOrder[idx],
       })),
@@ -233,7 +457,7 @@ export function generatePods(
   // Add bye pod (if any)
   if (byePlayers.length > 0) {
     assignments.push({
-      pod_number: numPods + 1,
+      pod_number: podSizes.length + 1,
       is_bye: true,
       players: byePlayers.map((p) => ({
         player_id: p.id,

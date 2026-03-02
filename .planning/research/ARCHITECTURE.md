@@ -1,567 +1,503 @@
-# Architecture Patterns
+# Architecture Research
 
-**Domain:** Real-time event management web app (MTG Commander pod pairing)
-**Researched:** 2026-02-20
-**Overall Confidence:** MEDIUM-HIGH (Supabase Realtime patterns verified via official docs; timer sync and passphrase patterns derived from multiple credible sources)
+**Domain:** Pod algorithm improvements — repeat opponent reduction, seat randomization, pods of 3 toggle
+**Researched:** 2026-03-02
+**Confidence:** HIGH (based on direct codebase inspection — all findings are from source files, no speculation)
 
-## Recommended Architecture
+---
+
+## Context: What v4.0 Is Adding to Existing Architecture
+
+This is a subsequent milestone, not a greenfield project. The existing architecture is fully understood from direct source inspection. The three v4.0 features all route through a single choke point:
 
 ```
-+-------------------------------------------------------------+
-|                     Client (React SPA)                       |
-|                                                              |
-|  +------------------+  +------------------+  +----------+   |
-|  | Route Layer      |  | State Layer      |  | UI Layer |   |
-|  | (React Router)   |  | (React Query +   |  | (Tailwind|   |
-|  |                  |  |  Supabase RT)    |  |  + React)|   |
-|  | /               |  |                  |  |          |   |
-|  | /event/:id      |  | useQuery (reads) |  | EventView|   |
-|  | /event/:id/admin|  | useMutation (wrt)|  | PodCard  |   |
-|  +------------------+  | RT subscription  |  | Timer    |   |
-|                        | -> invalidation  |  | PlayerLst|   |
-|                        +------------------+  +----------+   |
-|                              |                               |
-+------------------------------|-------------------------------+
-                               | WebSocket + REST
-                               v
-+-------------------------------------------------------------+
-|                   Supabase Backend                           |
-|                                                              |
-|  +------------------+  +------------------+  +----------+   |
-|  | Realtime         |  | PostgREST API    |  | Postgres |   |
-|  | (WebSocket)      |  | (Auto-generated) |  | Database |   |
-|  |                  |  |                  |  |          |   |
-|  | postgres_changes |  | CRUD via anon key|  | events   |   |
-|  | per event_id     |  | RPC functions    |  | players  |   |
-|  | filter           |  | (admin actions)  |  | rounds   |   |
-|  +------------------+  +------------------+  | pods     |   |
-|                                              | pod_plyr |   |
-|                                              +----------+   |
-|                                              | RLS Policies |
-|                                              | (anon read,  |
-|                                              |  RPC write)  |
-|                                              +----------+   |
-+-------------------------------------------------------------+
+AdminControls.tsx
+  └── generatePods()          ← pod-algorithm.ts (pure function)
+        └── PodAssignment[]
+              └── useGenerateRound.mutate()
+                    └── supabase.rpc('generate_round')
+                          └── rounds + pods + pod_players (DB)
 ```
 
-### Component Boundaries
+All three features (better opponent avoidance, seat randomization verification, pods of 3) touch only `pod-algorithm.ts` and `AdminControls.tsx`. The Supabase RPC, database schema, and all other components remain unchanged.
 
-| Component | Responsibility | Communicates With |
-|-----------|---------------|-------------------|
-| **React Router (SPA)** | URL routing, code splitting by route | All UI components |
-| **Supabase Client** | Single shared client instance; REST queries + Realtime channels | Supabase backend |
-| **React Query Layer** | Caching, deduplication, background refetch of all DB reads | Supabase REST API |
-| **Realtime Subscription Manager** | One channel per event; listens to postgres_changes; triggers React Query invalidation | Supabase Realtime, React Query |
-| **Timer Engine** | Client-side countdown from server-stored state (started_at + duration); drift-resistant recalculation | Supabase (reads timer state), UI (renders countdown) |
-| **Admin Action Layer** | Passphrase validation via RPC; mutation calls for admin-only operations | Supabase RPC functions |
-| **Pod Algorithm** | Pure function: takes players + history, outputs pod assignments | Called by admin action layer |
-| **UI Components** | Render event state; mobile-first dark theme; glanceable pod cards | React Query data, Timer engine |
+---
 
-### Data Flow
+## System Overview (With v4.0 Touch Points)
 
-**Read path (player view):**
 ```
-1. Player opens /event/:id
-2. React Query fetches event + players + current round + pods (REST)
-3. Supabase Realtime channel subscribes: postgres_changes on players/rounds/pods WHERE event_id = :id
-4. On realtime event -> queryClient.invalidateQueries(['event', eventId])
-5. React Query refetches stale data -> UI re-renders
++------------------------------------------------------------------+
+|                     React SPA (EventPage.tsx)                    |
+|                                                                  |
+|  AdminControls.tsx  [MODIFIED]                                   |
+|  +------------------------------------------------------------+  |
+|  | [NEW] allowPodsOf3 toggle  (boolean useState)              |  |
+|  | handleGenerateRound()                                      |  |
+|  |   → generatePods(activePlayers, history, { allowPodsOf3 }) |  |
+|  +----------------------------+-------------------------------+  |
+|                               | PodAssignment[]                  |
+|  pod-algorithm.ts  [MODIFIED] |                                  |
+|  +----------------------------v-------------------------------+  |
+|  | generatePods(players, history, options?)   [MODIFIED]      |  |
+|  |   buildOpponentHistory()                  [IMPROVED]       |  |
+|  |   buildByeCounts()                        [unchanged]      |  |
+|  |   selectByePlayers OR podOf3Sizing()      [NEW branch]     |  |
+|  |   greedy assignment (multi-start)         [IMPROVED]       |  |
+|  |   shuffleArray([1,2,3,4]) for seats       [already correct]|  |
+|  +----------------------------+-------------------------------+  |
+|                               | PodAssignment[]                  |
+|  useGenerateRound.ts  [UNCHANGED]                                |
+|  +----------------------------v-------------------------------+  |
+|  | mutate({ passphrase, podAssignments, timerDuration? })     |  |
+|  | supabase.rpc('generate_round', { p_pod_assignments: JSONB })|  |
+|  +----------------------------+-------------------------------+  |
+|                               |                                  |
++-------------------------------|----------------------------------+
+                                | Supabase RPC  [UNCHANGED]
++-------------------------------|----------------------------------+
+|  generate_round()             |                                  |
+|  +----------------------------v-------------------------------+  |
+|  | validate passphrase                                        |  |
+|  | INSERT rounds                                              |  |
+|  | FOR pod IN jsonb_array_elements(p_pod_assignments)         |  |
+|  |   INSERT pods (pod_number, is_bye)                         |  |
+|  |   INSERT pod_players (player_id, seat_number)              |  |
+|  | RETURN round_number                                        |  |
+|  +------------------------------------------------------------+  |
+|                                                                  |
+|  DB: rounds, pods, pod_players  [NO SCHEMA CHANGES NEEDED]       |
++------------------------------------------------------------------+
+
+  PodCard.tsx  [VERIFY ONLY — likely no change needed]
+  +------------------------------------------------------------+
+  | getOrdinal(n) already has fallback: case 1/2/3/4 + ${n}th  |
+  | sort by seat_number: works for any pod size                 |
+  | POD_COLORS: cycles, works for any pod count                 |
+  +------------------------------------------------------------+
 ```
 
-**Write path (admin action, e.g., "Generate Next Round"):**
-```
-1. Admin enters passphrase -> stored in sessionStorage
-2. Admin clicks "Generate Round"
-3. Client calls supabase.rpc('generate_round', { event_id, passphrase })
-4. Postgres function validates passphrase against events.passphrase_hash
-5. Function runs pod algorithm in SQL or returns player data for client-side computation
-6. New round/pods/pod_players rows inserted
-7. postgres_changes fires -> all subscribed clients invalidate + refetch
-```
+---
 
-**Timer flow:**
-```
-1. Admin starts timer -> supabase.rpc('start_timer', { event_id, duration_seconds, passphrase })
-2. Server stores: { started_at: now(), duration_seconds: 5400, paused_remaining: null }
-3. Clients read timer state via React Query
-4. Client computes: remaining = duration - (Date.now() - started_at) / 1000
-5. requestAnimationFrame loop updates display every second
-6. On pause: server stores paused_remaining, clears started_at
-7. On resume: server sets started_at = now(), duration_seconds = paused_remaining
-8. Timer state change triggers postgres_changes -> all clients recalculate
-```
+## Component Responsibilities
 
-## Patterns to Follow
+| Component | Responsibility | v4.0 Change |
+|-----------|---------------|-------------|
+| `pod-algorithm.ts` | Pure pairing logic — opponent history, bye rotation, seat assignment | MODIFIED: multi-start greedy for better avoidance, pods-of-3 sizing branch, options param |
+| `AdminControls.tsx` | Builds algorithm inputs, calls generatePods, fires mutation | MODIFIED: add allowPodsOf3 toggle UI, pass options to generatePods |
+| `useGenerateRound.ts` | TanStack mutation — calls Supabase RPC, invalidates queries | UNCHANGED |
+| `generate_round` RPC | Atomic DB write of round + pods + pod_players | UNCHANGED — already accepts pods of any size via JSONB iteration |
+| `PodCard.tsx` | Renders a pod with players and seat labels | VERIFY ONLY — getOrdinal already handles 1st/2nd/3rd; confirm 3-player pods render correctly |
+| `RoundDisplay.tsx` | Renders current round's pods | UNCHANGED — iterates pods without size assumption |
+| `PreviousRounds.tsx` | Lazy-loads and renders previous rounds | UNCHANGED |
+| `src/types/database.ts` | TypeScript types for DB shapes | UNCHANGED — no new columns |
 
-### Pattern 1: Channel-Per-Event with postgres_changes Filter
-**What:** Create one Supabase Realtime channel per event, filtering postgres_changes by event_id. This scopes all real-time updates to the relevant event.
-**When:** Always -- every client viewing an event subscribes to exactly one channel.
-**Why:** Avoids receiving updates for unrelated events. The filter on event_id means Supabase only delivers relevant WAL changes. For this app's scale (8-16 players per event, a few concurrent events), postgres_changes is the correct choice over Broadcast -- the data is already in Postgres and RLS authorization is automatic.
-**Confidence:** HIGH (verified via Supabase official docs)
+---
+
+## What Is New vs Modified vs Unchanged
+
+### NEW (net new code)
+- `GeneratePodsOptions` interface in `pod-algorithm.ts`
+- `allowPodsOf3` toggle button in `AdminControls.tsx`
+- Pod-of-3 sizing logic branch inside `generatePods()`
+- `scoreAssignment()` helper for multi-start greedy scoring
+
+### MODIFIED (surgical changes, no rewrites)
+- `pod-algorithm.ts` — add options param (backwards compatible), add pod-of-3 branch, wrap greedy in multi-start loop
+- `AdminControls.tsx` — add `useState` for toggle, pass options object to `generatePods()`
+- `pod-algorithm.test.ts` — add test cases for pods-of-3 scenarios
+- `pod-algorithm.integration.test.ts` — add multi-round pods-of-3 tests, tighten opponent avoidance thresholds
+- `AdminControls.test.tsx` — add toggle render + state tests
+
+### UNCHANGED (confirmed from source inspection)
+- `useGenerateRound.ts` — the `p_pod_assignments: JSONB` RPC param accepts any pod size today
+- `supabase/migrations/00002_rounds_pods_admin.sql` — the RPC iterates `jsonb_array_elements` without assuming pod size = 4
+- `PodCard.tsx` — `getOrdinal()` already has explicit cases for 1/2/3/4 and a `${n}th` fallback; sort by seat works for any count; POD_COLORS cycles
+- All timer hooks and components
+- All player management hooks and components
+- `EventPage.tsx`
+- `src/types/database.ts`
+- All Supabase migrations
+
+---
+
+## Architectural Patterns for v4.0
+
+### Pattern 1: Options Object for generatePods (backwards compatible extension)
+
+**What:** Add a third parameter as an options object, not a positional boolean. All existing call sites remain valid.
+
+**Why:** Positional booleans (`generatePods(players, history, true, false)`) are unreadable and brittle. An options object scales cleanly.
 
 ```typescript
-// src/hooks/useEventChannel.ts
-import { useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-
-export function useEventChannel(eventId: string) {
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    const channel = supabase
-      .channel(`event:${eventId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'players',
-          filter: `event_id=eq.${eventId}`,
-        },
-        () => queryClient.invalidateQueries({ queryKey: ['players', eventId] })
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'rounds',
-          filter: `event_id=eq.${eventId}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['rounds', eventId] });
-          queryClient.invalidateQueries({ queryKey: ['timer', eventId] });
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'pods',
-          filter: `round_id=eq.*`, // will need round-scoped or event-scoped approach
-        },
-        () => queryClient.invalidateQueries({ queryKey: ['pods', eventId] })
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [eventId, queryClient]);
+// ADD to pod-algorithm.ts
+export interface GeneratePodsOptions {
+  allowPodsOf3?: boolean
 }
+
+// MODIFIED signature
+export function generatePods(
+  activePlayers: PlayerInfo[],
+  previousRounds: RoundHistory[],
+  options: GeneratePodsOptions = {}
+): PodAssignmentResult {
+  const { allowPodsOf3 = false } = options
+  // ... existing validation, buildOpponentHistory, buildByeCounts ...
+}
+
+// All existing test calls (generatePods(players, [])) remain valid — no updates needed
 ```
 
-### Pattern 2: React Query as Primary State + Realtime as Invalidation Trigger
-**What:** Use TanStack React Query (v5) for all data fetching, caching, and UI state. Supabase Realtime subscriptions do NOT directly update state -- they invalidate queries, causing React Query to refetch.
-**When:** For all database-backed state (players, rounds, pods, timer state).
-**Why:** Supabase Realtime delivers change events (deltas), not full snapshots. Trying to merge deltas into local state is error-prone and creates consistency bugs. React Query's invalidation model is simple: real-time event arrives -> mark query stale -> refetch full state -> UI re-renders with consistent data. This is the pattern recommended by multiple sources including MakerKit and Supabase community discussions.
-**Confidence:** HIGH (multiple credible sources agree; official Supabase docs recommend this)
+### Pattern 2: Pods-of-3 Sizing Algorithm
+
+**What:** When `allowPodsOf3 = true`, replace the "remainder goes to bye" logic with a hybrid pod-sizing algorithm that finds the minimum number of 3-player pods to eliminate the remainder.
+
+**The math:** Find the minimum `k` (count of 3-player pods) such that `(n - 3k) % 4 === 0`. The rest become 4-player pods.
+
+**Player count lookup (n=4 to n=20):**
+
+| n | allowPodsOf3=false | allowPodsOf3=true |
+|---|-------------------|-------------------|
+| 4 | 1×4 | 1×4 |
+| 5 | 1×4 + 1 bye | 1×3 + 1 bye* |
+| 6 | 1×4 + 2 bye | 2×3 |
+| 7 | 1×4 + 3 bye | 1×4 + 1×3 |
+| 8 | 2×4 | 2×4 |
+| 9 | 2×4 + 1 bye | 3×3 |
+| 10 | 2×4 + 2 bye | 1×4 + 2×3 |
+| 11 | 2×4 + 3 bye | 2×4 + 1×3 |
+| 12 | 3×4 | 3×4 |
+| 13 | 3×4 + 1 bye | 1×4 + 3×3 |
+| 14 | 3×4 + 2 bye | 2×4 + 2×3 |
+| 15 | 3×4 + 3 bye | 3×4 + 1×3 |
+| 16 | 4×4 | 4×4 |
+| 17 | 4×4 + 1 bye | 2×4 + 3×3 |
+| 18 | 4×4 + 2 bye | 3×4 + 2×3 |
+| 19 | 4×4 + 3 bye | 4×4 + 1×3 |
+| 20 | 5×4 | 5×4 |
+
+*n=5 special case: `(5-3)=2` is not divisible by 4. No combination of 3-pods eliminates the need for a remainder when n=5. Best option: 1×3 + 2-person bye, or just 1×4 + 1 bye. Recommend: for n=5 with `allowPodsOf3=true`, fall through to 1×4 + 1 bye with a warning. This is the only player count where the toggle doesn't help.
+
+**Implementation approach:**
 
 ```typescript
-// src/hooks/useEventPlayers.ts
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-
-export function useEventPlayers(eventId: string) {
-  return useQuery({
-    queryKey: ['players', eventId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('players')
-        .select('*')
-        .eq('event_id', eventId)
-        .order('name');
-      if (error) throw error;
-      return data;
-    },
-    staleTime: 30_000, // 30s -- realtime invalidation handles freshness
-  });
-}
-```
-
-### Pattern 3: Server-Authoritative Timer with Client-Side Calculation
-**What:** Store timer state in the database as absolute values (started_at timestamp, duration_seconds integer, paused_remaining_seconds nullable integer). Clients calculate remaining time locally using `remaining = duration - (now - started_at)`. No countdown value is stored or transmitted -- each client computes it.
-**When:** For the round timer feature.
-**Why:** Eliminates drift between clients. Every client independently calculates from the same server-stored reference point. Even if a client's clock is slightly off, all clients converge because they recalculate on every render frame. Pausing is modeled as clearing started_at and storing remaining seconds; resuming sets a new started_at with the stored remaining as the new duration.
-**Confidence:** HIGH (well-established pattern verified by multiple web development sources)
-
-```typescript
-// src/hooks/useTimer.ts
-import { useState, useEffect, useCallback } from 'react';
-
-interface TimerState {
-  started_at: string | null;  // ISO timestamp
-  duration_seconds: number;
-  paused_remaining: number | null;
-}
-
-export function useTimer(timerState: TimerState | null) {
-  const [remaining, setRemaining] = useState<number | null>(null);
-
-  const calculate = useCallback(() => {
-    if (!timerState) return null;
-    if (timerState.paused_remaining !== null) return timerState.paused_remaining;
-    if (!timerState.started_at) return null;
-
-    const elapsed = (Date.now() - new Date(timerState.started_at).getTime()) / 1000;
-    return Math.max(0, timerState.duration_seconds - elapsed);
-  }, [timerState]);
-
-  useEffect(() => {
-    setRemaining(calculate());
-
-    // Use requestAnimationFrame for smooth updates, throttled to ~1fps
-    let frameId: number;
-    let lastUpdate = 0;
-
-    const tick = (timestamp: number) => {
-      if (timestamp - lastUpdate >= 1000) {
-        setRemaining(calculate());
-        lastUpdate = timestamp;
-      }
-      frameId = requestAnimationFrame(tick);
-    };
-
-    if (timerState?.started_at && timerState.paused_remaining === null) {
-      frameId = requestAnimationFrame(tick);
+function computePodSizes(n: number, allowPodsOf3: boolean): { pods4: number; pods3: number; byeCount: number } {
+  // n=0 handled upstream (validation throws)
+  if (n % 4 === 0 || !allowPodsOf3) {
+    return { pods4: Math.floor(n / 4), pods3: 0, byeCount: n % 4 }
+  }
+  // Find minimum k (3-pods) such that (n - 3k) % 4 === 0
+  for (let k = 1; k <= Math.floor(n / 3); k++) {
+    const remainder = n - 3 * k
+    if (remainder >= 0 && remainder % 4 === 0) {
+      return { pods4: remainder / 4, pods3: k, byeCount: 0 }
     }
-
-    return () => cancelAnimationFrame(frameId);
-  }, [timerState, calculate]);
-
-  return remaining;
+  }
+  // Fallback: no valid split (only n=5 reaches here)
+  return { pods4: Math.floor(n / 4), pods3: 0, byeCount: n % 4 }
 }
 ```
 
-### Pattern 4: Passphrase Validation via Supabase RPC (Not Client-Side Comparison)
-**What:** Admin actions call Supabase RPC functions that accept the passphrase as a parameter. The Postgres function compares the passphrase server-side against a hashed value stored in the events table. The client never reads the passphrase hash.
-**When:** For all admin-gated operations (generate round, remove player, start/pause timer, end event).
-**Why:** Sending the passphrase to an RPC function means the validation happens in Postgres. RLS policies on the events table can allow public SELECT on non-sensitive columns while hiding the passphrase_hash column entirely. The RPC function runs with SECURITY DEFINER to access the hash column that RLS hides from direct queries. This is more secure than client-side comparison and simpler than setting up Supabase Auth.
-**Confidence:** MEDIUM (pattern is sound and Supabase RPC docs confirm feasibility; no canonical example found for this exact use case)
+The output `PodAssignment[]` shape is identical for pods of 3 — they just have 3 players and `seat_number` values 1, 2, 3. The RPC handles this without any change.
 
-```sql
--- Database function for admin-gated actions
-CREATE OR REPLACE FUNCTION generate_round(
-  p_event_id UUID,
-  p_passphrase TEXT
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_event RECORD;
-BEGIN
-  SELECT * INTO v_event FROM events WHERE id = p_event_id;
+### Pattern 3: Seat Randomization — Verification, Not Fix
 
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Event not found';
-  END IF;
+**What:** Seats are ALREADY randomized correctly via `shuffleArray([1, 2, 3, 4])` on line 222 of `pod-algorithm.ts`. The integration test `seat assignments are randomized` asserts `uniqueOrders.size > 1`. This feature is already shipped in v2.0 per `PROJECT.md`.
 
-  -- Compare passphrase (use pgcrypto crypt() for hashed comparison)
-  IF v_event.passphrase_hash != crypt(p_passphrase, v_event.passphrase_hash) THEN
-    RAISE EXCEPTION 'Invalid passphrase';
-  END IF;
+**Investigation required:** The v4.0 requirement "fix seat order" needs clarification before implementation. The algorithm is correct. The question is whether there is a user-visible bug, and if so, where it originates:
 
-  -- ... perform admin action ...
-  RETURN jsonb_build_object('success', true);
-END;
-$$;
-```
+1. Is `PodCard.tsx`'s `sortedPlayers.sort((a,b) => seatNumber)` causing confusion? (No — displaying in seat order is intentional and correct.)
+2. Is the test for randomization loose enough to miss an actual bug? (Check: `uniqueOrders.size > 1` over 10 rounds is not very strict.)
+3. Is this actually a complaint about player order within a pod being similar round over round, even with different seat numbers? (Possible — e.g., if player A is always listed first because seat 1 is assigned to the first player added to the pod.)
+
+**Recommendation:** Run the integration test with higher round counts (50+) and track seat position distribution per player. If the distribution is even, the feature is working. If not, the bug is in the `shuffleArray` call or how it's seeded. Add a statistical assertion.
+
+### Pattern 4: Improved Opponent Avoidance — Multi-Start Greedy
+
+**What:** Run the greedy algorithm N times (5 iterations is sufficient), keep the assignment with the lowest total repeat-opponent score.
+
+**Why not a more complex algorithm:** This app targets 4–20 players. The greedy algorithm runs in O(n²) per iteration. 5 iterations of O(n²) for n=20 is trivially fast. Simulated annealing or ILP solvers are unnecessary complexity for this scale.
+
+**Current algorithm quality from integration tests:**
+- 8 players, 4 rounds: `maxPairCount <= 3` (current threshold)
+- 12 players, 6 rounds: `maxPairCount <= 4` (current threshold)
+
+**Expected improvement with multi-start:** These thresholds can likely tighten to `<= 2` and `<= 3` respectively. Update integration test assertions after verifying empirically.
 
 ```typescript
-// Client-side admin action
-async function generateRound(eventId: string, passphrase: string) {
-  const { data, error } = await supabase.rpc('generate_round', {
-    p_event_id: eventId,
-    p_passphrase: passphrase,
-  });
-  if (error) throw error;
-  return data;
+// ADD helper to pod-algorithm.ts
+function scoreAssignment(
+  assignments: PodAssignment[],
+  history: Map<string, Map<string, number>>
+): number {
+  let total = 0
+  for (const pod of assignments) {
+    if (pod.is_bye) continue
+    const ids = pod.players.map((p) => p.player_id)
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        total += history.get(ids[i])?.get(ids[j]) ?? 0
+      }
+    }
+  }
+  return total
+}
+
+// MODIFY the inner greedy body in generatePods to be callable as a function,
+// then wrap in multi-start loop:
+const ITERATIONS = 5
+let bestPods = runGreedy(podPlayers, numPods, numPods3, opponentHistory)
+let bestScore = scoreAssignment(buildAssignments(bestPods), opponentHistory)
+
+for (let attempt = 1; attempt < ITERATIONS; attempt++) {
+  const candidatePods = runGreedy(podPlayers, numPods, numPods3, opponentHistory)
+  const score = scoreAssignment(buildAssignments(candidatePods), opponentHistory)
+  if (score < bestScore) {
+    bestScore = score
+    bestPods = candidatePods
+  }
 }
 ```
 
-### Pattern 5: Session-Stored Admin Passphrase
-**What:** After the first successful passphrase validation, store the passphrase in sessionStorage so the user does not need to re-enter it for subsequent admin actions. Re-validate on each RPC call (server-side) but avoid prompting the user repeatedly.
-**When:** After first admin action per browser session.
-**Why:** UX requirement from the spec. sessionStorage clears on tab close, which is appropriate security for a casual event. The passphrase is re-sent with every RPC call and re-validated server-side, so a stale session cannot perform actions after the event passphrase changes.
-**Confidence:** HIGH (standard web pattern)
+---
 
-```typescript
-// src/hooks/useAdminAuth.ts
-import { useState, useCallback } from 'react';
+## Data Flow
 
-export function useAdminAuth(eventId: string) {
-  const storageKey = `admin_passphrase_${eventId}`;
+### Round Generation with v4.0 Changes
 
-  const getPassphrase = useCallback(() => {
-    return sessionStorage.getItem(storageKey);
-  }, [storageKey]);
-
-  const setPassphrase = useCallback((passphrase: string) => {
-    sessionStorage.setItem(storageKey, passphrase);
-  }, [storageKey]);
-
-  const clearPassphrase = useCallback(() => {
-    sessionStorage.removeItem(storageKey);
-  }, [storageKey]);
-
-  const requirePassphrase = useCallback(async (): Promise<string> => {
-    const stored = getPassphrase();
-    if (stored) return stored;
-    // Trigger modal/dialog for passphrase entry
-    // On success, store and return
-    throw new Error('Passphrase required');
-  }, [getPassphrase]);
-
-  return { getPassphrase, setPassphrase, clearPassphrase, requirePassphrase };
-}
+```
+Admin opens AdminControls
+  Admin toggles "Allow pods of 3" (optional)
+  Admin clicks "Generate Next Round"
+  Admin clicks timer duration (optional)
+    ↓
+AdminControls.handleGenerateRound()
+  reads: allowPodsOf3: boolean  ← [NEW state]
+  reads: activePlayers (from props)
+  reads: previousRounds (from useAllRoundsPods + useRounds)
+    ↓
+generatePods(activePlayers, previousRounds, { allowPodsOf3 })  ← [MODIFIED]
+  computePodSizes(n, allowPodsOf3)  ← [NEW]
+  buildOpponentHistory(previousRounds)  ← unchanged
+  buildByeCounts(previousRounds, playerIds)  ← unchanged
+  multi-start greedy assignment  ← [IMPROVED]
+  shuffleArray seats per pod  ← unchanged
+  → PodAssignment[] (pods may have 3 players when toggle is on)
+    ↓
+useGenerateRound.mutate({ passphrase, podAssignments })  ← UNCHANGED
+  supabase.rpc('generate_round', { p_pod_assignments: JSONB })  ← UNCHANGED
+    ↓
+generate_round() RPC — iterates JSONB, writes rows  ← UNCHANGED
+    ↓
+queryClient.invalidateQueries(['rounds', 'currentRound', 'pods', 'allRoundsPods', 'timer'])
+    ↓
+Supabase Realtime → all clients refetch
+    ↓
+RoundDisplay → PodCard[] renders with 3 or 4 players
 ```
 
-## Anti-Patterns to Avoid
+### Toggle State Flow
 
-### Anti-Pattern 1: Merging Realtime Deltas into Local State
-**What:** Listening to postgres_changes and directly updating a React state array (e.g., splicing a new player into a players list, removing a deleted one).
-**Why bad:** Creates inconsistency. You miss events during reconnection. INSERT gives you the new row but your local list may be stale. DELETE events with RLS enabled only give primary keys, not full records. You end up writing a mini database reconciliation engine in React.
-**Instead:** Let React Query own all data state. Realtime events trigger `queryClient.invalidateQueries()` which refetches the full, consistent dataset from Supabase.
+The `allowPodsOf3` toggle lives entirely in `AdminControls` component state. It does NOT need to:
+- Persist to the database (it is a per-round input, not a stored record)
+- Propagate to any other component
+- Affect display of historical rounds
 
-### Anti-Pattern 2: Client-Side Timer Synchronization via WebSocket Messages
-**What:** Broadcasting a "tick" or "remaining seconds" value from admin client to all other clients via Supabase Broadcast.
-**Why bad:** Network latency creates visible drift between clients. If the admin's browser tabs out, requestAnimationFrame pauses and ticks stop. Every client shows a different time.
-**Instead:** Store the timer's reference state (started_at, duration) in the database. Each client independently calculates remaining time from these values. All clients converge on the same value because they use the same formula against the same stored data.
+After round generation, the toggle may reset to `false` or stay sticky — either UX is acceptable. Sticky is simpler (no explicit reset needed).
 
-### Anti-Pattern 3: Storing Passphrase in Plain Text
-**What:** Storing the admin passphrase as-is in the events table.
-**Why bad:** Anyone with database access (or a SQL injection vector) gets all passphrases. Even though this is a casual app, it sets a bad pattern.
-**Instead:** Use pgcrypto's `crypt()` and `gen_salt('bf')` to store a bcrypt hash. The RPC function compares using `crypt(input, stored_hash) = stored_hash`.
+---
 
-### Anti-Pattern 4: One Global Realtime Channel for All Events
-**What:** Subscribing to all changes on the players/rounds/pods tables without filtering by event_id.
-**Why bad:** Every client receives changes for every event. With multiple concurrent events, this wastes bandwidth and triggers unnecessary React Query invalidations.
-**Instead:** Use per-event channels with `filter: event_id=eq.${eventId}` on every postgres_changes subscription.
+## File-Level Change Map
 
-### Anti-Pattern 5: Using Zustand or Redux for Server State
-**What:** Creating a Zustand/Redux store to hold players, rounds, pods, and syncing it manually with Supabase.
-**Why bad:** Duplicates what React Query does better. You end up maintaining cache invalidation, loading states, error states, and stale-while-revalidate logic by hand.
-**Instead:** React Query for server state. Only use React state (useState/useContext) for purely client-side concerns: modal open/close, passphrase input, UI preferences.
-
-## Component Architecture (Mobile-First)
-
-### Route Structure
 ```
-/                       -> LandingPage (create event, join by code)
-/event/:eventId         -> EventView (main player view)
-/event/:eventId/admin   -> EventView with admin controls visible
-```
+src/lib/pod-algorithm.ts
+  ├── ADD: GeneratePodsOptions interface
+  ├── ADD: computePodSizes() helper
+  ├── ADD: scoreAssignment() helper
+  ├── EXTRACT: inner greedy body to runGreedy()
+  ├── MODIFY: generatePods() — accept options, use computePodSizes, multi-start loop
+  └── VERIFY: shuffleArray([1,2,3,4]) for seats (already correct)
 
-Note: The admin route is not a separate page -- it is the same EventView with admin controls conditionally rendered based on validated passphrase in sessionStorage. The `/admin` suffix is optional and simply triggers the passphrase prompt on load.
+src/lib/pod-algorithm.test.ts
+  ├── ADD: tests for computePodSizes() with allowPodsOf3=true (all n=4–20)
+  ├── ADD: tests for generatePods with { allowPodsOf3: true }
+  └── KEEP: all existing tests unchanged (no breaking changes to public interface)
 
-### Component Hierarchy
-```
-App
-  LandingPage
-    CreateEventForm
-    JoinEventForm
-  EventView
-    EventInfoBar (name, QR, share link, player count, round #)
-      QRCodeExpander
-      ShareLinkCopier
-    TimerDisplay (countdown, color-coded urgency)
-    AdminControls (if passphrase validated)
-      GenerateRoundButton
-      TimerControls (start, pause, resume, +5min, cancel)
-      EndEventButton
-    PassphraseModal (shown on demand)
-    CurrentRound
-      PodCard[] (pod assignment with seat numbers)
-        PlayerSeat (name + seat number, highlighted if "you")
-      ByePod (players sitting out)
-    PreviousRounds (collapsible, most recent first)
-      RoundSection[]
-        PodCard[]
-    PlayerList
-      ActivePlayers[]
-      DroppedPlayers (collapsible)
-    PlayerActions
-      SelfDropButton
-    AdminPlayerActions (if admin)
-      RemovePlayerButton
-      ReactivatePlayerButton
+src/lib/pod-algorithm.integration.test.ts
+  ├── ADD: multi-round scenarios with allowPodsOf3=true
+  ├── UPDATE: opponent avoidance thresholds (tighten after empirical verification)
+  └── KEEP: all existing tests unchanged
+
+src/components/AdminControls.tsx
+  ├── ADD: const [allowPodsOf3, setAllowPodsOf3] = useState(false)
+  ├── ADD: toggle button with data-testid="pods-of-3-toggle"
+  └── MODIFY: generatePods() call to pass { allowPodsOf3 }
+
+src/components/AdminControls.test.tsx
+  ├── ADD: toggle renders when isAdmin=true
+  ├── ADD: toggle changes state on click
+  ├── ADD: generatePods called with options when toggle is on
+  └── KEEP: all existing tests unchanged
+
+src/components/PodCard.tsx
+  └── VERIFY ONLY — add unit test for 3-player pod; likely no source change needed
+      getOrdinal(1/2/3) already has explicit cases
+      sort by seatNumber works for any count
 ```
 
-### Component Sizing and Layout Notes
-- **PodCard**: The most important UI element. Must be readable at arm's length on a phone. Large player names, clear seat numbers (1st-4th), high-contrast dark theme.
-- **TimerDisplay**: Sticky at top of viewport. Large digits (mm:ss). Color transitions: white (normal) -> yellow (10 min) -> red (5 min) -> flashing red (0:00).
-- **AdminControls**: Collapsed behind a toggle or at bottom of screen. Not the primary view.
-- **PlayerList**: Secondary info. Below pods. Active players shown by default, dropped players in collapsible section.
-
-## Database Schema Design
-
-```sql
--- Core tables with RLS
-CREATE TABLE events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  passphrase_hash TEXT NOT NULL,  -- bcrypt via pgcrypto
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'ended')),
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE players (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_id UUID REFERENCES events(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'dropped')),
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(event_id, name)  -- duplicate name prevention
-);
-
-CREATE TABLE rounds (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_id UUID REFERENCES events(id) ON DELETE CASCADE,
-  round_number INTEGER NOT NULL,
-  timer_duration_seconds INTEGER,       -- null = no timer
-  timer_started_at TIMESTAMPTZ,         -- null = not started or paused
-  timer_paused_remaining INTEGER,       -- null = running or no timer
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(event_id, round_number)
-);
-
-CREATE TABLE pods (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  round_id UUID REFERENCES rounds(id) ON DELETE CASCADE,
-  pod_number INTEGER NOT NULL,
-  is_bye BOOLEAN DEFAULT false
-);
-
-CREATE TABLE pod_players (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  pod_id UUID REFERENCES pods(id) ON DELETE CASCADE,
-  player_id UUID REFERENCES players(id) ON DELETE CASCADE,
-  seat_number INTEGER  -- null for bye pod
-);
-```
-
-### RLS Policies
-
-```sql
--- Events: anyone can read non-sensitive columns, nobody can direct-write
-ALTER TABLE events ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Public read events" ON events
-  FOR SELECT USING (true);
--- Note: passphrase_hash excluded via column-level security or view
-
--- Players: anyone can read, insert (join), and update own status (drop)
-ALTER TABLE players ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Public read players" ON players
-  FOR SELECT USING (true);
-
-CREATE POLICY "Public insert players" ON players
-  FOR INSERT WITH CHECK (status = 'active');
-
--- Self-drop: players can update their own status to 'dropped'
--- Implementation: use RPC function with player_id parameter
-
--- Rounds, Pods, Pod_Players: public read, admin-only write via RPC
-ALTER TABLE rounds ENABLE ROW LEVEL SECURITY;
-ALTER TABLE pods ENABLE ROW LEVEL SECURITY;
-ALTER TABLE pod_players ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Public read rounds" ON rounds FOR SELECT USING (true);
-CREATE POLICY "Public read pods" ON pods FOR SELECT USING (true);
-CREATE POLICY "Public read pod_players" ON pod_players FOR SELECT USING (true);
-
--- All writes go through SECURITY DEFINER RPC functions that validate passphrase
-```
-
-### Column-Level Security for Passphrase Hash
-
-```sql
--- Option 1: Use a view that excludes passphrase_hash
-CREATE VIEW public_events AS
-  SELECT id, name, status, created_at FROM events;
-
--- Option 2: Revoke column access from anon role
-REVOKE SELECT (passphrase_hash) ON events FROM anon;
-```
+---
 
 ## Suggested Build Order
 
-The build order follows data dependency chains. Each layer depends on the one before it.
+The order follows data dependency direction (pure core first, UI last) and ensures each step is independently testable.
 
-### Layer 1: Foundation (must be first)
-1. **Supabase project setup** - database, tables, RLS policies, RPC functions
-2. **Vite + React + Tailwind project scaffold** - routing, Supabase client, React Query provider
-3. **Event creation** - CreateEventForm -> calls RPC to insert event with hashed passphrase
+### Step 1: Pods-of-3 algorithm (pure function, no dependencies)
 
-**Rationale:** Everything depends on the database schema and the client infrastructure. Event creation is the entry point for all other features.
+**Files:** `src/lib/pod-algorithm.ts`, `src/lib/pod-algorithm.test.ts`, `src/lib/pod-algorithm.integration.test.ts`
 
-### Layer 2: Core Player Flow (depends on Layer 1)
-4. **Player join** - JoinEventForm or direct link -> inserts player row
-5. **Player list** - useEventPlayers hook, PlayerList component
-6. **Realtime subscription** - useEventChannel hook, query invalidation on player changes
-7. **Self-drop** - player status update
+- Add `GeneratePodsOptions` interface
+- Implement `computePodSizes(n, allowPodsOf3)` with the k-finding loop
+- Handle n=5 special case (fall through to bye, emit warning)
+- Add seat assignment for pods of 3 (`shuffleArray([1, 2, 3])`)
+- Unit test every n=4–20 with both `allowPodsOf3: true` and `false`
+- Integration test: generate 5 rounds with pods-of-3 enabled, assert no byes for qualifying n
+- Run Stryker — maintain >= 80% mutation score
 
-**Rationale:** Player management is the foundation for pod generation. Realtime subscriptions should be wired up early so all subsequent features get live updates automatically.
+**Why first:** Pure function with zero React/Supabase deps. Fastest feedback loop. Bugs here are isolated from UI.
 
-### Layer 3: Pod Generation (depends on Layer 2)
-8. **Pod algorithm** - pure TypeScript function, extensively unit-tested
-9. **Admin passphrase flow** - PassphraseModal, useAdminAuth, RPC validation
-10. **Generate round** - admin action -> pod algorithm -> write to DB -> realtime updates all clients
-11. **PodCard UI** - display pods, seats, bye assignments
+### Step 2: Multi-start greedy opponent avoidance (pure function, no dependencies)
 
-**Rationale:** The pod algorithm is the core differentiating logic. It should be a pure function with comprehensive unit tests before being wired into the admin flow. The passphrase system gates all admin actions and must work before any admin features ship.
+**Files:** `src/lib/pod-algorithm.ts`, `src/lib/pod-algorithm.test.ts`, `src/lib/pod-algorithm.integration.test.ts`
 
-### Layer 4: Timer (depends on Layer 3)
-12. **Timer state in rounds table** - started_at, duration, paused_remaining
-13. **Timer display** - useTimer hook, TimerDisplay component with color transitions
-14. **Timer controls** - admin start, pause, resume, +5min, cancel
-15. **Browser notifications** - Notification API permission flow, fire at timer=0
+- Extract greedy body to `runGreedy()`
+- Add `scoreAssignment()` helper
+- Wrap `generatePods()` core in multi-start loop (5 iterations)
+- Empirically measure improvement: run integration tests, check actual `maxPairCount` values
+- Update integration test thresholds to reflect improved quality
+- Run Stryker — verify `scoreAssignment` has killed mutants
 
-**Rationale:** Timer is a core feature but depends on rounds existing. Browser notification permission should be requested early (on first event view load) but notification firing depends on the timer being functional.
+**Why second:** Independent of pods-of-3. Keeping it as a separate step makes each Stryker run faster and more focused.
 
-### Layer 5: Polish and Edge Cases (depends on Layers 1-4)
-16. **Event info bar** - QR code, share link, player count, round number
-17. **Previous rounds** - collapsible history
-18. **Admin player management** - remove player, reactivate dropped player
-19. **End event** - read-only state
-20. **Mid-event join** - player joining with empty history
+### Step 3: Seat randomization audit (verify existing behavior)
 
-### Layer 6: Testing and Deployment
-21. **Unit tests** - pod algorithm (critical), timer calculation, passphrase hashing
-22. **Integration tests** - full flows (create event -> join -> generate round -> see pods)
-23. **Deployment setup** - Vercel config, Supabase migration scripts, environment variables
+**Files:** `src/lib/pod-algorithm.integration.test.ts`
 
-## Scalability Considerations
+- Add a statistical test: 20 players, 20 rounds, collect seat assignments per player
+- Assert each player gets each seat number roughly uniformly (not exact — statistical)
+- If the test reveals a bug, fix it in `pod-algorithm.ts`; otherwise document "verified working"
+- No UI changes expected from this step
 
-| Concern | 1 Event / 8 Players (Target) | 10 Events / 100 Players | 100 Events / 1000 Players |
-|---------|------|------|------|
-| Realtime connections | Trivial (8 WebSockets) | Fine (100 connections, well within free tier) | Needs Supabase Pro; consider connection pooling |
-| postgres_changes load | Negligible | Fine -- per-event filters limit broadcasts | May need Broadcast pattern instead of postgres_changes for high-change tables |
-| Timer precision | Perfect -- 8 clients calculating locally | Fine | Fine -- timer is pure client-side math |
-| Pod algorithm | Instant for 8 players | <100ms for 20 players per event | N/A -- events are independent |
-| Database size | Tiny | Small | Needs event cleanup/archival strategy |
+**Why third:** This is verification, not implementation. It either confirms no bug (fast) or reveals one (then fix it before wiring UI).
 
-For this project's target scale (8-16 players, a few concurrent events), every architectural choice is well within comfortable limits. The postgres_changes + React Query invalidation pattern handles this scale trivially.
+### Step 4: Admin UI toggle (depends on Step 1)
+
+**Files:** `src/components/AdminControls.tsx`, `src/components/AdminControls.test.tsx`
+
+- Add `allowPodsOf3` state and toggle button
+- Use same visual pattern as timer duration buttons (toggle-style, `data-testid="pods-of-3-toggle"`)
+- Pass `{ allowPodsOf3 }` to `generatePods()`
+- Show warning in the toggle if n=5 (the one case where toggle doesn't help) — optional UX detail
+- Unit test: toggle renders, state changes, `generatePods` receives correct options
+
+**Why fourth:** UI depends on Step 1 algorithm being correct. The component test mocks `generatePods` so algorithm bugs don't surface here.
+
+### Step 5: PodCard verification (depends on Step 4)
+
+**Files:** `src/components/PodCard.tsx`, `src/components/PodCard.test.tsx`
+
+- Add a unit test for a 3-player pod (3 players, seats 1/2/3)
+- Confirm `getOrdinal` renders "1st", "2nd", "3rd" correctly
+- Confirm sort works correctly
+- If any display bug is found, fix it here; otherwise no source changes needed
+
+**Why fifth:** Only verifiable after the full data flow is wired in Step 4.
+
+### Step 6: E2E tests (depends on Steps 4–5)
+
+**Files:** `cypress/e2e/`
+
+- E2E: generate a round with pods-of-3 toggle ON for a 9-player or 13-player event
+- Assert a 3-player pod card is visible
+- Assert seat labels "1st", "2nd", "3rd" appear in the pod
+- E2E: toggle OFF reverts to standard behavior (bye pod visible)
+- Update visual regression baselines if pod card layout changes
+
+**Why last:** E2E tests are the slowest layer and depend on all prior steps. They validate user-visible behavior, not algorithm correctness.
+
+---
+
+## Anti-Patterns
+
+### Anti-Pattern 1: Adding allowPodsOf3 to the Database
+
+**What people do:** Add an `allow_pods_of_3` column to `rounds` or create a per-round config table.
+
+**Why it's wrong:** The toggle is an algorithm input, not a persistent record. Historical pods already carry their size in `pod_players` count — no stored flag is needed to display them. Adding a column means a new migration, RPC parameter change, and type update.
+
+**Do this instead:** Keep `allowPodsOf3` as `useState` in `AdminControls`. It resets on page refresh, which is correct UX (admin decides per round, not per event).
+
+### Anti-Pattern 2: Changing the useGenerateRound Hook or RPC Interface
+
+**What people do:** Add `allowPodsOf3` as a parameter to `useGenerateRound` or to the `generate_round` RPC call.
+
+**Why it's wrong:** The RPC receives already-computed pod assignments (`p_pod_assignments: JSONB`). It doesn't need to know how they were generated — it just writes them. The algorithm runs entirely client-side.
+
+**Do this instead:** Keep `allowPodsOf3` inside `generatePods()`. Only the output (`PodAssignment[]`) crosses the boundary to the hook.
+
+### Anti-Pattern 3: Hardcoding Pod Size of 4 in New Tests
+
+**What people do:** Write new integration tests that assert `pod.players.length === 4` everywhere.
+
+**Why it's wrong:** This will fail for pods-of-3 scenarios. The existing test pattern already uses `expectedByes = playerCount % 4` — new tests must handle variable sizes.
+
+**Do this instead:** For `allowPodsOf3=true` tests, compute the expected pod sizes using `computePodSizes(n, true)` and assert against those values.
+
+### Anti-Pattern 4: Using Math.random() Inside Sort for Shuffling
+
+**What people do:** `players.sort(() => Math.random() - 0.5)` to shuffle.
+
+**Why it's wrong:** Already documented in `pod-algorithm.ts` with a comment. Using random inside a sort comparator violates transitivity and produces biased orderings. The codebase already uses Fisher-Yates correctly via `shuffleArray()`.
+
+**Do this instead:** Always use `shuffleArray()` for any randomization in the algorithm. Do not introduce new sort-with-random calls.
+
+### Anti-Pattern 5: Making Seat Randomization "More Random" by Re-Shuffling
+
+**What people do:** Add additional `shuffleArray()` calls across the pipeline, thinking more shuffles = more randomness.
+
+**Why it's wrong:** The existing single `shuffleArray([1, 2, 3, 4])` per pod is already a perfect uniform random permutation. Adding more calls doesn't improve randomness and can introduce bugs if the wrong array is shuffled.
+
+**Do this instead:** Trust the existing `shuffleArray()` call. If the seat randomization test (Step 3) reveals a bug, fix the specific call site — don't add more shuffles.
+
+---
+
+## Integration Points
+
+### Internal Boundaries
+
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| `AdminControls` → `pod-algorithm.ts` | Direct import, function call | Add `options` as third param; all call sites in `handleGenerateRound` only |
+| `pod-algorithm.ts` → `useGenerateRound` | `PodAssignment[]` (unchanged shape) | Pods of 3: `is_bye: false`, 3 players, seats 1–3 — no interface change |
+| `useGenerateRound` → Supabase RPC | JSONB payload | RPC iterates `jsonb_array_elements` — already handles any pod size |
+| `RoundDisplay` → `PodCard` | `players[]`, `podNumber`, `isBye` props | No prop changes; `PodCard` works for any player count |
+| `AdminControls.test.tsx` → component | React Testing Library | Mock `generatePods` at module level; assert it's called with `{ allowPodsOf3: true }` |
+
+### External Boundaries
+
+All external boundaries (Supabase, Realtime, PostgREST) remain unchanged.
+
+---
 
 ## Sources
 
-- [Supabase Realtime Overview](https://supabase.com/docs/guides/realtime) - Official docs, three subscription types (HIGH confidence)
-- [Supabase Postgres Changes](https://supabase.com/docs/guides/realtime/postgres-changes) - Filter syntax, RLS interaction, performance notes (HIGH confidence)
-- [Supabase Broadcast](https://supabase.com/docs/guides/realtime/broadcast) - When to use over postgres_changes (HIGH confidence)
-- [Supabase Realtime Concepts](https://supabase.com/docs/guides/realtime/concepts) - Channels, topics, connection pools (HIGH confidence)
-- [Supabase Securing API](https://supabase.com/docs/guides/api/securing-your-api) - check_request function, anon key, RLS without auth (HIGH confidence)
-- [Supabase Anonymous Sign-Ins](https://supabase.com/docs/guides/auth/auth-anonymous) - Confirmed NOT needed for this use case (HIGH confidence)
-- [Supabase RPC Docs](https://supabase.com/docs/reference/javascript/rpc) - Function call syntax (HIGH confidence)
-- [Supabase Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security) - Policy patterns (HIGH confidence)
-- [Timer Modelling for Browsers](https://boopathi.blog/modelling-timers-for-the-browser) - Target datetime pattern, NTP sync (MEDIUM confidence)
-- [Syncing Countdown Timers Across Clients](https://medium.com/@flowersayo/syncing-countdown-timers-across-multiple-clients-a-subtle-but-critical-challenge-384ba5fbef9a) - Diff-based polling approach (MEDIUM confidence)
-- [TanStack Query + Supabase Pattern](https://makerkit.dev/blog/saas/supabase-react-query) - Invalidation-based integration (MEDIUM confidence)
-- [React Architecture 2025](https://launchdarkly.com/docs/blog/react-architecture-2025) - Component organization patterns (MEDIUM confidence)
-- [React Folder Structure 2025](https://www.robinwieruch.de/react-folder-structure/) - Project organization (MEDIUM confidence)
-- [Supabase RLS Complete Guide 2026](https://designrevision.com/blog/supabase-row-level-security) - Modern RLS patterns (MEDIUM confidence)
-- [Building Scalable Real-Time Systems with Supabase](https://medium.com/@ansh91627/building-scalable-real-time-systems-a-deep-dive-into-supabase-realtime-architecture-and-eccb01852f2b) - Optimistic UI, architecture decisions (LOW confidence, single source)
+- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/src/lib/pod-algorithm.ts`
+- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/src/components/AdminControls.tsx`
+- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/src/components/PodCard.tsx`
+- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/src/hooks/useGenerateRound.ts`
+- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/supabase/migrations/00002_rounds_pods_admin.sql`
+- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/src/lib/pod-algorithm.integration.test.ts`
+- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/src/types/database.ts`
+- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/.planning/PROJECT.md`
+
+---
+*Architecture research for: Commander Pod Pairer v4.0 — Pod Algorithm Improvements*
+*Researched: 2026-03-02*

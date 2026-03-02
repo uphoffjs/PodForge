@@ -1,57 +1,46 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.0
-milestone_name: Event Polish & CI/CD
-status: complete
-last_updated: "2026-03-01T18:20:47.000Z"
+milestone: v4.0
+milestone_name: Pod Algorithm Improvements
+status: unknown
+last_updated: "2026-03-02T18:46:48.356Z"
 progress:
   total_phases: 2
   completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 5
+  completed_plans: 5
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-27)
+See: .planning/PROJECT.md (updated 2026-03-02)
 
-**Core value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone — who they're playing with, what seat they're in, and how much time they have.
-**Current focus:** Planning next milestone
+**Core value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone -- who they're playing with, what seat they're in, and how much time they have.
+**Current focus:** Phase 7 - Pods-of-3 Support
 
 ## Current Position
 
-Phase: All phases complete
-Plan: —
-Status: Milestone v3.0 shipped
-Last activity: 2026-03-02 - Completed quick task 5: Investigate 5 survived fault injection faults
+Phase: 7 of 7 (Pods-of-3 Support) -- COMPLETE
+Plan: 3 of 3 in current phase -- ALL COMPLETE
+Status: v4.0 milestone complete -- all phases and plans executed
+Last activity: 2026-03-02 -- Completed 07-03 (E2E Tests + Stryker Mutation Validation)
 
-Progress: Phase 04 ██████████ 100% (3/3 plans)
-Progress: Phase 05 ██████████ 100% (3/3 plans)
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
-**v3.0 Velocity:**
+**v3.0 Velocity (reference):**
 - Total plans completed: 6
-- Timeline: 3 days (2026-02-25 → 2026-02-27)
+- Timeline: 3 days (2026-02-25 to 2026-02-27)
 
-**Phase 4:**
-- 04-01: 3min, 2 tasks, 4 files
-- 04-02: 2min, 2 tasks, 2 files
-- 04-03: 5min, 2 tasks, 8 files
+**v4.0:**
 
-**Phase 5:**
-- 05-01: 7min, 2 tasks, 8 files
-- 05-02: 1min, 1 task, 2 files
-- 05-03: 3min, 2 tasks, 15 files
-
-**Quick Tasks:**
-- quick-1: Update favicon to match app theme
-- quick-2: Get code coverage to 100%
-- quick-3: Address technical debt
-- quick-4: Set up Cypress Cloud with parallel CI runners
-- quick-5: Investigate 5 survived fault injection faults (9min, 2 tasks, 14 files)
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| 6 | 2/2 | 32min | 16min |
+| 7 | 3/3 | 19min | 6min |
 
 ## Accumulated Context
 
@@ -59,11 +48,23 @@ Progress: Phase 05 ██████████ 100% (3/3 plans)
 
 See: .planning/PROJECT.md Key Decisions table (comprehensive list)
 
-### Roadmap Evolution
-
-- v1.0: Phase 1.1 inserted (Cypress E2E), Phases 1.2-1.4 inserted (gap closures)
-- v2.0: Phase 2.1 inserted (E2E tests for Phase 2)
-- v3.0: Phase 5 added (Bulletproof CI/CD Pipeline)
+Recent decisions affecting current work:
+- [v4.0 Roadmap]: 2 phases -- opponent diversity + seat verification first (pure algorithm), then pods-of-3 (algorithm + UI + E2E)
+- [v4.0 Roadmap]: Test requirements distributed across phases (not a separate test phase)
+- [v4.0 Roadmap]: Feature branch `feature/v4.0-pod-improvements` -- create before starting Phase 6
+- [06-01]: NUM_STARTS=20 (not 5) required for consistent maxPairCount<=2 with 8 players / 4 rounds
+- [06-01]: Mixed start strategies (half greedy + half random chunk) needed to escape greedy local minima
+- [06-01]: Swap pass applied per-candidate for better global optimization
+- [06-02]: Chi-squared aggregate test as primary seat uniformity assertion
+- [06-02]: SEAT-02 not needed -- Fisher-Yates empirically uniform
+- [06-02]: 20 surviving Stryker mutants are all equivalent (no behavioral impact)
+- [07-01]: computePodSizes uses remainder-formula partitioning (not lookup table) -- scales to any player count
+- [07-01]: n=5 only unsolvable case with allowPodsOf3=true; greedyAssign now accepts podSizes:number[]
+- [07-01]: allowPodsOf3 defaults to false for full backward compatibility
+- [07-02]: Checkbox placed between timer picker and generate button, following existing conditional UI pattern
+- [07-02]: PodCard already handles variable player counts dynamically -- verification tests confirm 3-player rendering
+- [07-03]: Warning toast assertion uses 'exist' not 'be.visible' due to Sonner toast stacking
+- [07-03]: 23 surviving Stryker mutants are all equivalent (89.45% mutation score)
 
 ### Pending Todos
 
@@ -71,7 +72,7 @@ None.
 
 ### Blockers/Concerns
 
-None — all milestones complete.
+None -- all v4.0 milestone work complete.
 
 ### Quick Tasks Completed
 
@@ -86,6 +87,5 @@ None — all milestones complete.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed quick-5 (fault injection investigation)
-Resume file: none
-Next action: None -- all tasks complete
+Stopped at: Completed 07-03-PLAN.md (E2E Tests + Stryker Mutation Validation). v4.0 milestone complete.
+Resume file: None

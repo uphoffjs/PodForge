@@ -732,4 +732,118 @@ describe('AdminControls', () => {
 
     expect(screen.getByTestId('end-event-btn')).toHaveTextContent('Ending...')
   })
+
+  // --- Allow pods of 3 checkbox ---
+
+  it('renders pods-of-3 checkbox when event is not ended', () => {
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    expect(screen.getByTestId('pods-of-3-checkbox')).toBeInTheDocument()
+  })
+
+  it('hides pods-of-3 checkbox when event is ended', () => {
+    render(
+      <AdminControls {...defaultProps} isEventEnded={true} />,
+      { wrapper: createWrapper() }
+    )
+
+    expect(screen.queryByTestId('pods-of-3-checkbox')).not.toBeInTheDocument()
+  })
+
+  it('clicking pods-of-3 checkbox toggles its checked state', async () => {
+    const user = userEvent.setup()
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    const checkbox = screen.getByTestId('pods-of-3-checkbox') as HTMLInputElement
+    expect(checkbox.checked).toBe(false)
+
+    await user.click(checkbox)
+    expect(checkbox.checked).toBe(true)
+
+    await user.click(checkbox)
+    expect(checkbox.checked).toBe(false)
+  })
+
+  it('passes allowPodsOf3=true to generatePods when checkbox is checked', async () => {
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('pods-of-3-checkbox'))
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(mockGeneratePods).toHaveBeenCalledTimes(1)
+    const [, , allowPodsOf3] = mockGeneratePods.mock.calls[0]
+    expect(allowPodsOf3).toBe(true)
+  })
+
+  it('passes allowPodsOf3=false to generatePods when checkbox is unchecked', async () => {
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(mockGeneratePods).toHaveBeenCalledTimes(1)
+    const [, , allowPodsOf3] = mockGeneratePods.mock.calls[0]
+    expect(allowPodsOf3).toBe(false)
+  })
+
+  it('resets pods-of-3 checkbox to unchecked after successful generation', async () => {
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
+    mockMutate.mockImplementation(
+      (_params: unknown, options: { onSuccess?: () => void }) => {
+        options.onSuccess?.()
+      }
+    )
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    // Check the checkbox
+    const checkbox = screen.getByTestId('pods-of-3-checkbox') as HTMLInputElement
+    await user.click(checkbox)
+    expect(checkbox.checked).toBe(true)
+
+    // Generate round
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    // Checkbox should be reset to unchecked
+    expect(checkbox.checked).toBe(false)
+  })
+
+  it('error handling still works with pods-of-3 checkbox enabled', async () => {
+    const { toast } = await import('sonner')
+    const user = userEvent.setup()
+    mockGeneratePods.mockImplementation(() => {
+      throw new Error('Not enough players for pods of 3')
+    })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('pods-of-3-checkbox'))
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(toast.error).toHaveBeenCalledWith('Not enough players for pods of 3')
+    expect(mockMutate).not.toHaveBeenCalled()
+  })
+
+  it('algorithm warnings display via toast.warning with pods-of-3 enabled', async () => {
+    const { toast } = await import('sonner')
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({
+      assignments: [],
+      warnings: ['5 players: 1 pod of 4 + 1 bye (no valid 3-player split)'],
+    })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('pods-of-3-checkbox'))
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(toast.warning).toHaveBeenCalledWith('5 players: 1 pod of 4 + 1 bye (no valid 3-player split)')
+  })
 })

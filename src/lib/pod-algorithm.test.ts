@@ -3,6 +3,12 @@ import {
   generatePods,
   buildOpponentHistory,
   buildByeCounts,
+  getOpponentScore,
+  podPenalty,
+  totalPenalty,
+  greedyAssign,
+  swapPass,
+  computePodSizes,
   type PlayerInfo,
   type RoundHistory,
 } from './pod-algorithm'
@@ -925,6 +931,335 @@ describe('pod-algorithm', () => {
     })
   })
 
+  describe('getOpponentScore (quadratic penalty)', () => {
+    it('returns 0 when candidate has no history', () => {
+      const history = new Map<string, Map<string, number>>()
+      expect(getOpponentScore('a', ['b', 'c'], history)).toBe(0)
+    })
+
+    it('returns 0 when candidate has 0 encounters with pod members', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['d', 1]]))
+      expect(getOpponentScore('a', ['b', 'c'], history)).toBe(0)
+    })
+
+    it('returns 1 for 1 encounter (1^2 = 1)', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 1]]))
+      expect(getOpponentScore('a', ['b'], history)).toBe(1)
+    })
+
+    it('returns 4 for 2 encounters (2^2 = 4)', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 2]]))
+      expect(getOpponentScore('a', ['b'], history)).toBe(4)
+    })
+
+    it('returns 9 for 3 encounters (3^2 = 9)', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 3]]))
+      expect(getOpponentScore('a', ['b'], history)).toBe(9)
+    })
+
+    it('sums quadratic penalties across multiple pod members', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 2], ['c', 1]]))
+      // 2^2 + 1^2 = 4 + 1 = 5
+      expect(getOpponentScore('a', ['b', 'c'], history)).toBe(5)
+    })
+  })
+
+  describe('podPenalty', () => {
+    it('returns 0 for a pod with no history', () => {
+      const history = new Map<string, Map<string, number>>()
+      expect(podPenalty(['a', 'b', 'c', 'd'], history)).toBe(0)
+    })
+
+    it('computes sum of encounters^2 for all C(n,2) pairs', () => {
+      // Pod: [a, b, c, d]. a-b met 2 times, a-c met 1 time. All others 0.
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 2], ['c', 1]]))
+      history.set('b', new Map([['a', 2]]))
+      history.set('c', new Map([['a', 1]]))
+      // Pairs: a-b=2^2=4, a-c=1^2=1, a-d=0, b-c=0, b-d=0, c-d=0 => total=5
+      expect(podPenalty(['a', 'b', 'c', 'd'], history)).toBe(5)
+    })
+
+    it('computes exactly C(n,2) pairs, no extra from loop boundary mutation', () => {
+      // If i <= pod.length or j <= pod.length (boundary mutation), it would try to
+      // access pod[4] which is undefined, and history.get(undefined) returns undefined,
+      // so encounters would be 0 and penalty unchanged. BUT it would also create an
+      // extra iteration with undefined index. We detect this by checking the exact value.
+      // All 4 players have met each other exactly once: C(4,2)=6 pairs, each 1^2=1. Total=6.
+      const history = new Map<string, Map<string, number>>()
+      for (const x of ['a', 'b', 'c', 'd']) {
+        history.set(x, new Map())
+        for (const y of ['a', 'b', 'c', 'd']) {
+          if (x !== y) history.get(x)!.set(y, 1)
+        }
+      }
+      expect(podPenalty(['a', 'b', 'c', 'd'], history)).toBe(6)
+    })
+
+    it('handles 2-player pod correctly (only 1 pair)', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 3]]))
+      history.set('b', new Map([['a', 3]]))
+      // Only 1 pair: a-b=3^2=9
+      expect(podPenalty(['a', 'b'], history)).toBe(9)
+    })
+
+    it('handles 1-player pod correctly (0 pairs)', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 3]]))
+      // 0 pairs
+      expect(podPenalty(['a'], history)).toBe(0)
+    })
+  })
+
+  describe('totalPenalty', () => {
+    it('sums podPenalty across all pods', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 1]]))
+      history.set('b', new Map([['a', 1]]))
+      history.set('c', new Map([['d', 2]]))
+      history.set('d', new Map([['c', 2]]))
+      // Pod1: [a, b] => a-b=1^2=1. Pod2: [c, d] => c-d=2^2=4. Total=5
+      expect(totalPenalty([['a', 'b'], ['c', 'd']], history)).toBe(5)
+    })
+
+    it('returns 0 when no history exists', () => {
+      const history = new Map<string, Map<string, number>>()
+      expect(totalPenalty([['a', 'b', 'c', 'd'], ['e', 'f', 'g', 'h']], history)).toBe(0)
+    })
+  })
+
+  describe('greedyAssign', () => {
+    it('produces valid pod assignments with correct sizes', () => {
+      const pool = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+      const history = new Map<string, Map<string, number>>()
+      const pods = greedyAssign(pool, [4, 4], history)
+
+      expect(pods).toHaveLength(2)
+      expect(pods[0]).toHaveLength(4)
+      expect(pods[1]).toHaveLength(4)
+
+      // All players accounted for
+      const allPlayers = pods.flat().sort()
+      expect(allPlayers).toEqual(pool.slice().sort())
+    })
+
+    it('places low-overlap candidates into pods', () => {
+      // a-b met 3 times, a-c met 0 times. With pool [a, b, c, d, e, f, g, h]
+      // The greedy should prefer c over b when filling a's pod.
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 3]]))
+      history.set('b', new Map([['a', 3]]))
+
+      // Run multiple times due to random first pick
+      let separatedCount = 0
+      for (let i = 0; i < 20; i++) {
+        const pool = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+        const pods = greedyAssign(pool, [4, 4], history)
+        const aPod = pods.find(p => p.includes('a'))!
+        if (!aPod.includes('b')) separatedCount++
+      }
+      // Greedy should separate them most of the time
+      expect(separatedCount).toBeGreaterThan(10)
+    })
+
+    it('selects the minimum-score candidate, not just any candidate (kills score < bestScore -> true)', () => {
+      // Setup: pool order is [a, b, c, d, e, f, g, h] where a is picked first for pod 1.
+      // b has met a 5 times, c has met a 0 times. The greedy MUST pick c over b for a's pod.
+      // If mutation changes `score < bestScore` to `if (true)`, every candidate replaces the
+      // previous best, and the last candidate in the remaining list gets picked regardless.
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 5]]))
+      history.set('b', new Map([['a', 5]]))
+
+      // Use fixed pool order: a first, then b (high overlap), then c-h (zero overlap)
+      const pool = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+      const pods = greedyAssign(pool, [4, 4], history)
+
+      // Pod 0 starts with 'a'. Greedy must NOT pick 'b' (score=25) over c/d/e/f/g/h (score=0).
+      const aPod = pods[0]
+      expect(aPod[0]).toBe('a') // a is first player placed
+      expect(aPod).not.toContain('b') // b should be rejected due to high overlap
+    })
+
+    it('produces variable pod sizes with mix of 3s and 4s', () => {
+      const pool = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
+      const history = new Map<string, Map<string, number>>()
+      const pods = greedyAssign(pool, [4, 3], history)
+
+      expect(pods).toHaveLength(2)
+      expect(pods[0]).toHaveLength(4)
+      expect(pods[1]).toHaveLength(3)
+
+      // All players accounted for
+      const allPlayers = pods.flat().sort()
+      expect(allPlayers).toEqual(pool.slice().sort())
+    })
+
+    it('produces two pods of 3 when given [3, 3]', () => {
+      const pool = ['a', 'b', 'c', 'd', 'e', 'f']
+      const history = new Map<string, Map<string, number>>()
+      const pods = greedyAssign(pool, [3, 3], history)
+
+      expect(pods).toHaveLength(2)
+      expect(pods[0]).toHaveLength(3)
+      expect(pods[1]).toHaveLength(3)
+
+      const allPlayers = pods.flat().sort()
+      expect(allPlayers).toEqual(pool.slice().sort())
+    })
+  })
+
+  describe('swapPass', () => {
+    it('returns pods unchanged when no improving swap exists', () => {
+      const history = new Map<string, Map<string, number>>()
+      const pods = [['a', 'b', 'c', 'd'], ['e', 'f', 'g', 'h']]
+      const result = swapPass(pods, history)
+
+      // With no history, all scores are 0, so no swaps improve
+      expect(result.map(p => p.sort())).toEqual(pods.map(p => p.sort()))
+    })
+
+    it('reduces total penalty when an improving swap exists', () => {
+      // a-b met 3 times, c-d met 3 times. Pods: [a,b,e,f], [c,d,g,h]
+      // Swap a<->c gives [c,b,e,f], [a,d,g,h] which reduces penalty
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 3]]))
+      history.set('b', new Map([['a', 3]]))
+      history.set('c', new Map([['d', 3]]))
+      history.set('d', new Map([['c', 3]]))
+
+      const pods = [['a', 'b', 'e', 'f'], ['c', 'd', 'g', 'h']]
+      const before = totalPenalty(pods, history)
+      const result = swapPass(pods, history)
+      const after = totalPenalty(result, history)
+
+      expect(after).toBeLessThan(before)
+    })
+
+    it('terminates (does not infinite loop)', () => {
+      // Verified by the test completing within the timeout
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 2], ['c', 1]]))
+      history.set('b', new Map([['a', 2]]))
+      history.set('c', new Map([['a', 1]]))
+
+      const pods = [['a', 'b', 'e', 'f'], ['c', 'd', 'g', 'h']]
+      const result = swapPass(pods, history)
+      expect(result).toBeDefined()
+      expect(result).toHaveLength(2)
+    })
+
+    it('preserves pod sizes (no players lost or duplicated)', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 3]]))
+      history.set('b', new Map([['a', 3]]))
+
+      const pods = [['a', 'b', 'c', 'd'], ['e', 'f', 'g', 'h']]
+      const result = swapPass(pods, history)
+
+      expect(result[0]).toHaveLength(4)
+      expect(result[1]).toHaveLength(4)
+
+      const allPlayers = result.flat().sort()
+      expect(allPlayers).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'])
+    })
+
+    it('actually performs the swap (improved flag is set and break exits correctly)', () => {
+      // Setup: a-b met 5 times. Pods: [a,b,c,d], [e,f,g,h]
+      // swapPass should swap a or b with someone from the other pod.
+      // If the improved=true / break block is removed (BlockStatement mutation),
+      // the swap still happens but is immediately undone in the else branch.
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 5]]))
+      history.set('b', new Map([['a', 5]]))
+
+      const pods = [['a', 'b', 'c', 'd'], ['e', 'f', 'g', 'h']]
+      const result = swapPass(pods, history)
+      const after = totalPenalty(result, history)
+
+      // Before: a-b penalty = 5^2 = 25. After swap: should be 0 (a and b separated).
+      expect(after).toBe(0)
+
+      // Verify a and b are in DIFFERENT pods
+      const aInPod0 = result[0].includes('a')
+      const bInPod0 = result[0].includes('b')
+      expect(aInPod0).not.toBe(bInPod0) // a and b must be in different pods
+    })
+
+    it('does not swap when swapped score equals current score (strict less-than)', () => {
+      // Setup where a swap produces equal score, not better.
+      // Pod1: [a,b,c,d], Pod2: [e,f,g,h]
+      // a-b=1, e-f=1. Swapping a<->e gives a-f=0+e-b=0 in each pod but
+      // we need both pods to have the same penalty before and after.
+      // Actually: both pods have penalty 1 (a-b and e-f). Total=2.
+      // Swapping a<->e: Pod1=[e,b,c,d] penalty=0, Pod2=[a,f,g,h] penalty=0. Total=0.
+      // That's an improvement, so it would swap. Need equal case instead.
+
+      // Better: all pairs have equal history. No swap can improve.
+      const history = new Map<string, Map<string, number>>()
+      // Every pair in pod1 has encounter=1, every pair in pod2 has encounter=1
+      for (const x of ['a', 'b', 'c', 'd']) {
+        history.set(x, new Map())
+        for (const y of ['a', 'b', 'c', 'd']) {
+          if (x !== y) history.get(x)!.set(y, 1)
+        }
+      }
+      for (const x of ['e', 'f', 'g', 'h']) {
+        history.set(x, new Map())
+        for (const y of ['e', 'f', 'g', 'h']) {
+          if (x !== y) history.get(x)!.set(y, 1)
+        }
+      }
+      // Cross-pod: also 1 encounter each
+      for (const x of ['a', 'b', 'c', 'd']) {
+        for (const y of ['e', 'f', 'g', 'h']) {
+          history.get(x)!.set(y, 1)
+          history.get(y)!.set(x, 1)
+        }
+      }
+
+      const pods = [['a', 'b', 'c', 'd'], ['e', 'f', 'g', 'h']]
+      const before = totalPenalty(pods, history)
+      const result = swapPass(pods, history)
+      const after = totalPenalty(result, history)
+
+      // Swapping any pair produces equal penalty (all encounter=1), so no swap should occur
+      expect(after).toBe(before)
+    })
+
+    it('performs cascading swaps when first swap enables second improvement', () => {
+      // Setup: a-b=3, c-d=3, e-f=3 across 3 pods
+      // Swap pass should fix all three in one pass (multiple iterations)
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 3]]))
+      history.set('b', new Map([['a', 3]]))
+      history.set('c', new Map([['d', 3]]))
+      history.set('d', new Map([['c', 3]]))
+      history.set('e', new Map([['f', 3]]))
+      history.set('f', new Map([['e', 3]]))
+
+      const pods = [
+        ['a', 'b', 'g', 'h'],
+        ['c', 'd', 'i', 'j'],
+        ['e', 'f', 'k', 'l'],
+      ]
+      const before = totalPenalty(pods, history) // 9 + 9 + 9 = 27
+      expect(before).toBe(27)
+
+      const result = swapPass(pods, history)
+      const after = totalPenalty(result, history)
+
+      // Should reduce to 0 by separating all high-penalty pairs
+      expect(after).toBe(0)
+    })
+  })
+
   describe('buildOpponentHistory', () => {
     it('returns empty map for no rounds', () => {
       const history = buildOpponentHistory([])
@@ -1153,6 +1488,265 @@ describe('pod-algorithm', () => {
       expect(counts.get('b')).toBe(0)
       // The dropped player gets a count entry via the ?? 0 fallback on line 99
       expect(counts.get('dropped-player')).toBe(1)
+    })
+  })
+
+  describe('computePodSizes', () => {
+    describe('allowPodsOf3=false (legacy behavior)', () => {
+      it('computePodSizes(8, false) -> { podSizes: [4, 4], byeCount: 0 }', () => {
+        expect(computePodSizes(8, false)).toEqual({ podSizes: [4, 4], byeCount: 0 })
+      })
+
+      it('computePodSizes(9, false) -> { podSizes: [4, 4], byeCount: 1 }', () => {
+        expect(computePodSizes(9, false)).toEqual({ podSizes: [4, 4], byeCount: 1 })
+      })
+
+      it('computePodSizes(10, false) -> { podSizes: [4, 4], byeCount: 2 }', () => {
+        expect(computePodSizes(10, false)).toEqual({ podSizes: [4, 4], byeCount: 2 })
+      })
+
+      it('computePodSizes(4, false) -> { podSizes: [4], byeCount: 0 }', () => {
+        expect(computePodSizes(4, false)).toEqual({ podSizes: [4], byeCount: 0 })
+      })
+
+      it('computePodSizes(5, false) -> { podSizes: [4], byeCount: 1 }', () => {
+        expect(computePodSizes(5, false)).toEqual({ podSizes: [4], byeCount: 1 })
+      })
+
+      it('computePodSizes(20, false) -> { podSizes: [4,4,4,4,4], byeCount: 0 }', () => {
+        expect(computePodSizes(20, false)).toEqual({ podSizes: [4, 4, 4, 4, 4], byeCount: 0 })
+      })
+
+      it.each(Array.from({ length: 17 }, (_, i) => i + 4))(
+        'allowPodsOf3=false with %i players: all podSizes are 4, byeCount == n %% 4',
+        (n) => {
+          const result = computePodSizes(n, false)
+          expect(result.podSizes.every(s => s === 4)).toBe(true)
+          expect(result.byeCount).toBe(n % 4)
+          expect(result.podSizes.reduce((a, b) => a + b, 0) + result.byeCount).toBe(n)
+        }
+      )
+    })
+
+    describe('allowPodsOf3=true', () => {
+      it('computePodSizes(3, true) -> { podSizes: [3], byeCount: 0 }', () => {
+        expect(computePodSizes(3, true)).toEqual({ podSizes: [3], byeCount: 0 })
+      })
+
+      it('computePodSizes(4, true) -> { podSizes: [4], byeCount: 0 }', () => {
+        expect(computePodSizes(4, true)).toEqual({ podSizes: [4], byeCount: 0 })
+      })
+
+      it('computePodSizes(5, true) -> { podSizes: [4], byeCount: 1 } (special case)', () => {
+        expect(computePodSizes(5, true)).toEqual({ podSizes: [4], byeCount: 1 })
+      })
+
+      it('computePodSizes(6, true) -> { podSizes: [3, 3], byeCount: 0 }', () => {
+        expect(computePodSizes(6, true)).toEqual({ podSizes: [3, 3], byeCount: 0 })
+      })
+
+      it('computePodSizes(7, true) -> { podSizes: [4, 3], byeCount: 0 }', () => {
+        expect(computePodSizes(7, true)).toEqual({ podSizes: [4, 3], byeCount: 0 })
+      })
+
+      it('computePodSizes(9, true) -> { podSizes: [3, 3, 3], byeCount: 0 }', () => {
+        expect(computePodSizes(9, true)).toEqual({ podSizes: [3, 3, 3], byeCount: 0 })
+      })
+
+      it('computePodSizes(10, true) -> { podSizes: [4, 3, 3], byeCount: 0 }', () => {
+        expect(computePodSizes(10, true)).toEqual({ podSizes: [4, 3, 3], byeCount: 0 })
+      })
+
+      it('computePodSizes(13, true) -> { podSizes: [4, 3, 3, 3], byeCount: 0 }', () => {
+        expect(computePodSizes(13, true)).toEqual({ podSizes: [4, 3, 3, 3], byeCount: 0 })
+      })
+
+      it('computePodSizes(12, true) -> { podSizes: [4, 4, 4], byeCount: 0 }', () => {
+        expect(computePodSizes(12, true)).toEqual({ podSizes: [4, 4, 4], byeCount: 0 })
+      })
+
+      it('computePodSizes(16, true) -> { podSizes: [4, 4, 4, 4], byeCount: 0 }', () => {
+        expect(computePodSizes(16, true)).toEqual({ podSizes: [4, 4, 4, 4], byeCount: 0 })
+      })
+
+      it('computePodSizes(17, true) -> { podSizes: [4, 4, 3, 3, 3], byeCount: 0 }', () => {
+        expect(computePodSizes(17, true)).toEqual({ podSizes: [4, 4, 3, 3, 3], byeCount: 0 })
+      })
+
+      it('computePodSizes(20, true) -> { podSizes: [4, 4, 4, 4, 4], byeCount: 0 }', () => {
+        expect(computePodSizes(20, true)).toEqual({ podSizes: [4, 4, 4, 4, 4], byeCount: 0 })
+      })
+
+      it.each(Array.from({ length: 18 }, (_, i) => i + 3))(
+        'allowPodsOf3=true with %i players: sum of podSizes + byeCount == playerCount',
+        (n) => {
+          const result = computePodSizes(n, true)
+          expect(result.podSizes.reduce((a, b) => a + b, 0) + result.byeCount).toBe(n)
+          // All pod sizes are 3 or 4
+          expect(result.podSizes.every(s => s === 3 || s === 4)).toBe(true)
+          // Only n=5 has byes
+          if (n !== 5) {
+            expect(result.byeCount).toBe(0)
+          }
+        }
+      )
+    })
+  })
+
+  describe('generatePods with allowPodsOf3', () => {
+    it('generatePods(7_players, [], true) -> 2 pods (one of 4, one of 3), 0 byes', () => {
+      const players = makePlayers(7)
+      const result = generatePods(players, [], true)
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      const byePods = result.assignments.filter(a => a.is_bye)
+
+      expect(activePods).toHaveLength(2)
+      expect(byePods).toHaveLength(0)
+
+      const podSizes = activePods.map(p => p.players.length).sort((a, b) => b - a)
+      expect(podSizes).toEqual([4, 3])
+
+      // All 7 players accounted for
+      const allIds = result.assignments.flatMap(a => a.players.map(p => p.player_id))
+      expect(new Set(allIds).size).toBe(7)
+    })
+
+    it('generatePods(7_players, [], false) -> 1 pod of 4, 3 byes (existing behavior)', () => {
+      const players = makePlayers(7)
+      const result = generatePods(players, [], false)
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      const byePods = result.assignments.filter(a => a.is_bye)
+
+      expect(activePods).toHaveLength(1)
+      expect(activePods[0].players).toHaveLength(4)
+      expect(byePods).toHaveLength(1)
+      expect(byePods[0].players).toHaveLength(3)
+    })
+
+    it('generatePods(5_players, [], true) -> 1 pod of 4, 1 bye, warning message', () => {
+      const players = makePlayers(5)
+      const result = generatePods(players, [], true)
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      const byePods = result.assignments.filter(a => a.is_bye)
+
+      expect(activePods).toHaveLength(1)
+      expect(activePods[0].players).toHaveLength(4)
+      expect(byePods).toHaveLength(1)
+      expect(byePods[0].players).toHaveLength(1)
+      expect(result.warnings).toContainEqual(
+        expect.stringContaining('5 players cannot be split into pods of 3 and 4')
+      )
+    })
+
+    it('generatePods(3_players, [], true) -> 1 pod of 3, 0 byes (lowered threshold)', () => {
+      const players = makePlayers(3)
+      const result = generatePods(players, [], true)
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      const byePods = result.assignments.filter(a => a.is_bye)
+
+      expect(activePods).toHaveLength(1)
+      expect(activePods[0].players).toHaveLength(3)
+      expect(byePods).toHaveLength(0)
+    })
+
+    it('generatePods(3_players, [], false) -> throws "Fewer than 4 active players"', () => {
+      const players = makePlayers(3)
+      expect(() => generatePods(players, [], false)).toThrow('Fewer than 4 active players')
+    })
+
+    it('generatePods(8_players, [], false) -> identical to current behavior (backward compatible)', () => {
+      const players = makePlayers(8)
+      const result = generatePods(players, [], false)
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      const byePods = result.assignments.filter(a => a.is_bye)
+
+      expect(activePods).toHaveLength(2)
+      activePods.forEach(pod => expect(pod.players).toHaveLength(4))
+      expect(byePods).toHaveLength(0)
+    })
+
+    it('3-player pods have seat numbers [1, 2, 3] (not [1, 2, 3, 4])', () => {
+      const players = makePlayers(7)
+      const result = generatePods(players, [], true)
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      for (const pod of activePods) {
+        const seats = pod.players.map(p => p.seat_number).sort((a, b) => a! - b!)
+        if (pod.players.length === 3) {
+          expect(seats).toEqual([1, 2, 3])
+        } else {
+          expect(seats).toEqual([1, 2, 3, 4])
+        }
+      }
+    })
+
+    it('4-player pods have seat numbers [1, 2, 3, 4]', () => {
+      const players = makePlayers(8)
+      const result = generatePods(players, [], true)
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      for (const pod of activePods) {
+        const seats = pod.players.map(p => p.seat_number).sort((a, b) => a! - b!)
+        expect(seats).toEqual([1, 2, 3, 4])
+      }
+    })
+
+    it('default (no third param) behaves like allowPodsOf3=false', () => {
+      const players = makePlayers(7)
+      const result = generatePods(players, [])
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      const byePods = result.assignments.filter(a => a.is_bye)
+
+      // Without allowPodsOf3, 7 players => 1 pod of 4 + 3 byes
+      expect(activePods).toHaveLength(1)
+      expect(activePods[0].players).toHaveLength(4)
+      expect(byePods).toHaveLength(1)
+      expect(byePods[0].players).toHaveLength(3)
+    })
+
+    it('bye pod_number is correct with variable pod sizes', () => {
+      const players = makePlayers(5)
+      const result = generatePods(players, [], true)
+
+      // 1 active pod + 1 bye
+      const byePod = result.assignments.find(a => a.is_bye)
+      expect(byePod).toBeDefined()
+      expect(byePod!.pod_number).toBe(2) // 1 active pod + 1 = 2
+    })
+
+    it.each([
+      [6, [3, 3]],
+      [9, [3, 3, 3]],
+      [10, [4, 3, 3]],
+      [11, [4, 4, 3]],
+      [13, [4, 3, 3, 3]],
+      [14, [4, 4, 3, 3]],
+      [15, [4, 4, 4, 3]],
+      [17, [4, 4, 3, 3, 3]],
+      [18, [4, 4, 4, 3, 3]],
+      [19, [4, 4, 4, 4, 3]],
+    ])('allowPodsOf3=true with %i players: correct pod sizes %j, 0 byes', (count, expectedSizes) => {
+      const players = makePlayers(count)
+      const result = generatePods(players, [], true)
+
+      const activePods = result.assignments.filter(a => !a.is_bye)
+      const byePods = result.assignments.filter(a => a.is_bye)
+
+      expect(byePods).toHaveLength(0)
+
+      const actualSizes = activePods.map(p => p.players.length).sort((a, b) => b - a)
+      const sortedExpected = [...expectedSizes].sort((a, b) => b - a)
+      expect(actualSizes).toEqual(sortedExpected)
+
+      // All players accounted for
+      const allIds = result.assignments.flatMap(a => a.players.map(p => p.player_id))
+      expect(new Set(allIds).size).toBe(count)
     })
   })
 })

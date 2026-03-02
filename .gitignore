@@ -26,8 +26,7 @@ dist-ssr
 *.sw?
 
 # Cypress
-cypress/snapshots/actual/
-cypress/snapshots/diff/
+cypress/screenshots/
 cypress/videos/
 
 # Test coverage
