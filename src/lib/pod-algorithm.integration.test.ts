@@ -501,17 +501,18 @@ describe('Pod Algorithm Integration — Multi-Round Fairness', () => {
   // SEAT-02 NOT NEEDED: No bias detected. Seat history tracking not implemented.
   //
   // The tests below empirically verify that generatePods assigns seats uniformly
-  // via Fisher-Yates shuffle. We use a chi-squared goodness-of-fit test per player
-  // to detect systematic bias while avoiding false positives from natural variance.
-  // With 200 rounds and a chi-squared critical value of 11.34 (df=3, alpha=0.01),
-  // the probability of a false positive per player is ~1%, and with 8-12 players
-  // the overall false-positive rate stays well below 10%.
+  // via Fisher-Yates shuffle. We use two complementary approaches:
+  //   1. Aggregate chi-squared test: pool all players' seat counts together for a
+  //      high-power, low-false-positive check of overall uniformity.
+  //   2. Per-player chi-squared test at alpha=0.001 (critical=16.266, df=3):
+  //      with ~0.1% false positive per player and up to 12 players, the overall
+  //      false-positive rate stays under ~1.2%.
   describe('seat randomization fairness', () => {
     /**
      * Chi-squared statistic for seat distribution uniformity.
      * Under the null hypothesis of uniform distribution, each seat should
-     * be assigned expected = rounds/4 times. Returns the chi-squared statistic.
-     * For df=3 (4 categories - 1), critical value at alpha=0.01 is 11.345.
+     * be assigned expected times. Returns the chi-squared statistic.
+     * Critical values for df=3: alpha=0.01 -> 11.345, alpha=0.001 -> 16.266.
      */
     function chiSquared(observed: number[], expected: number): number {
       let stat = 0
@@ -521,10 +522,17 @@ describe('Pod Algorithm Integration — Multi-Round Fairness', () => {
       return stat
     }
 
-    it('seat frequencies are uniform across 200 rounds with 8 players', () => {
-      const players = makePlayers(8) // 2 pods of 4
-      const rounds = 200
-      // Map<playerId, [seat1Count, seat2Count, seat3Count, seat4Count]>
+    /**
+     * Simulate rounds and collect per-player and aggregate seat counts.
+     */
+    function collectSeatStats(
+      playerCount: number,
+      rounds: number
+    ): {
+      perPlayer: Map<string, number[]>
+      aggregate: number[]
+    } {
+      const players = makePlayers(playerCount)
       const seatCounts = new Map<string, number[]>()
       for (const p of players) {
         seatCounts.set(p.id, [0, 0, 0, 0])
@@ -548,90 +556,69 @@ describe('Pod Algorithm Integration — Multi-Round Fairness', () => {
         })
       }
 
-      // Each player played 200 rounds, expected 50 times per seat
+      const aggregate = [0, 0, 0, 0]
+      for (const counts of seatCounts.values()) {
+        for (let i = 0; i < 4; i++) {
+          aggregate[i] += counts[i]
+        }
+      }
+
+      return { perPlayer: seatCounts, aggregate }
+    }
+
+    it('seat frequencies are uniform across 200 rounds with 8 players', () => {
+      const playerCount = 8
+      const rounds = 200
+      const { perPlayer, aggregate } = collectSeatStats(playerCount, rounds)
+
+      // 1. Aggregate test: pool all seat counts across all players.
+      // Total seat assignments = rounds * playerCount = 1600, expected per seat = 400.
+      const totalExpected = (rounds * playerCount) / 4
+      const aggregateChi2 = chiSquared(aggregate, totalExpected)
+      // df=3, alpha=0.01, critical=11.345
+      expect(
+        aggregateChi2,
+        `Aggregate seat distribution [${aggregate}] failed chi-squared (stat=${aggregateChi2.toFixed(2)})`
+      ).toBeLessThan(11.345)
+
+      // 2. Per-player test: each player should have roughly uniform seats.
+      // Using alpha=0.001 (critical=16.266) to minimize false positives across 8 players.
       const expectedPerSeat = rounds / 4
-      // Chi-squared critical value for df=3 at alpha=0.01 is 11.345
-      const chiCritical = 11.345
-      for (const [playerId, counts] of seatCounts) {
+      const chiCritical = 16.266
+      for (const [playerId, counts] of perPlayer) {
         const chi2 = chiSquared(counts, expectedPerSeat)
         expect(
           chi2,
           `Player ${playerId} seat distribution [${counts}] failed chi-squared test (stat=${chi2.toFixed(2)}, critical=${chiCritical})`
         ).toBeLessThan(chiCritical)
-      }
-
-      // Also verify each seat frequency is within 15% of expected across all players combined
-      const aggregateSeatCounts = [0, 0, 0, 0]
-      for (const counts of seatCounts.values()) {
-        for (let i = 0; i < 4; i++) {
-          aggregateSeatCounts[i] += counts[i]
-        }
-      }
-      const totalExpected = (rounds * 8) / 4 // 8 players, each assigned to one seat per round
-      for (let seatIdx = 0; seatIdx < 4; seatIdx++) {
-        const deviation =
-          Math.abs(aggregateSeatCounts[seatIdx] - totalExpected) / totalExpected
-        expect(
-          deviation,
-          `Aggregate seat ${seatIdx + 1}: got ${aggregateSeatCounts[seatIdx]}, expected ~${totalExpected}`
-        ).toBeLessThan(0.05)
       }
     })
 
     it('seat frequencies are uniform across 200 rounds with 12 players', () => {
-      const players = makePlayers(12) // 3 pods of 4
+      const playerCount = 12
       const rounds = 200
-      // Map<playerId, [seat1Count, seat2Count, seat3Count, seat4Count]>
-      const seatCounts = new Map<string, number[]>()
-      for (const p of players) {
-        seatCounts.set(p.id, [0, 0, 0, 0])
-      }
+      const { perPlayer, aggregate } = collectSeatStats(playerCount, rounds)
 
-      const previousRounds: RoundHistory[] = []
-      for (let r = 0; r < rounds; r++) {
-        const result = generatePods(players, previousRounds)
-        for (const pod of result.assignments) {
-          if (pod.is_bye) continue
-          for (const player of pod.players) {
-            const counts = seatCounts.get(player.player_id)!
-            counts[player.seat_number! - 1]++
-          }
-        }
-        previousRounds.push({
-          pods: result.assignments.map((a) => ({
-            playerIds: a.players.map((p) => p.player_id),
-            isBye: a.is_bye,
-          })),
-        })
-      }
+      // 1. Aggregate test: pool all seat counts across all players.
+      // Total seat assignments = rounds * playerCount = 2400, expected per seat = 600.
+      const totalExpected = (rounds * playerCount) / 4
+      const aggregateChi2 = chiSquared(aggregate, totalExpected)
+      // df=3, alpha=0.01, critical=11.345
+      expect(
+        aggregateChi2,
+        `Aggregate seat distribution [${aggregate}] failed chi-squared (stat=${aggregateChi2.toFixed(2)})`
+      ).toBeLessThan(11.345)
 
-      // Each player played 200 rounds, expected 50 times per seat
+      // 2. Per-player test: each player should have roughly uniform seats.
+      // Using alpha=0.001 (critical=16.266) to minimize false positives across 12 players.
       const expectedPerSeat = rounds / 4
-      // Chi-squared critical value for df=3 at alpha=0.01 is 11.345
-      const chiCritical = 11.345
-      for (const [playerId, counts] of seatCounts) {
+      const chiCritical = 16.266
+      for (const [playerId, counts] of perPlayer) {
         const chi2 = chiSquared(counts, expectedPerSeat)
         expect(
           chi2,
           `Player ${playerId} seat distribution [${counts}] failed chi-squared test (stat=${chi2.toFixed(2)}, critical=${chiCritical})`
         ).toBeLessThan(chiCritical)
-      }
-
-      // Also verify each seat frequency is within 15% of expected across all players combined
-      const aggregateSeatCounts = [0, 0, 0, 0]
-      for (const counts of seatCounts.values()) {
-        for (let i = 0; i < 4; i++) {
-          aggregateSeatCounts[i] += counts[i]
-        }
-      }
-      const totalExpected = (rounds * 12) / 4 // 12 players, each assigned to one seat per round
-      for (let seatIdx = 0; seatIdx < 4; seatIdx++) {
-        const deviation =
-          Math.abs(aggregateSeatCounts[seatIdx] - totalExpected) / totalExpected
-        expect(
-          deviation,
-          `Aggregate seat ${seatIdx + 1}: got ${aggregateSeatCounts[seatIdx]}, expected ~${totalExpected}`
-        ).toBeLessThan(0.05)
       }
     })
   })
