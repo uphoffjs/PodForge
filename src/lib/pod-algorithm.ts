@@ -1,10 +1,14 @@
 /**
  * Pod Generation Algorithm
  *
- * Pure function that divides active players into pods of 4,
+ * Pure function that divides active players into pods of 3 or 4,
  * minimizing repeat opponents using a multi-start greedy algorithm
  * with quadratic penalty scoring and post-greedy swap pass.
  * Handles bye rotation fairly and assigns random seat order.
+ *
+ * Supports variable pod sizes via allowPodsOf3 toggle:
+ * - false (default): all pods size 4, remainder become byes
+ * - true: mix of 3s and 4s to minimize byes (only n=5 unsolvable)
  */
 
 export interface PlayerInfo {
@@ -167,24 +171,24 @@ export function totalPenalty(
 
 /**
  * Single greedy assignment pass. Takes a pre-shuffled pool of player IDs
- * and assigns them to pods, greedily minimizing opponent overlap score.
- * Returns string[][] of pod assignments.
+ * and assigns them to pods of specified sizes, greedily minimizing
+ * opponent overlap score. Returns string[][] of pod assignments.
  */
 export function greedyAssign(
   pool: string[],
-  numPods: number,
+  podSizes: number[],
   history: Map<string, Map<string, number>>
 ): string[][] {
-  const pods: string[][] = Array.from({ length: numPods }, () => [])
+  const pods: string[][] = Array.from({ length: podSizes.length }, () => [])
   const remaining = [...pool]
 
-  for (let podIdx = 0; podIdx < numPods; podIdx++) {
+  for (let podIdx = 0; podIdx < podSizes.length; podIdx++) {
     // Pick first player from remaining (already shuffled)
     pods[podIdx].push(remaining[0])
     remaining.splice(0, 1)
 
-    // Fill positions 2-4 greedily
-    for (let slot = 1; slot < 4; slot++) {
+    // Fill remaining positions greedily (up to target pod size)
+    for (let slot = 1; slot < podSizes[podIdx]; slot++) {
       let bestIdx = 0
       let bestScore = getOpponentScore(
         remaining[0],
@@ -260,6 +264,73 @@ export function swapPass(
 }
 
 /**
+ * Compute optimal pod sizes for a given player count.
+ *
+ * When allowPodsOf3 is false (legacy): all pods are size 4, remainder become byes.
+ * When allowPodsOf3 is true: mix of 3s and 4s to minimize byes.
+ * Only n=5 with allowPodsOf3=true still requires 1 bye (unsolvable).
+ */
+export function computePodSizes(
+  playerCount: number,
+  allowPodsOf3: boolean
+): { podSizes: number[]; byeCount: number } {
+  if (!allowPodsOf3) {
+    const numPods = Math.floor(playerCount / 4)
+    return {
+      podSizes: Array(numPods).fill(4),
+      byeCount: playerCount % 4,
+    }
+  }
+
+  // Special cases for allowPodsOf3=true
+  if (playerCount === 3) {
+    return { podSizes: [3], byeCount: 0 }
+  }
+
+  if (playerCount === 5) {
+    // Only unsolvable case: 5 cannot be split into 3s and 4s
+    return { podSizes: [4], byeCount: 1 }
+  }
+
+  // General case for n >= 4, n != 5
+  const remainder = playerCount % 4
+  const numFours = Math.floor(playerCount / 4)
+
+  if (remainder === 0) {
+    // All 4s
+    return { podSizes: Array(numFours).fill(4), byeCount: 0 }
+  } else if (remainder === 1) {
+    // Replace 3 fours with 4 threes: (numFours - 3) fours + 3 threes (summing to -12 + 12 = net 0 for 3*4 removed, 4*3 added... wait)
+    // Actually: numFours*4 + 1 = playerCount. We need (numFours - k) fours + m threes = playerCount
+    // remainder=1: floor(n/4) fours leaves 1 extra. Convert 3 fours + 1 extra = 13 into 4 threes + 1 = 13? No.
+    // Let me reconsider from the plan: remainder=1: (floor(n/4) - 2) fours + 3 threes
+    // Check: (floor(n/4)-2)*4 + 3*3 = 4*floor(n/4) - 8 + 9 = 4*floor(n/4) + 1 = n. Correct!
+    const foursCount = numFours - 2
+    const threesCount = 3
+    return {
+      podSizes: [...Array(foursCount).fill(4), ...Array(threesCount).fill(3)],
+      byeCount: 0,
+    }
+  } else if (remainder === 2) {
+    // (floor(n/4) - 1) fours + 2 threes
+    // Check: (floor(n/4)-1)*4 + 2*3 = 4*floor(n/4) - 4 + 6 = 4*floor(n/4) + 2 = n. Correct!
+    const foursCount = numFours - 1
+    const threesCount = 2
+    return {
+      podSizes: [...Array(foursCount).fill(4), ...Array(threesCount).fill(3)],
+      byeCount: 0,
+    }
+  } else {
+    // remainder === 3: floor(n/4) fours + 1 three
+    // Check: floor(n/4)*4 + 3 = n. Correct!
+    return {
+      podSizes: [...Array(numFours).fill(4), 3],
+      byeCount: 0,
+    }
+  }
+}
+
+/**
  * Main pod generation function.
  *
  * Takes active players and their round history, produces pod
@@ -267,15 +338,20 @@ export function swapPass(
  * greedy with quadratic scoring and swap pass. Handles bye rotation
  * fairly, and assigns random seat order.
  *
- * @throws Error when fewer than 4 active players
+ * When allowPodsOf3 is true, pods can be size 3 or 4, reducing byes.
+ * When false (default), all pods are size 4 (legacy behavior).
+ *
+ * @throws Error when fewer than minPlayers active players (3 if allowPodsOf3, 4 otherwise)
  */
 export function generatePods(
   activePlayers: PlayerInfo[],
-  previousRounds: RoundHistory[]
+  previousRounds: RoundHistory[],
+  allowPodsOf3: boolean = false
 ): PodAssignmentResult {
   // 1. Validation
-  if (activePlayers.length < 4) {
-    throw new Error('Fewer than 4 active players')
+  const minPlayers = allowPodsOf3 ? 3 : 4
+  if (activePlayers.length < minPlayers) {
+    throw new Error(`Fewer than ${minPlayers} active players`)
   }
 
   const warnings: string[] = []
@@ -289,8 +365,19 @@ export function generatePods(
     activePlayers.map((p) => p.id)
   )
 
-  // 4. Select bye players (if needed)
-  const numByes = activePlayers.length % 4
+  // 4. Compute pod sizes and select bye players (if needed)
+  const { podSizes, byeCount: numByes } = computePodSizes(
+    activePlayers.length,
+    allowPodsOf3
+  )
+
+  // Add warning for 5 players with allowPodsOf3
+  if (allowPodsOf3 && activePlayers.length === 5) {
+    warnings.push(
+      '5 players cannot be split into pods of 3 and 4. Using 1 pod of 4 with 1 bye.'
+    )
+  }
+
   let byePlayers: PlayerInfo[] = []
   let podPlayers: PlayerInfo[]
 
@@ -321,7 +408,6 @@ export function generatePods(
   }
 
   // 5. Multi-start assignment with swap pass
-  const numPods = podPlayers.length / 4
   const podPlayerIds = podPlayers.map((p) => p.id)
 
   let bestPods: string[][] = []
@@ -333,13 +419,16 @@ export function generatePods(
 
     if (start < NUM_STARTS / 2) {
       // First half: greedy assignment (good local optimization)
-      pods = greedyAssign(pool, numPods, opponentHistory)
+      pods = greedyAssign(pool, podSizes, opponentHistory)
     } else {
       // Second half: random chunk assignment (diverse starting points)
-      // Split shuffled pool into consecutive chunks of 4
-      pods = Array.from({ length: numPods }, (_, i) =>
-        pool.slice(i * 4, (i + 1) * 4)
-      )
+      // Split shuffled pool into consecutive chunks using podSizes
+      let offset = 0
+      pods = podSizes.map((size) => {
+        const chunk = pool.slice(offset, offset + size)
+        offset += size
+        return chunk
+      })
     }
 
     // Apply swap pass to each candidate
@@ -356,9 +445,11 @@ export function generatePods(
   // 6. Build result
   const assignments: PodAssignment[] = []
 
-  // Add active pods
+  // Add active pods with dynamic seat numbers based on pod size
   for (let i = 0; i < finalPods.length; i++) {
-    const seatOrder = shuffleArray([1, 2, 3, 4])
+    const seatOrder = shuffleArray(
+      Array.from({ length: finalPods[i].length }, (_, j) => j + 1)
+    )
     assignments.push({
       pod_number: i + 1,
       is_bye: false,
@@ -372,7 +463,7 @@ export function generatePods(
   // Add bye pod (if any)
   if (byePlayers.length > 0) {
     assignments.push({
-      pod_number: numPods + 1,
+      pod_number: podSizes.length + 1,
       is_bye: true,
       players: byePlayers.map((p) => ({
         player_id: p.id,
