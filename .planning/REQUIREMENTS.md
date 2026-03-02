@@ -12,7 +12,7 @@ Requirements for Pod Algorithm Improvements milestone.
 - [x] **OPPO-01**: Pod algorithm uses quadratic penalty scoring (encounters^2) to more aggressively avoid repeat opponents
 - [x] **OPPO-02**: Pod algorithm uses multi-start greedy (run N random starting orders, pick best result) to escape local optima
 - [x] **OPPO-03**: Pod algorithm applies post-greedy swap pass to fix last-pod-gets-worst-pairings problem
-- [ ] **OPPO-04**: Unit tests validate improved opponent diversity with Stryker mutation score >=80%
+- [x] **OPPO-04**: Unit tests validate improved opponent diversity with Stryker mutation score >=80%
 
 ### Pods of 3
 
@@ -26,12 +26,12 @@ Requirements for Pod Algorithm Improvements milestone.
 
 ### Seat Randomization
 
-- [ ] **SEAT-01**: Empirical verification that current Fisher-Yates seat shuffle produces uniform distribution across rounds
-- [ ] **SEAT-02**: If bias detected, add seat history tracking to avoid same-seat-across-rounds (soft preference, not hard constraint)
+- [x] **SEAT-01**: Empirical verification that current Fisher-Yates seat shuffle produces uniform distribution across rounds
+- [x] **SEAT-02**: If bias detected, add seat history tracking to avoid same-seat-across-rounds (soft preference, not hard constraint)
 
 ### Test Coverage
 
-- [ ] **TEST-01**: All new algorithm code has unit tests with >=80% Stryker mutation score
+- [x] **TEST-01**: All new algorithm code has unit tests with >=80% Stryker mutation score
 - [ ] **TEST-02**: Cypress E2E tests cover pods-of-3 toggle, 3-player pod display, and opponent diversity scenarios
 - [ ] **TEST-03**: Integration tests validate pod generation with parameterized player counts (4-20) for both toggle states
 
@@ -58,7 +58,7 @@ Requirements for Pod Algorithm Improvements milestone.
 | OPPO-01 | Phase 6 | Complete |
 | OPPO-02 | Phase 6 | Complete |
 | OPPO-03 | Phase 6 | Complete |
-| OPPO-04 | Phase 6 | Pending |
+| OPPO-04 | Phase 6 | Complete |
 | POD3-01 | Phase 7 | Pending |
 | POD3-02 | Phase 7 | Pending |
 | POD3-03 | Phase 7 | Pending |
@@ -66,9 +66,9 @@ Requirements for Pod Algorithm Improvements milestone.
 | POD3-05 | Phase 7 | Pending |
 | POD3-06 | Phase 7 | Pending |
 | POD3-07 | Phase 7 | Pending |
-| SEAT-01 | Phase 6 | Pending |
-| SEAT-02 | Phase 6 | Pending |
-| TEST-01 | Phase 6 | Pending |
+| SEAT-01 | Phase 6 | Complete |
+| SEAT-02 | Phase 6 | Complete |
+| TEST-01 | Phase 6 | Complete |
 | TEST-02 | Phase 7 | Pending |
 | TEST-03 | Phase 7 | Pending |
 

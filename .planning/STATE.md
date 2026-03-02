@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone -- who they're playing with, what seat they're in, and how much time they have.
-**Current focus:** Phase 6 - Opponent Diversity and Seat Verification
+**Current focus:** Phase 7 - Pods-of-3 Support
 
 ## Current Position
 
-Phase: 6 of 7 (Opponent Diversity and Seat Verification)
-Plan: 1 of 2 in current phase (completed)
-Status: Executing Phase 6
-Last activity: 2026-03-02 -- Completed 06-01 (Opponent Diversity Algorithm)
+Phase: 7 of 7 (Pods-of-3 Support)
+Plan: 0 of ? in current phase
+Status: Phase 6 complete, ready for Phase 7
+Last activity: 2026-03-02 -- Completed 06-02 (Seat Verification and Mutation Testing)
 
-Progress: [██░░░░░░░░] 25%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -39,7 +39,7 @@ Progress: [██░░░░░░░░] 25%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 6 | 1/2 | 10min | 10min |
+| 6 | 2/2 | 32min | 16min |
 | 7 | 0/? | - | - |
 
 ## Accumulated Context
@@ -55,6 +55,9 @@ Recent decisions affecting current work:
 - [06-01]: NUM_STARTS=20 (not 5) required for consistent maxPairCount<=2 with 8 players / 4 rounds
 - [06-01]: Mixed start strategies (half greedy + half random chunk) needed to escape greedy local minima
 - [06-01]: Swap pass applied per-candidate for better global optimization
+- [06-02]: Chi-squared aggregate test as primary seat uniformity assertion
+- [06-02]: SEAT-02 not needed -- Fisher-Yates empirically uniform
+- [06-02]: 20 surviving Stryker mutants are all equivalent (no behavioral impact)
 
 ### Pending Todos
 
@@ -62,7 +65,7 @@ None.
 
 ### Blockers/Concerns
 
-- Seat randomization may already be correct (Fisher-Yates per pod). Phase 6 uses investigation-first approach.
+- Seat randomization confirmed correct (Fisher-Yates per pod, empirically verified in 06-02).
 - Stryker 80% CI gate: new `computePodSizes` branch logic in Phase 7 is high-mutant-density territory.
 - Hardcoded `4` literals in `pod-algorithm.ts` must be audited before Phase 7.
 
@@ -79,5 +82,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 06-01-PLAN.md (Opponent Diversity Algorithm). Ready for 06-02.
+Stopped at: Completed 06-02-PLAN.md (Seat Verification and Mutation Testing). Phase 6 complete. Ready for Phase 7.
 Resume file: None
