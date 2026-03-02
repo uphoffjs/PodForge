@@ -190,6 +190,9 @@ describe('Previous Rounds', () => {
     cy.getByTestId('previous-round-2').should('be.visible')
     cy.getByTestId('previous-round-1').should('be.visible')
 
+    // Current round (round 3) must NOT appear in previous rounds section
+    cy.getByTestId('previous-round-3').should('not.exist')
+
     // Verify DOM ordering: previous-round-2 should come before previous-round-1
     cy.get('[data-testid^="previous-round-"]').then(($sections) => {
       const testIds = [...$sections].map((el) => el.getAttribute('data-testid'))
