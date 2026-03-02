@@ -22,7 +22,7 @@ Requirements for Pod Algorithm Improvements milestone.
 - [x] **POD3-04**: For n=5 with toggle enabled, algorithm falls back to 1x4 + 1 bye with admin warning (no clean 3-player solution)
 - [x] **POD3-05**: Minimum player threshold relaxes from 4 to 3 when toggle is active
 - [x] **POD3-06**: PodCard component renders 3-player pods correctly (seats 1st-3rd)
-- [ ] **POD3-07**: E2E tests cover toggle interaction, round generation with pods of 3, and edge cases
+- [x] **POD3-07**: E2E tests cover toggle interaction, round generation with pods of 3, and edge cases
 
 ### Seat Randomization
 
@@ -32,7 +32,7 @@ Requirements for Pod Algorithm Improvements milestone.
 ### Test Coverage
 
 - [x] **TEST-01**: All new algorithm code has unit tests with >=80% Stryker mutation score
-- [ ] **TEST-02**: Cypress E2E tests cover pods-of-3 toggle, 3-player pod display, and opponent diversity scenarios
+- [x] **TEST-02**: Cypress E2E tests cover pods-of-3 toggle, 3-player pod display, and opponent diversity scenarios
 - [x] **TEST-03**: Integration tests validate pod generation with parameterized player counts (4-20) for both toggle states
 
 ## Future Requirements
@@ -65,11 +65,11 @@ Requirements for Pod Algorithm Improvements milestone.
 | POD3-04 | Phase 7 | Complete |
 | POD3-05 | Phase 7 | Complete |
 | POD3-06 | Phase 7 | Complete |
-| POD3-07 | Phase 7 | Pending |
+| POD3-07 | Phase 7 | Complete |
 | SEAT-01 | Phase 6 | Complete |
 | SEAT-02 | Phase 6 | Complete |
 | TEST-01 | Phase 6 | Complete |
-| TEST-02 | Phase 7 | Pending |
+| TEST-02 | Phase 7 | Complete |
 | TEST-03 | Phase 7 | Complete |
 
 **Coverage:**
