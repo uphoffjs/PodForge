@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 ## Current Position
 
 Phase: 6 of 7 (Opponent Diversity and Seat Verification)
-Plan: 0 of ? in current phase (not yet planned)
-Status: Ready to plan
-Last activity: 2026-03-02 -- Roadmap created for v4.0 Pod Algorithm Improvements
+Plan: 1 of 2 in current phase (completed)
+Status: Executing Phase 6
+Last activity: 2026-03-02 -- Completed 06-01 (Opponent Diversity Algorithm)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 25%
 
 ## Performance Metrics
 
@@ -39,7 +39,7 @@ Progress: [░░░░░░░░░░] 0%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 6 | 0/? | - | - |
+| 6 | 1/2 | 10min | 10min |
 | 7 | 0/? | - | - |
 
 ## Accumulated Context
@@ -52,6 +52,9 @@ Recent decisions affecting current work:
 - [v4.0 Roadmap]: 2 phases -- opponent diversity + seat verification first (pure algorithm), then pods-of-3 (algorithm + UI + E2E)
 - [v4.0 Roadmap]: Test requirements distributed across phases (not a separate test phase)
 - [v4.0 Roadmap]: Feature branch `feature/v4.0-pod-improvements` -- create before starting Phase 6
+- [06-01]: NUM_STARTS=20 (not 5) required for consistent maxPairCount<=2 with 8 players / 4 rounds
+- [06-01]: Mixed start strategies (half greedy + half random chunk) needed to escape greedy local minima
+- [06-01]: Swap pass applied per-candidate for better global optimization
 
 ### Pending Todos
 
@@ -76,5 +79,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Roadmap created for v4.0 milestone. Ready to plan Phase 6.
+Stopped at: Completed 06-01-PLAN.md (Opponent Diversity Algorithm). Ready for 06-02.
 Resume file: None

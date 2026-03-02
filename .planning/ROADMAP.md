@@ -65,7 +65,7 @@ Commander Pod Pairer is a web app for casual MTG Commander playgroups. Players j
 **Plans**: TBD
 
 Plans:
-- [ ] 06-01: TBD
+- [x] 06-01: Opponent Diversity Algorithm (quadratic scoring, multi-start greedy, swap pass)
 - [ ] 06-02: TBD
 
 ### Phase 7: Pods of 3
@@ -101,5 +101,5 @@ Phases execute in numeric order: 6 → 7
 | 3. Timer System | v2.0 | 3/3 | Complete | 2026-02-25 |
 | 4. Event Polish, Testing, and Deployment | v3.0 | 3/3 | Complete | 2026-02-25 |
 | 5. Bulletproof CI/CD Pipeline | v3.0 | 3/3 | Complete | 2026-02-27 |
-| 6. Opponent Diversity and Seat Verification | v4.0 | 0/? | Not started | - |
+| 6. Opponent Diversity and Seat Verification | v4.0 | 1/2 | In progress | - |
 | 7. Pods of 3 | v4.0 | 0/? | Not started | - |

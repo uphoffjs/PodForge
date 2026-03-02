@@ -9,9 +9,9 @@ Requirements for Pod Algorithm Improvements milestone.
 
 ### Opponent Diversity
 
-- [ ] **OPPO-01**: Pod algorithm uses quadratic penalty scoring (encounters^2) to more aggressively avoid repeat opponents
-- [ ] **OPPO-02**: Pod algorithm uses multi-start greedy (run N random starting orders, pick best result) to escape local optima
-- [ ] **OPPO-03**: Pod algorithm applies post-greedy swap pass to fix last-pod-gets-worst-pairings problem
+- [x] **OPPO-01**: Pod algorithm uses quadratic penalty scoring (encounters^2) to more aggressively avoid repeat opponents
+- [x] **OPPO-02**: Pod algorithm uses multi-start greedy (run N random starting orders, pick best result) to escape local optima
+- [x] **OPPO-03**: Pod algorithm applies post-greedy swap pass to fix last-pod-gets-worst-pairings problem
 - [ ] **OPPO-04**: Unit tests validate improved opponent diversity with Stryker mutation score >=80%
 
 ### Pods of 3
@@ -55,9 +55,9 @@ Requirements for Pod Algorithm Improvements milestone.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OPPO-01 | Phase 6 | Pending |
-| OPPO-02 | Phase 6 | Pending |
-| OPPO-03 | Phase 6 | Pending |
+| OPPO-01 | Phase 6 | Complete |
+| OPPO-02 | Phase 6 | Complete |
+| OPPO-03 | Phase 6 | Complete |
 | OPPO-04 | Phase 6 | Pending |
 | POD3-01 | Phase 7 | Pending |
 | POD3-02 | Phase 7 | Pending |
