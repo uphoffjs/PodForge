@@ -300,11 +300,7 @@ export function computePodSizes(
     // All 4s
     return { podSizes: Array(numFours).fill(4), byeCount: 0 }
   } else if (remainder === 1) {
-    // Replace 3 fours with 4 threes: (numFours - 3) fours + 3 threes (summing to -12 + 12 = net 0 for 3*4 removed, 4*3 added... wait)
-    // Actually: numFours*4 + 1 = playerCount. We need (numFours - k) fours + m threes = playerCount
-    // remainder=1: floor(n/4) fours leaves 1 extra. Convert 3 fours + 1 extra = 13 into 4 threes + 1 = 13? No.
-    // Let me reconsider from the plan: remainder=1: (floor(n/4) - 2) fours + 3 threes
-    // Check: (floor(n/4)-2)*4 + 3*3 = 4*floor(n/4) - 8 + 9 = 4*floor(n/4) + 1 = n. Correct!
+    // (floor(n/4) - 2) fours + 3 threes = 4*floor(n/4) - 8 + 9 = n
     const foursCount = numFours - 2
     const threesCount = 3
     return {
@@ -312,8 +308,7 @@ export function computePodSizes(
       byeCount: 0,
     }
   } else if (remainder === 2) {
-    // (floor(n/4) - 1) fours + 2 threes
-    // Check: (floor(n/4)-1)*4 + 2*3 = 4*floor(n/4) - 4 + 6 = 4*floor(n/4) + 2 = n. Correct!
+    // (floor(n/4) - 1) fours + 2 threes = 4*floor(n/4) - 4 + 6 = n
     const foursCount = numFours - 1
     const threesCount = 2
     return {
@@ -321,8 +316,7 @@ export function computePodSizes(
       byeCount: 0,
     }
   } else {
-    // remainder === 3: floor(n/4) fours + 1 three
-    // Check: floor(n/4)*4 + 3 = n. Correct!
+    // remainder === 3: floor(n/4) fours + 1 three = 4*floor(n/4) + 3 = n
     return {
       podSizes: [...Array(numFours).fill(4), 3],
       byeCount: 0,
