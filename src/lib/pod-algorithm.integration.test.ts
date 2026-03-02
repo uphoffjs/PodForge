@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   generatePods,
   buildOpponentHistory,
+  totalPenalty,
+  greedyAssign,
   type PlayerInfo,
   type RoundHistory,
   type PodAssignmentResult,
@@ -154,16 +156,131 @@ describe('Pod Algorithm Integration — Multi-Round Fairness', () => {
   })
 
   describe('opponent avoidance across rounds', () => {
-    it('minimizes repeat opponents for 8 players over 4 rounds', () => {
-      // 8 players, 4 rounds, no byes
+    it('8 players over 4 rounds produces maxPairCount <= 2', () => {
+      // With quadratic scoring + multi-start + swap pass, maxPairCount should be <= 2
+      // Run multiple trials to account for randomness
+      for (let trial = 0; trial < 10; trial++) {
+        const { rounds } = simulateRounds(8, 4)
+        const opponentHistory = buildOpponentHistory(rounds)
+
+        let maxPairCount = 0
+        for (const [, opponents] of opponentHistory) {
+          for (const [, count] of opponents) {
+            if (count > maxPairCount) maxPairCount = count
+          }
+        }
+
+        expect(maxPairCount).toBeLessThanOrEqual(2)
+      }
+    })
+
+    it('multi-start produces score <= single-start for scenarios with opponent clustering', () => {
+      // Construct history where player ordering matters significantly
+      const players = makePlayers(8)
+      const clusteringHistory: RoundHistory[] = [
+        {
+          pods: [
+            { playerIds: ['p-0', 'p-1', 'p-2', 'p-3'], isBye: false },
+            { playerIds: ['p-4', 'p-5', 'p-6', 'p-7'], isBye: false },
+          ],
+        },
+        {
+          pods: [
+            { playerIds: ['p-0', 'p-1', 'p-2', 'p-3'], isBye: false },
+            { playerIds: ['p-4', 'p-5', 'p-6', 'p-7'], isBye: false },
+          ],
+        },
+      ]
+
+      const history = buildOpponentHistory(clusteringHistory)
+      const playerIds = players.map(p => p.id)
+
+      // Single-start: just one greedy pass
+      let singleStartTotal = 0
+      const singleTrials = 20
+      for (let i = 0; i < singleTrials; i++) {
+        const pool = [...playerIds].sort(() => Math.random() - 0.5)
+        const pods = greedyAssign(pool, 2, history)
+        singleStartTotal += totalPenalty(pods, history)
+      }
+      const singleAvg = singleStartTotal / singleTrials
+
+      // Multi-start: best of 5 greedy passes (what generatePods does)
+      let multiStartTotal = 0
+      const multiTrials = 20
+      for (let i = 0; i < multiTrials; i++) {
+        let bestScore = Infinity
+        for (let s = 0; s < 5; s++) {
+          const pool = [...playerIds].sort(() => Math.random() - 0.5)
+          const pods = greedyAssign(pool, 2, history)
+          const score = totalPenalty(pods, history)
+          if (score < bestScore) bestScore = score
+        }
+        multiStartTotal += bestScore
+      }
+      const multiAvg = multiStartTotal / multiTrials
+
+      // Multi-start average should be <= single-start average
+      expect(multiAvg).toBeLessThanOrEqual(singleAvg)
+    })
+
+    it('last pod does not consistently get worst pairings (swap pass fixes structural bias)', () => {
+      // Run many simulations and check that the last pod doesn't consistently
+      // have the highest penalty
+      const history: RoundHistory[] = [
+        {
+          pods: [
+            { playerIds: ['p-0', 'p-1', 'p-2', 'p-3'], isBye: false },
+            { playerIds: ['p-4', 'p-5', 'p-6', 'p-7'], isBye: false },
+            { playerIds: ['p-8', 'p-9', 'p-10', 'p-11'], isBye: false },
+          ],
+        },
+        {
+          pods: [
+            { playerIds: ['p-0', 'p-1', 'p-2', 'p-3'], isBye: false },
+            { playerIds: ['p-4', 'p-5', 'p-6', 'p-7'], isBye: false },
+            { playerIds: ['p-8', 'p-9', 'p-10', 'p-11'], isBye: false },
+          ],
+        },
+      ]
+
+      const players = makePlayers(12)
+      let lastPodWorstCount = 0
+      const trials = 30
+      for (let t = 0; t < trials; t++) {
+        const result = generatePods(players, history)
+        const activePods = result.assignments.filter(a => !a.is_bye)
+        const opHistory = buildOpponentHistory(history)
+
+        // Compute penalty for each pod
+        const penalties = activePods.map(pod => {
+          const ids = pod.players.map(p => p.player_id)
+          let penalty = 0
+          for (let i = 0; i < ids.length; i++) {
+            for (let j = i + 1; j < ids.length; j++) {
+              const encounters = opHistory.get(ids[i])?.get(ids[j]) ?? 0
+              penalty += encounters * encounters
+            }
+          }
+          return penalty
+        })
+
+        const maxPenalty = Math.max(...penalties)
+        const lastPodPenalty = penalties[penalties.length - 1]
+        if (lastPodPenalty === maxPenalty && maxPenalty > 0) lastPodWorstCount++
+      }
+
+      // The last pod should NOT be the worst more than 60% of the time
+      // (without swap pass, greedy assigns leftovers to the last pod, making it consistently worst)
+      expect(lastPodWorstCount).toBeLessThan(trials * 0.6)
+    })
+
+    it('minimizes repeat opponents for 8 players over 4 rounds (legacy bound)', () => {
+      // Keep the original test but with the improved bound
       const { rounds } = simulateRounds(8, 4)
 
       const opponentHistory = buildOpponentHistory(rounds)
 
-      // Check max pair count
-      // With 8 players in 4 rounds, each player has 3 opponents per round = 12 opponent-slots
-      // With 7 other players, perfectly spread would be ~1.7 each
-      // Assert max pair count <= 3
       let maxPairCount = 0
       for (const [, opponents] of opponentHistory) {
         for (const [, count] of opponents) {
@@ -171,7 +288,7 @@ describe('Pod Algorithm Integration — Multi-Round Fairness', () => {
         }
       }
 
-      expect(maxPairCount).toBeLessThanOrEqual(3)
+      expect(maxPairCount).toBeLessThanOrEqual(2)
     })
 
     it('minimizes repeat opponents for 12 players over 6 rounds', () => {

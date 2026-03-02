@@ -3,6 +3,11 @@ import {
   generatePods,
   buildOpponentHistory,
   buildByeCounts,
+  getOpponentScore,
+  podPenalty,
+  totalPenalty,
+  greedyAssign,
+  swapPass,
   type PlayerInfo,
   type RoundHistory,
 } from './pod-algorithm'
@@ -922,6 +927,169 @@ describe('pod-algorithm', () => {
         expect(byePod).toBeDefined()
         expect(byePod!.pod_number).toBe(2) // 1 active pod + 1 = 2
       })
+    })
+  })
+
+  describe('getOpponentScore (quadratic penalty)', () => {
+    it('returns 0 when candidate has no history', () => {
+      const history = new Map<string, Map<string, number>>()
+      expect(getOpponentScore('a', ['b', 'c'], history)).toBe(0)
+    })
+
+    it('returns 0 when candidate has 0 encounters with pod members', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['d', 1]]))
+      expect(getOpponentScore('a', ['b', 'c'], history)).toBe(0)
+    })
+
+    it('returns 1 for 1 encounter (1^2 = 1)', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 1]]))
+      expect(getOpponentScore('a', ['b'], history)).toBe(1)
+    })
+
+    it('returns 4 for 2 encounters (2^2 = 4)', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 2]]))
+      expect(getOpponentScore('a', ['b'], history)).toBe(4)
+    })
+
+    it('returns 9 for 3 encounters (3^2 = 9)', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 3]]))
+      expect(getOpponentScore('a', ['b'], history)).toBe(9)
+    })
+
+    it('sums quadratic penalties across multiple pod members', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 2], ['c', 1]]))
+      // 2^2 + 1^2 = 4 + 1 = 5
+      expect(getOpponentScore('a', ['b', 'c'], history)).toBe(5)
+    })
+  })
+
+  describe('podPenalty', () => {
+    it('returns 0 for a pod with no history', () => {
+      const history = new Map<string, Map<string, number>>()
+      expect(podPenalty(['a', 'b', 'c', 'd'], history)).toBe(0)
+    })
+
+    it('computes sum of encounters^2 for all C(n,2) pairs', () => {
+      // Pod: [a, b, c, d]. a-b met 2 times, a-c met 1 time. All others 0.
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 2], ['c', 1]]))
+      history.set('b', new Map([['a', 2]]))
+      history.set('c', new Map([['a', 1]]))
+      // Pairs: a-b=2^2=4, a-c=1^2=1, a-d=0, b-c=0, b-d=0, c-d=0 => total=5
+      expect(podPenalty(['a', 'b', 'c', 'd'], history)).toBe(5)
+    })
+  })
+
+  describe('totalPenalty', () => {
+    it('sums podPenalty across all pods', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 1]]))
+      history.set('b', new Map([['a', 1]]))
+      history.set('c', new Map([['d', 2]]))
+      history.set('d', new Map([['c', 2]]))
+      // Pod1: [a, b] => a-b=1^2=1. Pod2: [c, d] => c-d=2^2=4. Total=5
+      expect(totalPenalty([['a', 'b'], ['c', 'd']], history)).toBe(5)
+    })
+
+    it('returns 0 when no history exists', () => {
+      const history = new Map<string, Map<string, number>>()
+      expect(totalPenalty([['a', 'b', 'c', 'd'], ['e', 'f', 'g', 'h']], history)).toBe(0)
+    })
+  })
+
+  describe('greedyAssign', () => {
+    it('produces valid pod assignments with correct sizes', () => {
+      const pool = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+      const history = new Map<string, Map<string, number>>()
+      const pods = greedyAssign(pool, 2, history)
+
+      expect(pods).toHaveLength(2)
+      expect(pods[0]).toHaveLength(4)
+      expect(pods[1]).toHaveLength(4)
+
+      // All players accounted for
+      const allPlayers = pods.flat().sort()
+      expect(allPlayers).toEqual(pool.slice().sort())
+    })
+
+    it('places low-overlap candidates into pods', () => {
+      // a-b met 3 times, a-c met 0 times. With pool [a, b, c, d, e, f, g, h]
+      // The greedy should prefer c over b when filling a's pod.
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 3]]))
+      history.set('b', new Map([['a', 3]]))
+
+      // Run multiple times due to random first pick
+      let separatedCount = 0
+      for (let i = 0; i < 20; i++) {
+        const pool = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+        const pods = greedyAssign(pool, 2, history)
+        const aPod = pods.find(p => p.includes('a'))!
+        if (!aPod.includes('b')) separatedCount++
+      }
+      // Greedy should separate them most of the time
+      expect(separatedCount).toBeGreaterThan(10)
+    })
+  })
+
+  describe('swapPass', () => {
+    it('returns pods unchanged when no improving swap exists', () => {
+      const history = new Map<string, Map<string, number>>()
+      const pods = [['a', 'b', 'c', 'd'], ['e', 'f', 'g', 'h']]
+      const result = swapPass(pods, history)
+
+      // With no history, all scores are 0, so no swaps improve
+      expect(result.map(p => p.sort())).toEqual(pods.map(p => p.sort()))
+    })
+
+    it('reduces total penalty when an improving swap exists', () => {
+      // a-b met 3 times, c-d met 3 times. Pods: [a,b,e,f], [c,d,g,h]
+      // Swap a<->c gives [c,b,e,f], [a,d,g,h] which reduces penalty
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 3]]))
+      history.set('b', new Map([['a', 3]]))
+      history.set('c', new Map([['d', 3]]))
+      history.set('d', new Map([['c', 3]]))
+
+      const pods = [['a', 'b', 'e', 'f'], ['c', 'd', 'g', 'h']]
+      const before = totalPenalty(pods, history)
+      const result = swapPass(pods, history)
+      const after = totalPenalty(result, history)
+
+      expect(after).toBeLessThan(before)
+    })
+
+    it('terminates (does not infinite loop)', () => {
+      // Verified by the test completing within the timeout
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 2], ['c', 1]]))
+      history.set('b', new Map([['a', 2]]))
+      history.set('c', new Map([['a', 1]]))
+
+      const pods = [['a', 'b', 'e', 'f'], ['c', 'd', 'g', 'h']]
+      const result = swapPass(pods, history)
+      expect(result).toBeDefined()
+      expect(result).toHaveLength(2)
+    })
+
+    it('preserves pod sizes (no players lost or duplicated)', () => {
+      const history = new Map<string, Map<string, number>>()
+      history.set('a', new Map([['b', 3]]))
+      history.set('b', new Map([['a', 3]]))
+
+      const pods = [['a', 'b', 'c', 'd'], ['e', 'f', 'g', 'h']]
+      const result = swapPass(pods, history)
+
+      expect(result[0]).toHaveLength(4)
+      expect(result[1]).toHaveLength(4)
+
+      const allPlayers = result.flat().sort()
+      expect(allPlayers).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'])
     })
   })
 

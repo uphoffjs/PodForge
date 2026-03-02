@@ -108,7 +108,7 @@ export function buildByeCounts(
  * Calculate the opponent overlap score for a candidate player
  * against players already placed in a pod.
  */
-function getOpponentScore(
+export function getOpponentScore(
   candidate: string,
   podMembers: string[],
   history: Map<string, Map<string, number>>
