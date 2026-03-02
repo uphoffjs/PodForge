@@ -1,7 +1,4 @@
-import { addCompareSnapshotCommand } from 'cypress-visual-regression/dist/command'
 import './commands.js'
-
-addCompareSnapshotCommand()
 
 // Clear state between tests to prevent leakage (pitfall #2 from research)
 beforeEach(() => {
