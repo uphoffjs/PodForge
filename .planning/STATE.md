@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Mid-Event Flow & Round Formats
 status: executing
-stopped_at: "08-02 complete — RoundTimer.overtime_seconds contract + useGenerateRound p_overtime_minutes threading (100% Stryker). Next: plan 08-03 (useCountdown three-phase derivation)"
-last_updated: "2026-06-27T22:10:00.000Z"
+stopped_at: "08-03 complete — useCountdown three-phase derivation (main/overtime/countup) + phase field on CountdownState (100% coverage + 100% Stryker, 865 tests green). Next: plan 08-04 (useTimerNotification dual-boundary dedup)"
+last_updated: "2026-06-27T22:51:01.392Z"
 last_activity: 2026-06-27
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 9
-  completed_plans: 7
-  percent: 37
+  completed_plans: 8
+  percent: 33
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-27)
 ## Current Position
 
 Phase: 08 (timer-migration-core-engine) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-06-27
 
@@ -52,6 +52,7 @@ Last activity: 2026-06-27
 | 7 | 3/3 | 19min | 6min |
 | Phase 08 P01 | 6min | 3 tasks | 1 files |
 | Phase 08 P02 | 18min | 3 tasks | 9 files |
+| Phase 08 P03 | 32min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,7 @@ Recent decisions affecting current work:
 - [v4.0 Roadmap]: Test requirements distributed across phases (not a separate test phase) — pattern continued in v5.0
 - [Phase ?]: [08-01]: Migration 00005 applied to live DB — overtime_seconds column, overload-safe generate_round (p_overtime_minutes, bounds-checked), signed pause_timer (clamp removed). resume/extend/cancel untouched.
 - [08-02]: RoundTimer.overtime_seconds is a REQUIRED field (forces compile-time consumer audit); remaining_seconds documented SIGNED. useGenerateRound threads p_overtime_minutes: overtimeMinutes ?? 0. Suite green (849 tests), useGenerateRound.ts at 100% Stryker. Did NOT add CountdownState.phase (deferred to 08-03).
+- [08-03]: useCountdown derives 3 phases (main/overtime/countup) from expires_at + overtime_seconds + Date.now() via single-signed-value model (overtimeRemaining = mainRemaining + overtime_seconds). Added CountdownState.phase as source of truth; kept 4-value urgency union (overtime→danger, countup→expired) per locked Q1. Dropped dead `?? 0` (overtime_seconds is NOT NULL) and narrowed computeUrgency to positive-only for 100% coverage; one equivalent mutant inline-disabled. 100% Stryker (60 killed), 865 tests green. useTimerNotification factories got a phase field (ripple); the notification hook itself is plan 08-04.
 
 ### Pending Todos
 
@@ -91,6 +93,6 @@ None. Phase 8 planner should make two explicit design sign-offs before coding (p
 
 ## Session Continuity
 
-Last session: 2026-06-27T22:10:00.000Z
-Stopped at: 08-02 complete — RoundTimer.overtime_seconds contract + useGenerateRound p_overtime_minutes threading (100% Stryker, 849 tests green). Next: plan 08-03 (useCountdown three-phase derivation)
+Last session: 2026-06-27T22:51:01.386Z
+Stopped at: 08-03 complete — useCountdown three-phase derivation + CountdownState.phase (100% coverage + 100% Stryker, 865 tests green). Next: plan 08-04 (useTimerNotification dual-boundary dedup)
 Resume file: None
