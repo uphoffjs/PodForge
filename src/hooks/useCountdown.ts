@@ -78,6 +78,10 @@ export function useCountdown(timer: RoundTimer | null): CountdownState | null {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
+    // Stryker disable next-line ConditionalExpression: the `=== 'cancelled'` branch here is an
+    // equivalent mutant — the render guard below returns null for cancelled timers regardless, and a
+    // cancelled timer (status !== 'running') never starts an interval, so skipping vs. running this
+    // effect has no observable effect. The user-facing guard is the one at the bottom of the hook.
     if (!timer || timer.status === 'cancelled') {
       return
     }

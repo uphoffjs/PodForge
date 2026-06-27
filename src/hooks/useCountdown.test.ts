@@ -515,4 +515,22 @@ describe('useCountdown three-phase derivation (80+20)', () => {
     expect(result.current!.phase).toBe('overtime')
     expect(result.current!.display).toBe('19:59')
   })
+
+  it('does not start an interval for a paused timer (kills the running-only tick-guard mutant)', () => {
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval')
+    const timer = makeTimer({ status: 'paused', remaining_seconds: 500, overtime_seconds: 1200 })
+
+    renderHook(() => useCountdown(timer))
+
+    expect(setIntervalSpy).not.toHaveBeenCalled()
+    setIntervalSpy.mockRestore()
+  })
+
+  it('reports isPaused=false and isCancelled=false for a running timer', () => {
+    const timer = makeTimer({ status: 'running', overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.isPaused).toBe(false)
+    expect(result.current!.isCancelled).toBe(false)
+  })
 })

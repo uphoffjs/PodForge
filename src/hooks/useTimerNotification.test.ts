@@ -29,6 +29,7 @@ function makeCountdown(overrides: Partial<CountdownState> = {}): CountdownState 
     isPaused: false,
     isCancelled: false,
     urgency: 'danger',
+    phase: 'main',
     ...overrides,
   }
 }
@@ -39,6 +40,7 @@ function makeExpiredCountdown(overrides: Partial<CountdownState> = {}): Countdow
     display: '+0:10',
     isOvertime: true,
     urgency: 'expired',
+    phase: 'countup',
     ...overrides,
   })
 }
