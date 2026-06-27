@@ -111,7 +111,7 @@ Plans:
 **Plans**: 4 plans in 3 waves
 
 Plans:
-- [ ] 08-01-PLAN.md -- Migration 00005 (overtime_seconds column, generate_round overload DROP + p_overtime_minutes, pause_timer clamp removal) + schema push + SQL verify
+- [x] 08-01-PLAN.md -- Migration 00005 (overtime_seconds column, generate_round overload DROP + p_overtime_minutes, pause_timer clamp removal) + schema push + SQL verify
 - [ ] 08-02-PLAN.md -- RoundTimer.overtime_seconds type contract (repo-wide factory compat) + thread overtimeMinutes through useGenerateRound
 - [ ] 08-03-PLAN.md -- useCountdown three-phase derivation (main/overtime/countup) + phase field, 100% Stryker
 - [ ] 08-04-PLAN.md -- useTimerNotification dual-boundary dedup (phase-transition + Set), 100% Stryker
@@ -176,7 +176,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11. Within v5.0,
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 8. Timer Migration & Core Engine | v5.0 | 0/0 | Not started | - |
+| 8. Timer Migration & Core Engine | v5.0 | 1/4 | In Progress|  |
 | 9. Timer UI & Admin Controls | v5.0 | 0/0 | Not started | - |
 | 10. Mid-Event Join UX | v5.0 | 0/0 | Not started | - |
 | 11. Fault-Injection Campaign Completion | v5.0 | 0/0 | Not started | - |

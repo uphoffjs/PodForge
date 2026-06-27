@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Mid-Event Flow & Round Formats
-status: roadmapped
-last_updated: "2026-06-27T17:30:00.000Z"
-last_activity: 2026-06-27
+status: executing
+stopped_at: "08-01: migration 00005 written + applied to live DB; Task 3 human-verify checkpoint PENDING approval"
+last_updated: "2026-06-27T21:46:41.938Z"
+last_activity: 2026-06-27 -- Phase 08 execution started
 progress:
-  total_phases: 4
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 6
+  completed_phases: 2
+  total_plans: 9
+  completed_plans: 6
+  percent: 33
 ---
 
 # Project State
@@ -20,16 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-27)
 
 **Core value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone -- who they're playing with, what seat they're in, and how much time they have.
-**Current focus:** v5.0 roadmap created — Phase 8 (Timer Migration & Core Engine) is next
+**Current focus:** Phase 08 — timer-migration-core-engine
 
 ## Current Position
 
-Phase: Not started (roadmap created, awaiting Phase 8 planning)
-Plan: —
-Status: Roadmapped
-Last activity: 2026-06-27 — v5.0 roadmap created (Phases 8-11)
+Phase: 08 (timer-migration-core-engine) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 08
+Last activity: 2026-06-27 -- Phase 08 execution started
 
 **v5.0 phase map:**
+
 - Phase 8: Timer Migration & Core Engine — TIMER-03, TIMER-05, TIMER-06 (strictly first; migration 00005)
 - Phase 9: Timer UI & Admin Controls — TIMER-01, TIMER-02, TIMER-04, TIMER-07, TEST-05 (depends on 8)
 - Phase 10: Mid-Event Join UX — JOIN-01, JOIN-02, JOIN-03, TEST-04 (parallelizable, zero migration)
@@ -48,6 +50,7 @@ Last activity: 2026-06-27 — v5.0 roadmap created (Phases 8-11)
 |-------|-------|-------|----------|
 | 6 | 2/2 | 32min | 16min |
 | 7 | 3/3 | 19min | 6min |
+| Phase 08 P01 | 6min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -64,6 +67,7 @@ Recent decisions affecting current work:
 - [v5.0 Roadmap]: User decisions locked — passive mid-join badge only (no approval gate); fixed 80+20 (not configurable); admin explicitly starts timer; count-up runs indefinitely until admin acts; notifications fire at BOTH phase boundaries
 - [v5.0 Roadmap]: Branch `feature/v5.0-mid-event-flow` — create before starting Phase 8
 - [v4.0 Roadmap]: Test requirements distributed across phases (not a separate test phase) — pattern continued in v5.0
+- [Phase ?]: [08-01]: Migration 00005 applied to live DB — overtime_seconds column, overload-safe generate_round (p_overtime_minutes, bounds-checked), signed pause_timer (clamp removed). resume/extend/cancel untouched.
 
 ### Pending Todos
 
@@ -85,6 +89,6 @@ None. Phase 8 planner should make two explicit design sign-offs before coding (p
 
 ## Session Continuity
 
-Last session: 2026-06-27
-Stopped at: v5.0 roadmap created (Phases 8-11). Requirements traceability updated. Next: plan Phase 8 (`/gsd:plan-phase 8`).
+Last session: 2026-06-27T21:46:41.930Z
+Stopped at: 08-01: migration 00005 written + applied to live DB; Task 3 human-verify checkpoint PENDING approval
 Resume file: None
