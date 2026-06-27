@@ -13,6 +13,7 @@ function makeTimer(overrides: Partial<RoundTimer> = {}): RoundTimer {
     status: 'running',
     started_at: '2026-01-01T00:00:00Z',
     remaining_seconds: null,
+    overtime_seconds: 0,
     paused_at: null,
     expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
     created_at: '2026-01-01T00:00:00Z',
