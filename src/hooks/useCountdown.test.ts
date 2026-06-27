@@ -375,3 +375,144 @@ describe('useCountdown', () => {
     expect(result.current!.remainingSeconds).toBeGreaterThanOrEqual(28)
   })
 })
+
+describe('useCountdown three-phase derivation (80+20)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("derives phase 'main' with full main display when mainRemaining > 0 (75:00)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: 4500, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('main')
+    expect(result.current!.display).toBe('75:00')
+    expect(result.current!.remainingSeconds).toBe(4500)
+    expect(result.current!.isOvertime).toBe(false)
+  })
+
+  it("derives phase 'overtime' at the main boundary mainRemaining = 0 (20:00)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: 0, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('overtime')
+    expect(result.current!.display).toBe('20:00')
+    expect(result.current!.isOvertime).toBe(true)
+  })
+
+  it("derives phase 'main' at mainRemaining = 1 (kills > vs >= boundary mutant)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: 1, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('main')
+    expect(result.current!.display).toBe('0:01')
+  })
+
+  it("derives phase 'overtime' for a running timer at mainRemaining = -300 (15:00, kills + vs - mutant)", () => {
+    const expiresAt = new Date(Date.now() - 300 * 1000).toISOString()
+    const timer = makeTimer({ status: 'running', expires_at: expiresAt, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('overtime')
+    expect(result.current!.display).toBe('15:00')
+    expect(result.current!.remainingSeconds).toBe(-300)
+  })
+
+  it("derives phase 'countup' at overtimeRemaining = 0 (0:00, kills second boundary mutant)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: -1200, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('countup')
+    expect(result.current!.display).toBe('0:00')
+  })
+
+  it("derives phase 'overtime' at overtimeRemaining = 1 (0:01, kills second boundary mutant)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: -1199, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('overtime')
+    expect(result.current!.display).toBe('0:01')
+  })
+
+  it("derives phase 'countup' for a running timer at mainRemaining = -1320 (+2:00)", () => {
+    const expiresAt = new Date(Date.now() - 1320 * 1000).toISOString()
+    const timer = makeTimer({ status: 'running', expires_at: expiresAt, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('countup')
+    expect(result.current!.display).toBe('+2:00')
+  })
+
+  it("derives phase 'overtime' from signed paused remaining_seconds = -300 (15:00)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: -300, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('overtime')
+    expect(result.current!.display).toBe('15:00')
+    expect(result.current!.remainingSeconds).toBe(-300)
+    expect(result.current!.isOvertime).toBe(true)
+  })
+
+  it("derives phase 'countup' from signed paused remaining_seconds = -1320 (+2:00)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: -1320, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('countup')
+    expect(result.current!.display).toBe('+2:00')
+  })
+
+  it('backward compat: overtime_seconds = 0 reproduces single-phase count-up (+1:30)', () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: -90, overtime_seconds: 0 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('countup')
+    expect(result.current!.display).toBe('+1:30')
+    expect(result.current!.isOvertime).toBe(true)
+  })
+
+  it("maps urgency to 'danger' in the overtime phase (keeps 4-value union)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: -300, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('overtime')
+    expect(result.current!.urgency).toBe('danger')
+  })
+
+  it("maps urgency to 'expired' in the count-up phase (keeps 4-value union)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: -1320, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('countup')
+    expect(result.current!.urgency).toBe('expired')
+  })
+
+  it("maps urgency via main-phase thresholds when phase is 'main'", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: 450, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('main')
+    expect(result.current!.urgency).toBe('warning')
+  })
+
+  it('recomputes phase each tick: main crosses into overtime as the clock advances', () => {
+    // 2 seconds left in main, 1200s overtime configured
+    const expiresAt = new Date(Date.now() + 2 * 1000).toISOString()
+    const timer = makeTimer({ status: 'running', expires_at: expiresAt, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('main')
+    expect(result.current!.display).toBe('0:02')
+
+    act(() => {
+      vi.advanceTimersByTime(3000)
+    })
+
+    // mainRemaining is now -1 → overtime phase, display 1200 - 1 = 19:59
+    expect(result.current!.phase).toBe('overtime')
+    expect(result.current!.display).toBe('19:59')
+  })
+})
