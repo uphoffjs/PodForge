@@ -9,7 +9,8 @@ Commander Pod Pairer is a web app for casual MTG Commander playgroups. Players j
 - ✅ **v1.0 Foundation & Player Flow** — Phases 1-1.4 (shipped 2026-02-24) — [archive](milestones/v1.0-ROADMAP.md)
 - ✅ **v2.0 Complete App** — Phases 2-3 (shipped 2026-02-25) — [archive](milestones/v2.0-ROADMAP.md)
 - ✅ **v3.0 Event Polish & CI/CD** — Phases 4-5 (shipped 2026-02-27) — [archive](milestones/v3.0-ROADMAP.md)
-- 🚧 **v4.0 Pod Algorithm Improvements** — Phases 6-7 (in progress)
+- ✅ **v4.0 Pod Algorithm Improvements** — Phases 6-7 (shipped 2026-03-02)
+- 🚧 **v5.0 Mid-Event Flow & Round Formats** — Phases 8-11 (in progress)
 
 ## Phases
 
@@ -41,14 +42,26 @@ Commander Pod Pairer is a web app for casual MTG Commander playgroups. Players j
 
 </details>
 
-### 🚧 v4.0 Pod Algorithm Improvements (In Progress)
+<details>
+<summary>✅ v4.0 Pod Algorithm Improvements (Phases 6-7) — SHIPPED 2026-03-02</summary>
 
-**Milestone Goal:** Improve pod assignment quality -- reduce repeat opponents, verify seat randomization, and give admins a per-round toggle to allow pods of 3 (eliminating unnecessary byes).
+- [x] Phase 6: Opponent Diversity and Seat Verification (2/2 plans) — completed 2026-03-02
+- [x] Phase 7: Pods of 3 (3/3 plans) — completed 2026-03-02
 
-**Branch:** `feature/v4.0-pod-improvements` (create before starting Phase 6)
+</details>
 
-- [x] **Phase 6: Opponent Diversity and Seat Verification** - Quadratic penalty scoring, multi-start greedy, swap pass, and empirical seat randomization verification (completed 2026-03-02)
-- [x] **Phase 7: Pods of 3** - Algorithm support for 3-player pods, admin toggle UI, PodCard rendering, and full E2E coverage (completed 2026-03-02)
+### 🚧 v5.0 Mid-Event Flow & Round Formats (In Progress)
+
+**Milestone Goal:** Support players joining mid-event with clear UX, add an 80+20 minute round-timer format (80-min main → 20-min overtime → unbounded count-up), and close out E2E coverage gaps by finishing the batch-1 fault-injection campaign.
+
+**Branch:** `feature/v5.0-mid-event-flow` (create before starting Phase 8)
+
+**Build tracks:** The timer track (Phases 8→9) is strictly ordered — the `00005` migration must land before any client work. The mid-event-join track (Phase 10) and the fault-injection track (Phase 11) carry zero migration dependency and parallelize with the timer track.
+
+- [ ] **Phase 8: Timer Migration & Core Engine** - Additive `00005` migration (overtime column, `generate_round` param, `pause_timer` clamp removal), three-phase `useCountdown` engine, dual-boundary notification dedup, server-authoritative pause/reconnect — 100% Stryker
+- [ ] **Phase 9: Timer UI & Admin Controls** - 80+20 preset picker, explicit start action, phase-distinct `TimerDisplay` styling, pause/resume/+5/cancel across all phases, full timer E2E
+- [ ] **Phase 10: Mid-Event Join UX** - Pod-participation detection, persistent "Joined R{N}" badge, auto-flow into next round with no approval gate
+- [ ] **Phase 11: Fault-Injection Campaign Completion** - Run remaining 21 batch-1 faults with revert discipline, narrow the `uncaught:exception` suppressor, close every SURVIVED gap
 
 ## Phase Details
 
@@ -85,10 +98,58 @@ Plans:
 - [x] 07-02-PLAN.md -- Admin Toggle UI + PodCard Rendering
 - [x] 07-03-PLAN.md -- E2E Tests + Stryker Mutation Testing
 
+### Phase 8: Timer Migration & Core Engine
+**Goal**: The 80+20 three-phase timer is correct and server-authoritative at the engine level — phases derive purely on the client, and pause/resume/reconnect preserve signed position
+**Depends on**: Phase 7 (v4.0 shipped)
+**Requirements**: TIMER-03, TIMER-05, TIMER-06
+**Success Criteria** (what must be TRUE):
+  1. Generating a round with 80+20 selected persists `overtime_seconds = 1200` on `round_timers`, while plain timers persist `overtime_seconds = 0` (backward compatible — existing single-phase timers behave unchanged)
+  2. Unit tests confirm the phase derivation: main counts 80:00→0:00, overtime counts 20:00→0:00, then count-up increments past zero indefinitely until an admin acts
+  3. Pausing during overtime or count-up and resuming restores the exact signed remaining position (the `GREATEST(0,…)` clamp is removed; no reset to 0:00), and a mid-overtime page refresh re-renders the correct phase and position from server state
+  4. A browser notification fires exactly once at each phase boundary (main→overtime, overtime→count-up), deduplicated per boundary even across Realtime row updates
+  5. All new timer-engine branches pass Stryker mutation testing at 100%
+**Plans**: TBD
+
+### Phase 9: Timer UI & Admin Controls
+**Goal**: Admins can select and explicitly start the 80+20 format, and every player sees a glanceable, phase-distinct timer with working controls
+**Depends on**: Phase 8
+**Requirements**: TIMER-01, TIMER-02, TIMER-04, TIMER-07, TEST-05
+**Success Criteria** (what must be TRUE):
+  1. Admin sees an "80+20" option alongside the existing 60/90/120 presets in the duration picker
+  2. The 80-minute main countdown begins only when the admin presses an explicit "Start timer" action — it does not auto-start at round generation
+  3. Each phase is visually distinct (labeled MAIN / OVERTIME / OVERTIME ELAPSED, its own urgency styling, `+mm:ss` prefix in count-up) and updates in real time across all clients
+  4. Pause, resume, +5 min, and cancel all operate correctly during the main, overtime, and count-up phases
+  5. Cypress E2E covers selecting and starting 80+20 and walking through all three phase transitions; timer logic meets the 100% Stryker target
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 10: Mid-Event Join UX
+**Goal**: Players who join after pairing has begun are clearly flagged and automatically flow into the next round with no admin friction
+**Depends on**: Phase 7 (v4.0 shipped) — parallelizable with Phases 8-9 (zero migration dependency)
+**Requirements**: JOIN-01, JOIN-02, JOIN-03, TEST-04
+**Success Criteria** (what must be TRUE):
+  1. A player not yet placed in any pod (once at least one round exists) shows a persistent "Joined R{N}" badge, visually distinct from the transient new-player highlight
+  2. Mid-event status derives from pod participation — correctly flagging players who joined before round 1 but after others, and reactivated dropouts — and clears the moment the player is assigned to a pod
+  3. Mid-event joiners automatically enter the next round's pool with empty opponent history and 0 bye count, with no admin approval step
+  4. Unit + Cypress E2E tests cover the badge and detection edge cases (joined-before-round-1, reactivated dropout) at >=80% Stryker
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 11: Fault-Injection Campaign Completion
+**Goal**: The batch-1 fault-injection campaign is finished with trustworthy KILLED/SURVIVED results and every coverage gap closed
+**Depends on**: Phase 7 (v4.0 shipped) — parallelizable with Phases 8-10 (independent of timer and mid-event code)
+**Requirements**: FAULT-01, FAULT-02, FAULT-03, FAULT-04
+**Success Criteria** (what must be TRUE):
+  1. All 21 remaining batch-1 faults (2.2–5.6) are executed, each recorded KILLED or SURVIVED with verified symptom evidence in `.planning/debug/fault-injection-batch1.md`
+  2. Each fault is fully reverted via `git checkout` (verified clean tree) before the next is injected, preventing cross-fault contamination
+  3. The Cypress `uncaught:exception` suppressor is narrowed so injected faults can no longer be silently swallowed and falsely marked KILLED
+  4. Every SURVIVED fault yields a new or strengthened E2E test that kills it (or a documented equivalent-fault justification)
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 6 → 7
+Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11. Within v5.0, Phase 9 depends on Phase 8; Phases 10 and 11 are independent and may run in parallel with the timer track.
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -104,3 +165,14 @@ Phases execute in numeric order: 6 → 7
 | 5. Bulletproof CI/CD Pipeline | v3.0 | 3/3 | Complete | 2026-02-27 |
 | 6. Opponent Diversity and Seat Verification | v4.0 | 2/2 | Complete | 2026-03-02 |
 | 7. Pods of 3 | v4.0 | 3/3 | Complete | 2026-03-02 |
+
+### v5.0 Progress
+
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 8. Timer Migration & Core Engine | v5.0 | 0/0 | Not started | - |
+| 9. Timer UI & Admin Controls | v5.0 | 0/0 | Not started | - |
+| 10. Mid-Event Join UX | v5.0 | 0/0 | Not started | - |
+| 11. Fault-Injection Campaign Completion | v5.0 | 0/0 | Not started | - |
+</content>
+</invoke>

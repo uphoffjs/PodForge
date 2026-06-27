@@ -109,12 +109,27 @@ Requirements for the Mid-Event Flow & Round Formats milestone.
 | TEST-01 | Phase 6 | Complete |
 | TEST-02 | Phase 7 | Complete |
 | TEST-03 | Phase 7 | Complete |
+| JOIN-01 | Phase 10 | Pending |
+| JOIN-02 | Phase 10 | Pending |
+| JOIN-03 | Phase 10 | Pending |
+| TIMER-01 | Phase 9 | Pending |
+| TIMER-02 | Phase 9 | Pending |
+| TIMER-03 | Phase 8 | Pending |
+| TIMER-04 | Phase 9 | Pending |
+| TIMER-05 | Phase 8 | Pending |
+| TIMER-06 | Phase 8 | Pending |
+| TIMER-07 | Phase 9 | Pending |
+| TEST-04 | Phase 10 | Pending |
+| TEST-05 | Phase 9 | Pending |
+| FAULT-01 | Phase 11 | Pending |
+| FAULT-02 | Phase 11 | Pending |
+| FAULT-03 | Phase 11 | Pending |
+| FAULT-04 | Phase 11 | Pending |
 
 **Coverage:**
-- v4.0 requirements: 16 total
-- Mapped to phases: 16/16
-- Unmapped: 0
+- v4.0 requirements: 16 total — Mapped 16/16, Unmapped 0
+- v5.0 requirements: 16 total — Mapped 16/16, Unmapped 0
 
 ---
 *Requirements defined: 2026-03-02*
-*Last updated: 2026-03-02 after roadmap creation*
+*Last updated: 2026-06-27 after v5.0 roadmap creation*

@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Mid-Event Flow & Round Formats
-status: planning
-last_updated: "2026-06-27T17:01:11.490Z"
+status: roadmapped
+last_updated: "2026-06-27T17:30:00.000Z"
 last_activity: 2026-06-27
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,17 +17,23 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-02)
+See: .planning/PROJECT.md (updated 2026-06-27)
 
 **Core value:** When an admin hits "Generate Next Round," every player instantly sees their pod assignment on their phone -- who they're playing with, what seat they're in, and how much time they have.
-**Current focus:** Phase 7 - Pods-of-3 Support
+**Current focus:** v5.0 roadmap created — Phase 8 (Timer Migration & Core Engine) is next
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Not started (roadmap created, awaiting Phase 8 planning)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-27 — Milestone v5.0 started
+Status: Roadmapped
+Last activity: 2026-06-27 — v5.0 roadmap created (Phases 8-11)
+
+**v5.0 phase map:**
+- Phase 8: Timer Migration & Core Engine — TIMER-03, TIMER-05, TIMER-06 (strictly first; migration 00005)
+- Phase 9: Timer UI & Admin Controls — TIMER-01, TIMER-02, TIMER-04, TIMER-07, TEST-05 (depends on 8)
+- Phase 10: Mid-Event Join UX — JOIN-01, JOIN-02, JOIN-03, TEST-04 (parallelizable, zero migration)
+- Phase 11: Fault-Injection Campaign Completion — FAULT-01..04 (parallelizable, independent)
 
 ## Performance Metrics
 
@@ -51,22 +57,13 @@ See: .planning/PROJECT.md Key Decisions table (comprehensive list)
 
 Recent decisions affecting current work:
 
-- [v4.0 Roadmap]: 2 phases -- opponent diversity + seat verification first (pure algorithm), then pods-of-3 (algorithm + UI + E2E)
-- [v4.0 Roadmap]: Test requirements distributed across phases (not a separate test phase)
-- [v4.0 Roadmap]: Feature branch `feature/v4.0-pod-improvements` -- create before starting Phase 6
-- [06-01]: NUM_STARTS=20 (not 5) required for consistent maxPairCount<=2 with 8 players / 4 rounds
-- [06-01]: Mixed start strategies (half greedy + half random chunk) needed to escape greedy local minima
-- [06-01]: Swap pass applied per-candidate for better global optimization
-- [06-02]: Chi-squared aggregate test as primary seat uniformity assertion
-- [06-02]: SEAT-02 not needed -- Fisher-Yates empirically uniform
-- [06-02]: 20 surviving Stryker mutants are all equivalent (no behavioral impact)
-- [07-01]: computePodSizes uses remainder-formula partitioning (not lookup table) -- scales to any player count
-- [07-01]: n=5 only unsolvable case with allowPodsOf3=true; greedyAssign now accepts podSizes:number[]
-- [07-01]: allowPodsOf3 defaults to false for full backward compatibility
-- [07-02]: Checkbox placed between timer picker and generate button, following existing conditional UI pattern
-- [07-02]: PodCard already handles variable player counts dynamically -- verification tests confirm 3-player rendering
-- [07-03]: Warning toast assertion uses 'exist' not 'be.visible' due to Sonner toast stacking
-- [07-03]: 23 surviving Stryker mutants are all equivalent (89.45% mutation score)
+- [v5.0 Roadmap]: 4 phases — timer split into two (migration+core engine, then UI+controls) per research strict-ordering and risk-isolation; mid-event and fault-injection parallelizable
+- [v5.0 Roadmap]: Zero new runtime dependencies; one additive migration 00005 (`overtime_seconds` column, `generate_round` param, `pause_timer` clamp removal, partial unique index on active timers)
+- [v5.0 Roadmap]: 80+20 timer is highest-risk track — migration must land before any client work; useCountdown phase engine is the 100% Stryker target
+- [v5.0 Roadmap]: Mid-event detection derives from pod participation (player in zero pod_players rows), NOT created_at timestamp comparison — handles late pre-round-1 joiners and reactivated dropouts; clears on pairing
+- [v5.0 Roadmap]: User decisions locked — passive mid-join badge only (no approval gate); fixed 80+20 (not configurable); admin explicitly starts timer; count-up runs indefinitely until admin acts; notifications fire at BOTH phase boundaries
+- [v5.0 Roadmap]: Branch `feature/v5.0-mid-event-flow` — create before starting Phase 8
+- [v4.0 Roadmap]: Test requirements distributed across phases (not a separate test phase) — pattern continued in v5.0
 
 ### Pending Todos
 
@@ -74,7 +71,7 @@ None.
 
 ### Blockers/Concerns
 
-None -- all v4.0 milestone work complete.
+None. Phase 8 planner should make two explicit design sign-offs before coding (per research): (a) server-time offset mechanism for count-up clock skew; (b) `extend_timer` per-phase semantics.
 
 ### Quick Tasks Completed
 
@@ -88,6 +85,6 @@ None -- all v4.0 milestone work complete.
 
 ## Session Continuity
 
-Last session: 2026-03-02
-Stopped at: Completed 07-03-PLAN.md (E2E Tests + Stryker Mutation Validation). v4.0 milestone complete.
+Last session: 2026-06-27
+Stopped at: v5.0 roadmap created (Phases 8-11). Requirements traceability updated. Next: plan Phase 8 (`/gsd:plan-phase 8`).
 Resume file: None
