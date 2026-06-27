@@ -45,6 +45,7 @@ created: 2026-06-27
 | 08-01-T3 | 08-01 | 1 | TIMER-03, TIMER-06 | T-08-01/02 | overtime_seconds 1200/0 persisted; signed pause; single overload; bounds raise | manual (Wave 0 option c) | human-verify on pushed DB | n/a | ⬜ pending |
 | 08-02-T1 | 08-02 | 1 | TIMER-03 | — | RoundTimer.overtime_seconds contract; repo type-checks | type | `npx tsc --noEmit` | ✅ | ⬜ pending |
 | 08-02-T2 | 08-02 | 1 | TIMER-03 | T-08-04 | useGenerateRound forwards p_overtime_minutes (0 default) | unit | `npx vitest run src/hooks/useGenerateRound.test.ts` | ✅ | ⬜ pending |
+| 08-02-T3 | 08-02 | 1 | TIMER-03 | — | useGenerateRound.ts p_overtime_minutes threading 100% mutation | mutation | `npx stryker run --mutate "src/hooks/useGenerateRound.ts"` | ✅ | ⬜ pending |
 | 08-03-T1 | 08-03 | 2 | TIMER-03, TIMER-06 | T-08-05 | three-phase derivation incl. paused/backward-compat | unit | `npx vitest run src/hooks/useCountdown.test.ts` | ✅ | ⬜ pending |
 | 08-03-T2 | 08-03 | 2 | TIMER-03 | — | new derivation branches 100% mutation | mutation | `npx stryker run --mutate "src/hooks/useCountdown.ts"` | ✅ | ⬜ pending |
 | 08-04-T1 | 08-04 | 3 | TIMER-05 | T-08-07 | one notification per boundary, deduped, refresh-safe | unit | `npx vitest run src/hooks/useTimerNotification.test.ts` | ✅ | ⬜ pending |
