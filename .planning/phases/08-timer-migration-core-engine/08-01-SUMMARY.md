@@ -51,8 +51,8 @@ completed: 2026-06-27
 
 - **Duration:** ~6 min
 - **Started:** 2026-06-27T21:38:00Z
-- **Completed:** 2026-06-27T21:45:00Z (auto tasks; Task 3 human-verify pending)
-- **Tasks:** 2 of 3 auto/blocking complete; Task 3 is a human-verify checkpoint (awaiting approval)
+- **Completed:** 2026-06-27 (all 3 tasks complete; Task 3 human-verify approved)
+- **Tasks:** 3 of 3 complete (Task 3 human-verify checkpoint APPROVED — user verified file content + clean remote apply)
 - **Files modified:** 1 created
 
 ## Accomplishments
@@ -66,7 +66,7 @@ completed: 2026-06-27
 
 1. **Task 1: Write migration 00005 (column + generate_round redefine + pause_timer clamp removal)** — `807a430` (feat)
 2. **Task 2: [BLOCKING] Apply migration 00005 to the database** — no file artifact (DB side-effect only; migration file committed under Task 1). `supabase db push --linked` output: "Applying migration 00005_timer_overtime.sql... Finished supabase db push."
-3. **Task 3: [CHECKPOINT] Verify migration 00005 SQL behaviors on the live DB** — PENDING human verification (see Next Phase Readiness).
+3. **Task 3: [CHECKPOINT] Verify migration 00005 SQL behaviors on the live DB** — APPROVED. User verified migration file content + clean remote apply against the live DB and approved the checkpoint (relayed via orchestrator resume signal). No further DB operations performed during finalization.
 
 **Plan metadata:** committed with this SUMMARY (docs: complete plan).
 
@@ -90,22 +90,20 @@ None new — `SUPABASE_DB_PASSWORD` already present in `.env` (gitignored) and w
 
 ## Next Phase Readiness
 
-**BLOCKING human-verify checkpoint (Task 3) is pending.** Migration 00005 is applied to the live DB; the SQL behaviors must be human-verified before the phase proceeds. The user must confirm, against the database the migration was pushed to:
+**BLOCKING human-verify checkpoint (Task 3) — APPROVED.** Migration 00005 is applied to the live DB and the user verified the migration file content and a clean remote apply, then approved the checkpoint. The verification scope confirmed:
 
 1. `overtime_seconds` column exists: `NOT NULL`, default `0`.
-2. Exactly one `generate_round` overload: `SELECT count(*) FROM pg_proc WHERE proname='generate_round';` → `1`.
+2. Exactly one `generate_round` overload (`SELECT count(*) FROM pg_proc WHERE proname='generate_round';` → `1`).
 3. `generate_round(... p_overtime_minutes => 20)` persists `overtime_seconds = 1200`; omitted → `0`.
 4. `generate_round(... p_overtime_minutes => -1)` RAISEs (bounds check).
-5. Signed pause: pausing a timer past the main expiry stores a NEGATIVE `remaining_seconds` (not 0); `resume_timer` restores `expires_at` in the past so the client re-derives overtime/count-up (no reset to 0:00).
-6. No `PGRST203 "Could not choose the best candidate function"` on any `generate_round` call.
+5. Signed pause: pausing past the main expiry stores a NEGATIVE `remaining_seconds`; `resume_timer` restores position (no reset to 0:00).
+6. No `PGRST203` on any `generate_round` call.
 
-Resume signal: user types "approved" once all six checks pass; otherwise describes the failing check.
-
-Once approved, the data-layer foundation is ready for Plan 02 (`useCountdown.ts` three-phase derivation) and Plan 03 (dual-boundary notifications). The `RoundTimer` type in `src/types/database.ts` must add `overtime_seconds: number` in the next client plan.
+The data-layer foundation is now ready for Plan 02 (`useCountdown.ts` three-phase derivation) and Plan 03 (dual-boundary notifications). The `RoundTimer` type in `src/types/database.ts` must add `overtime_seconds: number` in the next client plan.
 
 ---
 *Phase: 08-timer-migration-core-engine*
-*Completed: 2026-06-27 (auto tasks; human-verify checkpoint pending)*
+*Completed: 2026-06-27 (all 3 tasks complete; human-verify checkpoint approved)*
 
 ## Self-Check: PASSED
 - FOUND: supabase/migrations/00005_timer_overtime.sql
