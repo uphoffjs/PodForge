@@ -48,7 +48,7 @@ Commander Pod Pairer is a web app for casual MTG Commander playgroups. Players j
 **Branch:** `feature/v4.0-pod-improvements` (create before starting Phase 6)
 
 - [x] **Phase 6: Opponent Diversity and Seat Verification** - Quadratic penalty scoring, multi-start greedy, swap pass, and empirical seat randomization verification (completed 2026-03-02)
-- [ ] **Phase 7: Pods of 3** - Algorithm support for 3-player pods, admin toggle UI, PodCard rendering, and full E2E coverage
+- [x] **Phase 7: Pods of 3** - Algorithm support for 3-player pods, admin toggle UI, PodCard rendering, and full E2E coverage (completed 2026-03-02)
 
 ## Phase Details
 
@@ -66,7 +66,7 @@ Commander Pod Pairer is a web app for casual MTG Commander playgroups. Players j
 
 Plans:
 - [x] 06-01: Opponent Diversity Algorithm (quadratic scoring, multi-start greedy, swap pass)
-- [ ] 06-02: TBD
+- [x] 06-02: Seat Randomization Verification (empirical chi-squared distribution test, unit coverage)
 
 ### Phase 7: Pods of 3
 **Goal**: Admins can toggle pods of 3 per-round to eliminate unnecessary byes, and the full feature works end-to-end through the real Supabase RPC
@@ -81,9 +81,9 @@ Plans:
 **Plans**: 3 plans in 3 waves
 
 Plans:
-- [ ] 07-01-PLAN.md -- computePodSizes + Algorithm Generalization (TDD)
-- [ ] 07-02-PLAN.md -- Admin Toggle UI + PodCard Rendering
-- [ ] 07-03-PLAN.md -- E2E Tests + Stryker Mutation Testing
+- [x] 07-01-PLAN.md -- computePodSizes + Algorithm Generalization (TDD)
+- [x] 07-02-PLAN.md -- Admin Toggle UI + PodCard Rendering
+- [x] 07-03-PLAN.md -- E2E Tests + Stryker Mutation Testing
 
 ## Progress
 
@@ -102,5 +102,5 @@ Phases execute in numeric order: 6 → 7
 | 3. Timer System | v2.0 | 3/3 | Complete | 2026-02-25 |
 | 4. Event Polish, Testing, and Deployment | v3.0 | 3/3 | Complete | 2026-02-25 |
 | 5. Bulletproof CI/CD Pipeline | v3.0 | 3/3 | Complete | 2026-02-27 |
-| 6. Opponent Diversity and Seat Verification | v4.0 | Complete    | 2026-03-02 | - |
-| 7. Pods of 3 | v4.0 | 0/3 | Not started | - |
+| 6. Opponent Diversity and Seat Verification | v4.0 | 2/2 | Complete | 2026-03-02 |
+| 7. Pods of 3 | v4.0 | 3/3 | Complete | 2026-03-02 |
