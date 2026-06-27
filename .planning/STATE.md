@@ -1,14 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.0
-milestone_name: Pod Algorithm Improvements
-status: unknown
-last_updated: "2026-03-02T18:46:48.356Z"
+milestone: v5.0
+milestone_name: Mid-Event Flow & Round Formats
+status: planning
+last_updated: "2026-06-27T17:01:11.490Z"
+last_activity: 2026-06-27
 progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -22,16 +24,15 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 
 ## Current Position
 
-Phase: 7 of 7 (Pods-of-3 Support) -- COMPLETE
-Plan: 3 of 3 in current phase -- ALL COMPLETE
-Status: v4.0 milestone complete -- all phases and plans executed
-Last activity: 2026-03-02 -- Completed 07-03 (E2E Tests + Stryker Mutation Validation)
-
-Progress: [██████████] 100%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-27 — Milestone v5.0 started
 
 ## Performance Metrics
 
 **v3.0 Velocity (reference):**
+
 - Total plans completed: 6
 - Timeline: 3 days (2026-02-25 to 2026-02-27)
 
@@ -49,6 +50,7 @@ Progress: [██████████] 100%
 See: .planning/PROJECT.md Key Decisions table (comprehensive list)
 
 Recent decisions affecting current work:
+
 - [v4.0 Roadmap]: 2 phases -- opponent diversity + seat verification first (pure algorithm), then pods-of-3 (algorithm + UI + E2E)
 - [v4.0 Roadmap]: Test requirements distributed across phases (not a separate test phase)
 - [v4.0 Roadmap]: Feature branch `feature/v4.0-pod-improvements` -- create before starting Phase 6
