@@ -65,6 +65,55 @@ describe('useGenerateRound', () => {
       p_passphrase: 'secret',
       p_pod_assignments: samplePodAssignments,
       p_timer_duration_minutes: 50,
+      p_overtime_minutes: 0,
+    })
+  })
+
+  it('forwards p_overtime_minutes when overtimeMinutes is provided', async () => {
+    mockRpc.mockResolvedValue({ data: 2, error: null })
+
+    const { result } = renderHook(() => useGenerateRound('evt1'), {
+      wrapper: createWrapper(),
+    })
+
+    result.current.mutate({
+      passphrase: 'secret',
+      podAssignments: samplePodAssignments,
+      timerDurationMinutes: 80,
+      overtimeMinutes: 20,
+    })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(mockRpc).toHaveBeenCalledWith('generate_round', {
+      p_event_id: 'evt1',
+      p_passphrase: 'secret',
+      p_pod_assignments: samplePodAssignments,
+      p_timer_duration_minutes: 80,
+      p_overtime_minutes: 20,
+    })
+  })
+
+  it('passes 0 for p_overtime_minutes when overtimeMinutes not provided', async () => {
+    mockRpc.mockResolvedValue({ data: 1, error: null })
+
+    const { result } = renderHook(() => useGenerateRound('evt1'), {
+      wrapper: createWrapper(),
+    })
+
+    result.current.mutate({
+      passphrase: 'secret',
+      podAssignments: samplePodAssignments,
+    })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(mockRpc).toHaveBeenCalledWith('generate_round', {
+      p_event_id: 'evt1',
+      p_passphrase: 'secret',
+      p_pod_assignments: samplePodAssignments,
+      p_timer_duration_minutes: null,
+      p_overtime_minutes: 0,
     })
   })
 
@@ -87,6 +136,7 @@ describe('useGenerateRound', () => {
       p_passphrase: 'secret',
       p_pod_assignments: samplePodAssignments,
       p_timer_duration_minutes: null,
+      p_overtime_minutes: 0,
     })
   })
 
