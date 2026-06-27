@@ -11,7 +11,7 @@ type PlayerListProps = {
   isAdmin?: boolean
   eventId?: string
   passphrase?: string | null
-  onPassphraseNeeded?: () => void
+  onPassphraseNeeded?: (error?: string) => void
 }
 
 export function PlayerList({

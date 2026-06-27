@@ -153,9 +153,9 @@ export function EventPage() {
     setPassphraseError(null)
   }, [])
 
-  const handlePassphraseNeeded = useCallback(() => {
+  const handlePassphraseNeeded = useCallback((error?: string) => {
     setShowPassphraseModal(true)
-    setPassphraseError(null)
+    setPassphraseError(error ?? null)
   }, [])
 
   if (!eventId) {

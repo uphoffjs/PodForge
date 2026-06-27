@@ -5,13 +5,17 @@ import { useResumeTimer } from '@/hooks/useResumeTimer'
 import { useExtendTimer } from '@/hooks/useExtendTimer'
 import { useCancelTimer } from '@/hooks/useCancelTimer'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import {
+  isInvalidPassphraseError,
+  INVALID_PASSPHRASE_RETRY_MESSAGE,
+} from '@/lib/passphrase-error'
 import type { RoundTimer } from '@/types/database'
 
 interface TimerControlsProps {
   eventId: string
   passphrase: string
   timer: RoundTimer
-  onPassphraseNeeded: () => void
+  onPassphraseNeeded: (error?: string) => void
 }
 
 export function TimerControls({
@@ -29,12 +33,20 @@ export function TimerControls({
 
   if (timer.status === 'cancelled') return null
 
+  // Re-open the passphrase modal with inline feedback when a timer mutation is
+  // rejected because the stored passphrase is invalid.
+  const handlePassphraseRejection = (error: unknown) => {
+    if (isInvalidPassphraseError(error)) {
+      onPassphraseNeeded(INVALID_PASSPHRASE_RETRY_MESSAGE)
+    }
+  }
+
   const handlePause = () => {
     if (!passphrase) {
       onPassphraseNeeded()
       return
     }
-    pauseTimer.mutate({ passphrase })
+    pauseTimer.mutate({ passphrase }, { onError: handlePassphraseRejection })
   }
 
   const handleResume = () => {
@@ -42,7 +54,7 @@ export function TimerControls({
       onPassphraseNeeded()
       return
     }
-    resumeTimer.mutate({ passphrase })
+    resumeTimer.mutate({ passphrase }, { onError: handlePassphraseRejection })
   }
 
   const handleExtend = () => {
@@ -50,7 +62,7 @@ export function TimerControls({
       onPassphraseNeeded()
       return
     }
-    extendTimer.mutate({ passphrase })
+    extendTimer.mutate({ passphrase }, { onError: handlePassphraseRejection })
   }
 
   const handleCancelClick = () => {
@@ -67,7 +79,10 @@ export function TimerControls({
       { passphrase },
       {
         onSuccess: () => setShowCancelConfirm(false),
-        onError: () => setShowCancelConfirm(false),
+        onError: (error) => {
+          setShowCancelConfirm(false)
+          handlePassphraseRejection(error)
+        },
       },
     )
   }

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AdminPlayerActions } from './AdminPlayerActions'
+import { INVALID_PASSPHRASE_RETRY_MESSAGE } from '@/lib/passphrase-error'
 
 // ---------------------------------------------------------------------------
 // Hoisted mock variables
@@ -273,6 +274,68 @@ describe('AdminPlayerActions', () => {
 
     expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
     expect(mockToastSuccess).not.toHaveBeenCalled()
+  })
+
+  // --- Passphrase feedback loop (invalid passphrase re-opens modal) ---
+
+  it('remove onError re-opens passphrase modal on invalid passphrase', async () => {
+    const user = userEvent.setup()
+    const onPassphraseNeeded = vi.fn()
+    mockRemoveMutate.mockImplementation(
+      (_params: unknown, options: { onError?: (e: unknown) => void }) => {
+        options.onError?.(new Error('invalid passphrase provided'))
+      }
+    )
+
+    render(
+      <AdminPlayerActions {...defaultActiveProps} onPassphraseNeeded={onPassphraseNeeded} />
+    )
+
+    await user.click(screen.getByTestId('admin-remove-player-p1'))
+    await user.click(screen.getByTestId('confirm-dialog-confirm-btn'))
+
+    expect(onPassphraseNeeded).toHaveBeenCalledTimes(1)
+    expect(onPassphraseNeeded).toHaveBeenCalledWith(INVALID_PASSPHRASE_RETRY_MESSAGE)
+    expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
+  })
+
+  it('remove onError does NOT re-open modal on a non-passphrase error', async () => {
+    const user = userEvent.setup()
+    const onPassphraseNeeded = vi.fn()
+    mockRemoveMutate.mockImplementation(
+      (_params: unknown, options: { onError?: (e: unknown) => void }) => {
+        options.onError?.(new Error('player not found'))
+      }
+    )
+
+    render(
+      <AdminPlayerActions {...defaultActiveProps} onPassphraseNeeded={onPassphraseNeeded} />
+    )
+
+    await user.click(screen.getByTestId('admin-remove-player-p1'))
+    await user.click(screen.getByTestId('confirm-dialog-confirm-btn'))
+
+    expect(onPassphraseNeeded).not.toHaveBeenCalled()
+  })
+
+  it('reactivate onError re-opens passphrase modal on invalid passphrase', async () => {
+    const user = userEvent.setup()
+    const onPassphraseNeeded = vi.fn()
+    mockReactivateMutate.mockImplementation(
+      (_params: unknown, options: { onError?: (e: unknown) => void }) => {
+        options.onError?.(new Error('invalid passphrase provided'))
+      }
+    )
+
+    render(
+      <AdminPlayerActions {...defaultDroppedProps} onPassphraseNeeded={onPassphraseNeeded} />
+    )
+
+    await user.click(screen.getByTestId('admin-reactivate-player-p1'))
+    await user.click(screen.getByTestId('confirm-dialog-confirm-btn'))
+
+    expect(onPassphraseNeeded).toHaveBeenCalledTimes(1)
+    expect(onPassphraseNeeded).toHaveBeenCalledWith(INVALID_PASSPHRASE_RETRY_MESSAGE)
   })
 
   it('handleConfirm returns early when passphrase becomes null', async () => {

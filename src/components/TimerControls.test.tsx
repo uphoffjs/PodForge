@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TimerControls } from './TimerControls'
+import { INVALID_PASSPHRASE_RETRY_MESSAGE } from '@/lib/passphrase-error'
 import type { RoundTimer } from '@/types/database'
 
 // ---------------------------------------------------------------------------
@@ -196,7 +197,10 @@ describe('TimerControls', () => {
     await user.click(screen.getByTestId('timer-pause-btn'))
 
     expect(mockPauseMutate).toHaveBeenCalledTimes(1)
-    expect(mockPauseMutate).toHaveBeenCalledWith({ passphrase: 'secret123' })
+    expect(mockPauseMutate).toHaveBeenCalledWith(
+      { passphrase: 'secret123' },
+      expect.objectContaining({ onError: expect.any(Function) })
+    )
   })
 
   it('calls resumeTimer.mutate with passphrase when Resume is clicked', async () => {
@@ -209,7 +213,10 @@ describe('TimerControls', () => {
     await user.click(screen.getByTestId('timer-resume-btn'))
 
     expect(mockResumeMutate).toHaveBeenCalledTimes(1)
-    expect(mockResumeMutate).toHaveBeenCalledWith({ passphrase: 'secret123' })
+    expect(mockResumeMutate).toHaveBeenCalledWith(
+      { passphrase: 'secret123' },
+      expect.objectContaining({ onError: expect.any(Function) })
+    )
   })
 
   it('calls extendTimer.mutate with passphrase when Extend is clicked', async () => {
@@ -220,7 +227,10 @@ describe('TimerControls', () => {
     await user.click(screen.getByTestId('timer-extend-btn'))
 
     expect(mockExtendMutate).toHaveBeenCalledTimes(1)
-    expect(mockExtendMutate).toHaveBeenCalledWith({ passphrase: 'secret123' })
+    expect(mockExtendMutate).toHaveBeenCalledWith(
+      { passphrase: 'secret123' },
+      expect.objectContaining({ onError: expect.any(Function) })
+    )
   })
 
   it('opens ConfirmDialog when Cancel is clicked with passphrase', async () => {
@@ -341,5 +351,74 @@ describe('TimerControls', () => {
     await user.click(screen.getByTestId('confirm-dialog-confirm-btn'))
 
     expect(mockCancelMutate).not.toHaveBeenCalled()
+  })
+
+  // --- Passphrase feedback loop (invalid passphrase re-opens modal) ---
+
+  it('Pause onError re-opens passphrase modal on invalid passphrase', async () => {
+    const user = userEvent.setup()
+    const onPassphraseNeeded = vi.fn()
+    mockPauseMutate.mockImplementation(
+      (_params: unknown, options: { onError?: (e: unknown) => void }) => {
+        options.onError?.(new Error('invalid passphrase provided'))
+      }
+    )
+
+    render(
+      <TimerControls
+        {...defaultProps}
+        timer={makeTimer({ status: 'running' })}
+        onPassphraseNeeded={onPassphraseNeeded}
+      />
+    )
+
+    await user.click(screen.getByTestId('timer-pause-btn'))
+
+    expect(onPassphraseNeeded).toHaveBeenCalledTimes(1)
+    expect(onPassphraseNeeded).toHaveBeenCalledWith(INVALID_PASSPHRASE_RETRY_MESSAGE)
+  })
+
+  it('Pause onError does NOT re-open modal on a non-passphrase error', async () => {
+    const user = userEvent.setup()
+    const onPassphraseNeeded = vi.fn()
+    mockPauseMutate.mockImplementation(
+      (_params: unknown, options: { onError?: (e: unknown) => void }) => {
+        options.onError?.(new Error('network down'))
+      }
+    )
+
+    render(
+      <TimerControls
+        {...defaultProps}
+        timer={makeTimer({ status: 'running' })}
+        onPassphraseNeeded={onPassphraseNeeded}
+      />
+    )
+
+    await user.click(screen.getByTestId('timer-pause-btn'))
+
+    expect(onPassphraseNeeded).not.toHaveBeenCalled()
+  })
+
+  it('Cancel timer onError re-opens passphrase modal on invalid passphrase', async () => {
+    const user = userEvent.setup()
+    const onPassphraseNeeded = vi.fn()
+    mockCancelMutate.mockImplementation(
+      (_params: unknown, options: { onError?: (e: unknown) => void }) => {
+        options.onError?.(new Error('invalid passphrase provided'))
+      }
+    )
+
+    render(
+      <TimerControls {...defaultProps} onPassphraseNeeded={onPassphraseNeeded} />
+    )
+
+    await user.click(screen.getByTestId('timer-cancel-btn'))
+    await user.click(screen.getByTestId('confirm-dialog-confirm-btn'))
+
+    expect(onPassphraseNeeded).toHaveBeenCalledTimes(1)
+    expect(onPassphraseNeeded).toHaveBeenCalledWith(INVALID_PASSPHRASE_RETRY_MESSAGE)
+    // Confirm dialog also closes on error
+    expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
   })
 })

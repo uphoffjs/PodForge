@@ -8,13 +8,17 @@ import { useRounds } from '@/hooks/useRounds'
 import { useAllRoundsPods } from '@/hooks/useAllRoundsPods'
 import type { PodWithPlayers } from '@/hooks/usePods'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import {
+  isInvalidPassphraseError,
+  INVALID_PASSPHRASE_RETRY_MESSAGE,
+} from '@/lib/passphrase-error'
 import type { Player, Round } from '@/types/database'
 
 interface AdminControlsProps {
   eventId: string
   isAdmin: boolean
   passphrase: string | null
-  onPassphraseNeeded: () => void
+  onPassphraseNeeded: (error?: string) => void
   players: Player[]
   isEventEnded: boolean
 }
@@ -111,8 +115,11 @@ export function AdminControls({
             setSelectedDuration(null)
             setAllowPodsOf3(false)
           },
-          onError: () => {
+          onError: (error) => {
             setIsGenerating(false)
+            if (isInvalidPassphraseError(error)) {
+              onPassphraseNeeded(INVALID_PASSPHRASE_RETRY_MESSAGE)
+            }
           },
         },
       )
@@ -143,8 +150,11 @@ export function AdminControls({
         onSuccess: () => {
           setShowEndConfirm(false)
         },
-        onError: () => {
+        onError: (error) => {
           setShowEndConfirm(false)
+          if (isInvalidPassphraseError(error)) {
+            onPassphraseNeeded(INVALID_PASSPHRASE_RETRY_MESSAGE)
+          }
         },
       },
     )

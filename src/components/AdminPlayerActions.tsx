@@ -4,6 +4,10 @@ import { Trash2, UserPlus } from 'lucide-react'
 import { useRemovePlayer } from '@/hooks/useRemovePlayer'
 import { useReactivatePlayer } from '@/hooks/useReactivatePlayer'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import {
+  isInvalidPassphraseError,
+  INVALID_PASSPHRASE_RETRY_MESSAGE,
+} from '@/lib/passphrase-error'
 
 interface AdminPlayerActionsProps {
   eventId: string
@@ -11,7 +15,7 @@ interface AdminPlayerActionsProps {
   playerName: string
   playerStatus: 'active' | 'dropped'
   passphrase: string | null
-  onPassphraseNeeded: () => void
+  onPassphraseNeeded: (error?: string) => void
 }
 
 export function AdminPlayerActions({
@@ -41,6 +45,15 @@ export function AdminPlayerActions({
   const handleConfirm = () => {
     if (!passphrase) return
 
+    // Re-open the passphrase modal with inline feedback when the mutation is
+    // rejected because the stored passphrase is invalid.
+    const handleError = (error: unknown) => {
+      setShowConfirm(false)
+      if (isInvalidPassphraseError(error)) {
+        onPassphraseNeeded(INVALID_PASSPHRASE_RETRY_MESSAGE)
+      }
+    }
+
     if (isActive) {
       removePlayer.mutate(
         { passphrase, playerId },
@@ -49,9 +62,7 @@ export function AdminPlayerActions({
             toast.success(`Removed ${playerName}`)
             setShowConfirm(false)
           },
-          onError: () => {
-            setShowConfirm(false)
-          },
+          onError: handleError,
         },
       )
     } else {
@@ -62,9 +73,7 @@ export function AdminPlayerActions({
             toast.success(`Reactivated ${playerName}`)
             setShowConfirm(false)
           },
-          onError: () => {
-            setShowConfirm(false)
-          },
+          onError: handleError,
         },
       )
     }

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
 import { AdminControls } from './AdminControls'
+import { INVALID_PASSPHRASE_RETRY_MESSAGE } from '@/lib/passphrase-error'
 import type { Player } from '@/types/database'
 
 // Mock generatePods to capture its input
@@ -845,5 +846,89 @@ describe('AdminControls', () => {
     await user.click(screen.getByTestId('generate-round-btn'))
 
     expect(toast.warning).toHaveBeenCalledWith('5 players: 1 pod of 4 + 1 bye (no valid 3-player split)')
+  })
+
+  // --- Passphrase feedback loop (invalid passphrase re-opens modal) ---
+
+  it('generate round onError re-opens passphrase modal on invalid passphrase', async () => {
+    const user = userEvent.setup()
+    const onPassphraseNeeded = vi.fn()
+    mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
+    mockMutate.mockImplementation(
+      (_params: unknown, options: { onError?: (e: unknown) => void }) => {
+        options.onError?.(new Error('invalid passphrase provided'))
+      }
+    )
+
+    render(
+      <AdminControls {...defaultProps} onPassphraseNeeded={onPassphraseNeeded} />,
+      { wrapper: createWrapper() }
+    )
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(onPassphraseNeeded).toHaveBeenCalledTimes(1)
+    expect(onPassphraseNeeded).toHaveBeenCalledWith(INVALID_PASSPHRASE_RETRY_MESSAGE)
+  })
+
+  it('generate round onError does NOT re-open modal on a non-passphrase error', async () => {
+    const user = userEvent.setup()
+    const onPassphraseNeeded = vi.fn()
+    mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
+    mockMutate.mockImplementation(
+      (_params: unknown, options: { onError?: (e: unknown) => void }) => {
+        options.onError?.(new Error('event has ended'))
+      }
+    )
+
+    render(
+      <AdminControls {...defaultProps} onPassphraseNeeded={onPassphraseNeeded} />,
+      { wrapper: createWrapper() }
+    )
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(onPassphraseNeeded).not.toHaveBeenCalled()
+  })
+
+  it('end event onError re-opens passphrase modal on invalid passphrase', async () => {
+    const user = userEvent.setup()
+    const onPassphraseNeeded = vi.fn()
+    mockEndMutate.mockImplementation(
+      (_params: unknown, options: { onError?: (e: unknown) => void }) => {
+        options.onError?.(new Error('invalid passphrase provided'))
+      }
+    )
+
+    render(
+      <AdminControls {...defaultProps} onPassphraseNeeded={onPassphraseNeeded} />,
+      { wrapper: createWrapper() }
+    )
+
+    await user.click(screen.getByTestId('end-event-btn'))
+    await user.click(screen.getByTestId('confirm-dialog-confirm-btn'))
+
+    expect(onPassphraseNeeded).toHaveBeenCalledTimes(1)
+    expect(onPassphraseNeeded).toHaveBeenCalledWith(INVALID_PASSPHRASE_RETRY_MESSAGE)
+  })
+
+  it('end event onError does NOT re-open modal on a non-passphrase error', async () => {
+    const user = userEvent.setup()
+    const onPassphraseNeeded = vi.fn()
+    mockEndMutate.mockImplementation(
+      (_params: unknown, options: { onError?: (e: unknown) => void }) => {
+        options.onError?.(new Error('something else failed'))
+      }
+    )
+
+    render(
+      <AdminControls {...defaultProps} onPassphraseNeeded={onPassphraseNeeded} />,
+      { wrapper: createWrapper() }
+    )
+
+    await user.click(screen.getByTestId('end-event-btn'))
+    await user.click(screen.getByTestId('confirm-dialog-confirm-btn'))
+
+    expect(onPassphraseNeeded).not.toHaveBeenCalled()
   })
 })

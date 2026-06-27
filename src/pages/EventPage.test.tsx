@@ -177,10 +177,16 @@ vi.mock('@/components/RoundDisplay', () => ({
 }))
 
 vi.mock('@/components/AdminControls', () => ({
-  AdminControls: ({ onPassphraseNeeded }: { eventId: string; isAdmin: boolean; passphrase: string | null; onPassphraseNeeded: () => void; players: Player[]; isEventEnded: boolean }) => (
+  AdminControls: ({ onPassphraseNeeded }: { eventId: string; isAdmin: boolean; passphrase: string | null; onPassphraseNeeded: (error?: string) => void; players: Player[]; isEventEnded: boolean }) => (
     <div data-testid="admin-controls">
-      <button data-testid="mock-passphrase-needed" onClick={onPassphraseNeeded}>
+      <button data-testid="mock-passphrase-needed" onClick={() => onPassphraseNeeded()}>
         Need Passphrase
+      </button>
+      <button
+        data-testid="mock-passphrase-rejected"
+        onClick={() => onPassphraseNeeded('Invalid passphrase. Please re-enter to continue.')}
+      >
+        Reject Passphrase
       </button>
     </div>
   ),
@@ -203,6 +209,7 @@ vi.mock('@/components/AdminPassphraseModal', () => ({
     isOpen,
     onSubmit,
     onCancel,
+    error,
   }: {
     isOpen: boolean
     onSubmit: (passphrase: string) => void
@@ -211,6 +218,7 @@ vi.mock('@/components/AdminPassphraseModal', () => ({
   }) =>
     isOpen ? (
       <div data-testid="admin-passphrase-modal">
+        {error && <p data-testid="admin-passphrase-error">{error}</p>}
         <button data-testid="mock-passphrase-submit" onClick={() => onSubmit('secret123')}>
           Submit
         </button>
@@ -1015,6 +1023,41 @@ describe('EventPage', () => {
 
       // Modal should now be visible
       expect(screen.getByTestId('admin-passphrase-modal')).toBeInTheDocument()
+      // Opened without an error message (passphrase missing, not rejected)
+      expect(screen.queryByTestId('admin-passphrase-error')).not.toBeInTheDocument()
+    })
+
+    it('re-opens passphrase modal with an inline error when a mutation reports an invalid passphrase', async () => {
+      const user = userEvent.setup()
+      render(<EventPage />)
+
+      expect(screen.queryByTestId('admin-passphrase-modal')).not.toBeInTheDocument()
+
+      // Admin action fails server-side with an invalid passphrase
+      await user.click(screen.getByTestId('mock-passphrase-rejected'))
+
+      // Modal re-opens AND surfaces the human-readable retry message
+      expect(screen.getByTestId('admin-passphrase-modal')).toBeInTheDocument()
+      expect(screen.getByTestId('admin-passphrase-error')).toHaveTextContent(
+        'Invalid passphrase. Please re-enter to continue.'
+      )
+    })
+
+    it('clears the inline error when the passphrase is re-submitted', async () => {
+      const user = userEvent.setup()
+      render(<EventPage />)
+
+      // Open with an error
+      await user.click(screen.getByTestId('mock-passphrase-rejected'))
+      expect(screen.getByTestId('admin-passphrase-error')).toBeInTheDocument()
+
+      // Submitting closes the modal (and would clear the error on next open)
+      await user.click(screen.getByTestId('mock-passphrase-submit'))
+      expect(screen.queryByTestId('admin-passphrase-modal')).not.toBeInTheDocument()
+
+      // Re-opening via the plain "needed" path shows no stale error
+      await user.click(screen.getByTestId('mock-passphrase-needed'))
+      expect(screen.queryByTestId('admin-passphrase-error')).not.toBeInTheDocument()
     })
 
     it('closes passphrase modal and clears error when cancel is clicked', async () => {
