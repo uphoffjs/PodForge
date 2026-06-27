@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Mid-Event Flow & Round Formats
 status: executing
-stopped_at: "08-01 complete — migration 00005 applied + human-verify checkpoint approved. Next: plan 08-02 (useCountdown three-phase derivation)"
-last_updated: "2026-06-27T21:50:54.238Z"
+stopped_at: "08-02 complete — RoundTimer.overtime_seconds contract + useGenerateRound p_overtime_minutes threading (100% Stryker). Next: plan 08-03 (useCountdown three-phase derivation)"
+last_updated: "2026-06-27T22:10:00.000Z"
 last_activity: 2026-06-27
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 9
-  completed_plans: 6
-  percent: 33
+  completed_plans: 7
+  percent: 37
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-27)
 ## Current Position
 
 Phase: 08 (timer-migration-core-engine) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-06-27
 
@@ -51,6 +51,7 @@ Last activity: 2026-06-27
 | 6 | 2/2 | 32min | 16min |
 | 7 | 3/3 | 19min | 6min |
 | Phase 08 P01 | 6min | 3 tasks | 1 files |
+| Phase 08 P02 | 18min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,7 @@ Recent decisions affecting current work:
 - [v5.0 Roadmap]: Branch `feature/v5.0-mid-event-flow` — create before starting Phase 8
 - [v4.0 Roadmap]: Test requirements distributed across phases (not a separate test phase) — pattern continued in v5.0
 - [Phase ?]: [08-01]: Migration 00005 applied to live DB — overtime_seconds column, overload-safe generate_round (p_overtime_minutes, bounds-checked), signed pause_timer (clamp removed). resume/extend/cancel untouched.
+- [08-02]: RoundTimer.overtime_seconds is a REQUIRED field (forces compile-time consumer audit); remaining_seconds documented SIGNED. useGenerateRound threads p_overtime_minutes: overtimeMinutes ?? 0. Suite green (849 tests), useGenerateRound.ts at 100% Stryker. Did NOT add CountdownState.phase (deferred to 08-03).
 
 ### Pending Todos
 
@@ -89,6 +91,6 @@ None. Phase 8 planner should make two explicit design sign-offs before coding (p
 
 ## Session Continuity
 
-Last session: 2026-06-27T21:50:54.233Z
-Stopped at: 08-01 complete — migration 00005 applied + human-verify checkpoint approved. Next: plan 08-02 (useCountdown three-phase derivation)
+Last session: 2026-06-27T22:10:00.000Z
+Stopped at: 08-02 complete — RoundTimer.overtime_seconds contract + useGenerateRound p_overtime_minutes threading (100% Stryker, 849 tests green). Next: plan 08-03 (useCountdown three-phase derivation)
 Resume file: None

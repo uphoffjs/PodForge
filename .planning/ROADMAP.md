@@ -112,7 +112,7 @@ Plans:
 
 Plans:
 - [x] 08-01-PLAN.md -- Migration 00005 (overtime_seconds column, generate_round overload DROP + p_overtime_minutes, pause_timer clamp removal) + schema push + SQL verify
-- [ ] 08-02-PLAN.md -- RoundTimer.overtime_seconds type contract (repo-wide factory compat) + thread overtimeMinutes through useGenerateRound
+- [x] 08-02-PLAN.md -- RoundTimer.overtime_seconds type contract (repo-wide factory compat) + thread overtimeMinutes through useGenerateRound
 - [ ] 08-03-PLAN.md -- useCountdown three-phase derivation (main/overtime/countup) + phase field, 100% Stryker
 - [ ] 08-04-PLAN.md -- useTimerNotification dual-boundary dedup (phase-transition + Set), 100% Stryker
 
