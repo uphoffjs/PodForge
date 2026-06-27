@@ -1,503 +1,250 @@
 # Architecture Research
 
-**Domain:** Pod algorithm improvements — repeat opponent reduction, seat randomization, pods of 3 toggle
-**Researched:** 2026-03-02
-**Confidence:** HIGH (based on direct codebase inspection — all findings are from source files, no speculation)
+**Domain:** v5.0 feature integration — 80+20 round-timer format + mid-event join UX (Commander Pod Pairer)
+**Researched:** 2026-06-27
+**Confidence:** HIGH (grounded entirely in current source: `00004_timer_system.sql`, `src/hooks/useCountdown.ts`, `useTimer.ts`, `useTimerNotification.ts`, `useGenerateRound.ts`, `useRounds.ts`, `src/components/TimerDisplay.tsx`, `PlayerItem.tsx`, `AdminControls.tsx`, `src/types/database.ts`)
 
----
+## Executive Recommendation
 
-## Context: What v4.0 Is Adding to Existing Architecture
+Both features integrate cleanly with the existing server-authoritative, pure-derivation architecture **without introducing any new server-side ticking, cron, or phase-transition writes.**
 
-This is a subsequent milestone, not a greenfield project. The existing architecture is fully understood from direct source inspection. The three v4.0 features all route through a single choke point:
+- **80+20 timer:** Add **one** column (`overtime_seconds`) to `round_timers`. Keep `expires_at` meaning "end of main period." **Derive the phase (main → overtime → count-up) purely on the client** from `expires_at` + `overtime_seconds` + `Date.now()`. Do **not** add a `phase` column — phase is a function of time and storing it would require a server tick to keep current (redundant state, violates the existing zero-drift model).
+- **Mid-event join:** **Zero migration, zero new columns.** Derive "joined mid-event" on the client by comparing `player.created_at` against the `created_at` of the earliest round (`round_number = 1`). Both values already flow through existing queries (`useEventPlayers`, `useRounds`).
 
-```
-AdminControls.tsx
-  └── generatePods()          ← pod-algorithm.ts (pure function)
-        └── PodAssignment[]
-              └── useGenerateRound.mutate()
-                    └── supabase.rpc('generate_round')
-                          └── rounds + pods + pod_players (DB)
-```
+The single most important insight: **`useCountdown` already counts up past zero** (negative `remainingSeconds`, `+M:SS` display, `isOvertime`). The only genuinely new timer concept is a *second, configurable countdown segment* that sits between the main countdown and the existing unbounded count-up.
 
-All three features (better opponent avoidance, seat randomization verification, pods of 3) touch only `pod-algorithm.ts` and `AdminControls.tsx`. The Supabase RPC, database schema, and all other components remain unchanged.
+## Standard Architecture
 
----
-
-## System Overview (With v4.0 Touch Points)
+### System Overview — Timer data flow (after v5.0)
 
 ```
-+------------------------------------------------------------------+
-|                     React SPA (EventPage.tsx)                    |
-|                                                                  |
-|  AdminControls.tsx  [MODIFIED]                                   |
-|  +------------------------------------------------------------+  |
-|  | [NEW] allowPodsOf3 toggle  (boolean useState)              |  |
-|  | handleGenerateRound()                                      |  |
-|  |   → generatePods(activePlayers, history, { allowPodsOf3 }) |  |
-|  +----------------------------+-------------------------------+  |
-|                               | PodAssignment[]                  |
-|  pod-algorithm.ts  [MODIFIED] |                                  |
-|  +----------------------------v-------------------------------+  |
-|  | generatePods(players, history, options?)   [MODIFIED]      |  |
-|  |   buildOpponentHistory()                  [IMPROVED]       |  |
-|  |   buildByeCounts()                        [unchanged]      |  |
-|  |   selectByePlayers OR podOf3Sizing()      [NEW branch]     |  |
-|  |   greedy assignment (multi-start)         [IMPROVED]       |  |
-|  |   shuffleArray([1,2,3,4]) for seats       [already correct]|  |
-|  +----------------------------+-------------------------------+  |
-|                               | PodAssignment[]                  |
-|  useGenerateRound.ts  [UNCHANGED]                                |
-|  +----------------------------v-------------------------------+  |
-|  | mutate({ passphrase, podAssignments, timerDuration? })     |  |
-|  | supabase.rpc('generate_round', { p_pod_assignments: JSONB })|  |
-|  +----------------------------+-------------------------------+  |
-|                               |                                  |
-+-------------------------------|----------------------------------+
-                                | Supabase RPC  [UNCHANGED]
-+-------------------------------|----------------------------------+
-|  generate_round()             |                                  |
-|  +----------------------------v-------------------------------+  |
-|  | validate passphrase                                        |  |
-|  | INSERT rounds                                              |  |
-|  | FOR pod IN jsonb_array_elements(p_pod_assignments)         |  |
-|  |   INSERT pods (pod_number, is_bye)                         |  |
-|  |   INSERT pod_players (player_id, seat_number)              |  |
-|  | RETURN round_number                                        |  |
-|  +------------------------------------------------------------+  |
-|                                                                  |
-|  DB: rounds, pods, pod_players  [NO SCHEMA CHANGES NEEDED]       |
-+------------------------------------------------------------------+
-
-  PodCard.tsx  [VERIFY ONLY — likely no change needed]
-  +------------------------------------------------------------+
-  | getOrdinal(n) already has fallback: case 1/2/3/4 + ${n}th  |
-  | sort by seat_number: works for any pod size                 |
-  | POD_COLORS: cycles, works for any pod count                 |
-  +------------------------------------------------------------+
+┌──────────────────────────────────────────────────────────────────────┐
+│  round_timers row (server-authoritative anchors)                       │
+│    expires_at        = end of MAIN period (existing, unchanged meaning) │
+│    overtime_seconds  = length of OVERTIME segment (NEW column)          │
+│    status            = running | paused | cancelled (unchanged)         │
+│    remaining_seconds = signed, on pause (semantics generalized)         │
+└───────────────────────────────┬────────────────────────────────────────┘
+                                 │ useTimer() query + Realtime invalidation
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  useCountdown(timer)  — PURE client derivation, recomputed every tick   │
+│                                                                         │
+│   t = now()                                                             │
+│   mainEnd     = expires_at                                              │
+│   overtimeEnd = expires_at + overtime_seconds                          │
+│                                                                         │
+│   if t <  mainEnd      → phase=main      remaining = mainEnd - t   (↓)  │
+│   if t <  overtimeEnd  → phase=overtime  remaining = overtimeEnd - t(↓) │
+│   else                 → phase=countup   elapsed   = t - overtimeEnd(↑) │
+└───────────────┬───────────────────────────────────┬────────────────────┘
+                ▼                                   ▼
+       TimerDisplay (phase label/styling)   useTimerNotification
+                                            (fires at BOTH zero crossings)
 ```
 
----
+Because every value derives from two absolute server quantities (`expires_at`, `overtime_seconds`) plus the client clock, **refresh and reconnect are automatically correct**: re-reading the row and recomputing yields the identical phase/value. The count-up segment needs no upper bound and no server write — it is just `now - overtimeEnd`. This preserves the existing "Server-authoritative timer (expires_at - now())" key decision verbatim.
 
-## Component Responsibilities
+### Component / module responsibilities (timer)
 
-| Component | Responsibility | v4.0 Change |
-|-----------|---------------|-------------|
-| `pod-algorithm.ts` | Pure pairing logic — opponent history, bye rotation, seat assignment | MODIFIED: multi-start greedy for better avoidance, pods-of-3 sizing branch, options param |
-| `AdminControls.tsx` | Builds algorithm inputs, calls generatePods, fires mutation | MODIFIED: add allowPodsOf3 toggle UI, pass options to generatePods |
-| `useGenerateRound.ts` | TanStack mutation — calls Supabase RPC, invalidates queries | UNCHANGED |
-| `generate_round` RPC | Atomic DB write of round + pods + pod_players | UNCHANGED — already accepts pods of any size via JSONB iteration |
-| `PodCard.tsx` | Renders a pod with players and seat labels | VERIFY ONLY — getOrdinal already handles 1st/2nd/3rd; confirm 3-player pods render correctly |
-| `RoundDisplay.tsx` | Renders current round's pods | UNCHANGED — iterates pods without size assumption |
-| `PreviousRounds.tsx` | Lazy-loads and renders previous rounds | UNCHANGED |
-| `src/types/database.ts` | TypeScript types for DB shapes | UNCHANGED — no new columns |
+| Module | Current responsibility | v5.0 change |
+|--------|------------------------|-------------|
+| `round_timers` table (`supabase/migrations/00004_timer_system.sql:8`) | Authoritative timer state | **+1 column** `overtime_seconds` |
+| `generate_round` RPC (`00004_timer_system.sql:47`) | Create round + optional timer | Accept `p_overtime_minutes`, persist `overtime_seconds` |
+| `pause_timer` RPC (`00004_timer_system.sql:145`) | Snapshot remaining on pause | Generalize: drop `GREATEST(0, …)` clamp so it stores *signed* remaining (preserves overtime/count-up position across pause) |
+| `resume_timer` / `extend_timer` / `cancel_timer` | Resume/extend/cancel | **No structural change** — they manipulate `expires_at`; `overtime_seconds` rides along as a constant offset |
+| `src/types/database.ts:37` `RoundTimer` | DB row type | **+1 field** `overtime_seconds: number` |
+| `src/hooks/useCountdown.ts` | Derive remaining/display/urgency/overtime | Add `phase` derivation + per-phase remaining; extend `CountdownState` |
+| `src/hooks/useTimerNotification.ts` | Fire once at zero | Fire at **two** boundaries (main→overtime, overtime→count-up) |
+| `src/components/TimerDisplay.tsx` | Render countdown + status | Phase-aware label (`MAIN` / `OVERTIME` / `OVERTIME ELAPSED`) + styling |
+| `src/components/AdminControls.tsx:179` | Timer duration picker (60/90/120) | Add an "80+20" format option |
+| `src/hooks/useGenerateRound.ts` | Call `generate_round` RPC | Pass `overtimeMinutes` |
+| `src/hooks/useTimer.ts` | Fetch active timer | **No change** — `.select('*')` already returns the new column |
+| `src/hooks/useEventChannel.ts` | Realtime invalidation | **No change** — `round_timers` already subscribed, `REPLICA IDENTITY FULL` already set |
 
----
+### Component / module responsibilities (mid-event join)
 
-## What Is New vs Modified vs Unchanged
+| Module | v5.0 change |
+|--------|-------------|
+| `src/lib/mid-event.ts` (**NEW** pure helper) | `isMidEventJoin(playerCreatedAt, firstRoundCreatedAt): boolean` — mirrors the `pod-algorithm.ts` "pure, exported, unit-tested" convention |
+| `src/pages/EventPage.tsx` | Compute earliest-round timestamp from `useRounds` data; build a `midEventPlayerIds` Set (mirrors existing `newPlayerIds` Set pattern) and pass down |
+| `src/components/PlayerList.tsx` | Thread the Set / flag through to each row |
+| `src/components/PlayerItem.tsx:3` | Accept `isMidEvent?: boolean`; render a persistent badge (distinct from the existing 400ms `isNew` flash) |
+| Migrations / RPCs / types | **None** — fully derived |
 
-### NEW (net new code)
-- `GeneratePodsOptions` interface in `pod-algorithm.ts`
-- `allowPodsOf3` toggle button in `AdminControls.tsx`
-- Pod-of-3 sizing logic branch inside `generatePods()`
-- `scoreAssignment()` helper for multi-start greedy scoring
+## Architectural Patterns
 
-### MODIFIED (surgical changes, no rewrites)
-- `pod-algorithm.ts` — add options param (backwards compatible), add pod-of-3 branch, wrap greedy in multi-start loop
-- `AdminControls.tsx` — add `useState` for toggle, pass options object to `generatePods()`
-- `pod-algorithm.test.ts` — add test cases for pods-of-3 scenarios
-- `pod-algorithm.integration.test.ts` — add multi-round pods-of-3 tests, tighten opponent avoidance thresholds
-- `AdminControls.test.tsx` — add toggle render + state tests
+### Pattern 1: Minimal column + pure phase derivation (the core timer decision)
 
-### UNCHANGED (confirmed from source inspection)
-- `useGenerateRound.ts` — the `p_pod_assignments: JSONB` RPC param accepts any pod size today
-- `supabase/migrations/00002_rounds_pods_admin.sql` — the RPC iterates `jsonb_array_elements` without assuming pod size = 4
-- `PodCard.tsx` — `getOrdinal()` already has explicit cases for 1/2/3/4 and a `${n}th` fallback; sort by seat works for any count; POD_COLORS cycles
-- All timer hooks and components
-- All player management hooks and components
-- `EventPage.tsx`
-- `src/types/database.ts`
-- All Supabase migrations
+**What:** Store only the *configurable, authoritative* fact the client cannot otherwise know — the overtime length — and derive everything time-dependent on the client.
 
----
+**Why store `overtime_seconds` at all (vs. a hardcoded client constant)?** Because it is per-timer configuration that must be part of the authoritative record and survive format changes. A client-side `const OVERTIME = 20*60` would not be server-authoritative and would silently misrender historical timers if the format ever changed. One column is the correct minimal cost.
 
-## Architectural Patterns for v4.0
+**Why NOT a `phase` column?** Phase is a deterministic function of `(now, expires_at, overtime_seconds)`. Persisting it would force a server-side tick/cron to advance `main → overtime → countup` at the boundaries — reintroducing the drift and liveness problems the `expires_at` model was specifically chosen to avoid. Derivation keeps the DB write-free between admin actions.
 
-### Pattern 1: Options Object for generatePods (backwards compatible extension)
+**Trade-offs:** Inherits the existing client/server clock-skew characteristic (already present for the v2.0 countdown — no worse). Phase boundaries are evaluated on the 1s `setInterval`, so a transition is visible within ~1s of the true crossing.
 
-**What:** Add a third parameter as an options object, not a positional boolean. All existing call sites remain valid.
-
-**Why:** Positional booleans (`generatePods(players, history, true, false)`) are unreadable and brittle. An options object scales cleanly.
-
+**Example:**
 ```typescript
-// ADD to pod-algorithm.ts
-export interface GeneratePodsOptions {
-  allowPodsOf3?: boolean
-}
-
-// MODIFIED signature
-export function generatePods(
-  activePlayers: PlayerInfo[],
-  previousRounds: RoundHistory[],
-  options: GeneratePodsOptions = {}
-): PodAssignmentResult {
-  const { allowPodsOf3 = false } = options
-  // ... existing validation, buildOpponentHistory, buildByeCounts ...
-}
-
-// All existing test calls (generatePods(players, [])) remain valid — no updates needed
+// useCountdown.ts — replaces single computeRemaining for running timers
+const mainEnd = new Date(timer.expires_at).getTime()
+const overtimeEnd = mainEnd + timer.overtime_seconds * 1000
+const t = Date.now()
+let phase: 'main' | 'overtime' | 'countup'
+let value: number // seconds; signed for display
+if (t < mainEnd)         { phase = 'main';     value = Math.floor((mainEnd - t) / 1000) }
+else if (t < overtimeEnd){ phase = 'overtime'; value = Math.floor((overtimeEnd - t) / 1000) }
+else                     { phase = 'countup';  value = Math.floor((overtimeEnd - t) / 1000) } // negative → "+M:SS"
 ```
+A plain timer (no overtime) sets `overtime_seconds = 0`, so `overtimeEnd === mainEnd` and behavior is **identical to today** (main countdown straight into count-up) — backward compatible with all existing 60/90/120 timers.
 
-### Pattern 2: Pods-of-3 Sizing Algorithm
+### Pattern 2: Generalized pause snapshot (signed remaining)
 
-**What:** When `allowPodsOf3 = true`, replace the "remainder goes to bye" logic with a hybrid pod-sizing algorithm that finds the minimum number of 3-player pods to eliminate the remainder.
+**What:** `pause_timer` currently does `remaining_seconds = GREATEST(0, EXTRACT(EPOCH FROM (expires_at - now())))` (`00004_timer_system.sql:185`). The `GREATEST(0, …)` clamp means pausing in overtime/count-up loses position (resumes at 0). For 80+20 this would silently discard overtime/count-up progress on a mid-overtime pause.
 
-**The math:** Find the minimum `k` (count of 3-player pods) such that `(n - 3k) % 4 === 0`. The rest become 4-player pods.
+**Recommendation:** Remove the clamp so `remaining_seconds` is **signed** (can be negative, meaning "already past main end"). `resume_timer` already does `expires_at = now() + (remaining * INTERVAL '1 second')` (`:233`), which is correct for negative values too — it places `expires_at` in the past, and `overtime_seconds` (constant) keeps overtime/count-up aligned. This is a one-line RPC change that also fixes the pre-existing "pause-in-overtime resets to zero" limitation for plain timers.
 
-**Player count lookup (n=4 to n=20):**
+**Trade-off:** `remaining_seconds` is no longer guaranteed non-negative; any client code reading it directly must tolerate negatives (today only `useCountdown` reads it, and only for `paused` status — route the paused value through the same phase math).
 
-| n | allowPodsOf3=false | allowPodsOf3=true |
-|---|-------------------|-------------------|
-| 4 | 1×4 | 1×4 |
-| 5 | 1×4 + 1 bye | 1×3 + 1 bye* |
-| 6 | 1×4 + 2 bye | 2×3 |
-| 7 | 1×4 + 3 bye | 1×4 + 1×3 |
-| 8 | 2×4 | 2×4 |
-| 9 | 2×4 + 1 bye | 3×3 |
-| 10 | 2×4 + 2 bye | 1×4 + 2×3 |
-| 11 | 2×4 + 3 bye | 2×4 + 1×3 |
-| 12 | 3×4 | 3×4 |
-| 13 | 3×4 + 1 bye | 1×4 + 3×3 |
-| 14 | 3×4 + 2 bye | 2×4 + 2×3 |
-| 15 | 3×4 + 3 bye | 3×4 + 1×3 |
-| 16 | 4×4 | 4×4 |
-| 17 | 4×4 + 1 bye | 2×4 + 3×3 |
-| 18 | 4×4 + 2 bye | 3×4 + 2×3 |
-| 19 | 4×4 + 3 bye | 4×4 + 1×3 |
-| 20 | 5×4 | 5×4 |
+### Pattern 3: Pure-derivation flag via timestamp comparison (mid-event)
 
-*n=5 special case: `(5-3)=2` is not divisible by 4. No combination of 3-pods eliminates the need for a remainder when n=5. Best option: 1×3 + 2-person bye, or just 1×4 + 1 bye. Recommend: for n=5 with `allowPodsOf3=true`, fall through to 1×4 + 1 bye with a warning. This is the only player count where the toggle doesn't help.
+**What:** "Joined mid-event" = there is at least one round AND `player.created_at > earliestRound.created_at`. The earliest round is `round_number = 1`; `useRounds` returns rounds ordered `round_number` descending (`useRounds.ts:13`), so the earliest is the last element (or `Math.min` of `created_at`).
 
-**Implementation approach:**
+**Why derive (vs. a stored `joined_round` column)?** It avoids redundant state that could drift, requires no migration, and is robust to drop→reactivate (reactivation does not change `created_at`). It also automatically matches the pairing algorithm's existing behavior (mid-joiners already get empty opponent history + 0 byes).
 
+**Edge cases handled:** Pre-first-round joiners have `created_at < round1.created_at` → not flagged. With zero rounds, nobody is mid-event (no baseline yet) → flag `false` for all. Removed-then-readded-by-admin players keep their original insert time.
+
+**Trade-off:** Relies on `created_at` accuracy of the `players` insert vs. the `rounds` insert — both are server `now()` defaults, so ordering is reliable. A player joining in the same second as round-1 generation is a negligible boundary case (treat `>` strictly = not mid-event).
+
+**Example:**
 ```typescript
-function computePodSizes(n: number, allowPodsOf3: boolean): { pods4: number; pods3: number; byeCount: number } {
-  // n=0 handled upstream (validation throws)
-  if (n % 4 === 0 || !allowPodsOf3) {
-    return { pods4: Math.floor(n / 4), pods3: 0, byeCount: n % 4 }
-  }
-  // Find minimum k (3-pods) such that (n - 3k) % 4 === 0
-  for (let k = 1; k <= Math.floor(n / 3); k++) {
-    const remainder = n - 3 * k
-    if (remainder >= 0 && remainder % 4 === 0) {
-      return { pods4: remainder / 4, pods3: k, byeCount: 0 }
-    }
-  }
-  // Fallback: no valid split (only n=5 reaches here)
-  return { pods4: Math.floor(n / 4), pods3: 0, byeCount: n % 4 }
+// src/lib/mid-event.ts (NEW, pure + unit-tested per pod-algorithm convention)
+export function isMidEventJoin(playerCreatedAt: string, firstRoundCreatedAt: string | null): boolean {
+  if (!firstRoundCreatedAt) return false               // no rounds yet
+  return new Date(playerCreatedAt).getTime() > new Date(firstRoundCreatedAt).getTime()
 }
 ```
-
-The output `PodAssignment[]` shape is identical for pods of 3 — they just have 3 players and `seat_number` values 1, 2, 3. The RPC handles this without any change.
-
-### Pattern 3: Seat Randomization — Verification, Not Fix
-
-**What:** Seats are ALREADY randomized correctly via `shuffleArray([1, 2, 3, 4])` on line 222 of `pod-algorithm.ts`. The integration test `seat assignments are randomized` asserts `uniqueOrders.size > 1`. This feature is already shipped in v2.0 per `PROJECT.md`.
-
-**Investigation required:** The v4.0 requirement "fix seat order" needs clarification before implementation. The algorithm is correct. The question is whether there is a user-visible bug, and if so, where it originates:
-
-1. Is `PodCard.tsx`'s `sortedPlayers.sort((a,b) => seatNumber)` causing confusion? (No — displaying in seat order is intentional and correct.)
-2. Is the test for randomization loose enough to miss an actual bug? (Check: `uniqueOrders.size > 1` over 10 rounds is not very strict.)
-3. Is this actually a complaint about player order within a pod being similar round over round, even with different seat numbers? (Possible — e.g., if player A is always listed first because seat 1 is assigned to the first player added to the pod.)
-
-**Recommendation:** Run the integration test with higher round counts (50+) and track seat position distribution per player. If the distribution is even, the feature is working. If not, the bug is in the `shuffleArray` call or how it's seeded. Add a statistical assertion.
-
-### Pattern 4: Improved Opponent Avoidance — Multi-Start Greedy
-
-**What:** Run the greedy algorithm N times (5 iterations is sufficient), keep the assignment with the lowest total repeat-opponent score.
-
-**Why not a more complex algorithm:** This app targets 4–20 players. The greedy algorithm runs in O(n²) per iteration. 5 iterations of O(n²) for n=20 is trivially fast. Simulated annealing or ILP solvers are unnecessary complexity for this scale.
-
-**Current algorithm quality from integration tests:**
-- 8 players, 4 rounds: `maxPairCount <= 3` (current threshold)
-- 12 players, 6 rounds: `maxPairCount <= 4` (current threshold)
-
-**Expected improvement with multi-start:** These thresholds can likely tighten to `<= 2` and `<= 3` respectively. Update integration test assertions after verifying empirically.
-
-```typescript
-// ADD helper to pod-algorithm.ts
-function scoreAssignment(
-  assignments: PodAssignment[],
-  history: Map<string, Map<string, number>>
-): number {
-  let total = 0
-  for (const pod of assignments) {
-    if (pod.is_bye) continue
-    const ids = pod.players.map((p) => p.player_id)
-    for (let i = 0; i < ids.length; i++) {
-      for (let j = i + 1; j < ids.length; j++) {
-        total += history.get(ids[i])?.get(ids[j]) ?? 0
-      }
-    }
-  }
-  return total
-}
-
-// MODIFY the inner greedy body in generatePods to be callable as a function,
-// then wrap in multi-start loop:
-const ITERATIONS = 5
-let bestPods = runGreedy(podPlayers, numPods, numPods3, opponentHistory)
-let bestScore = scoreAssignment(buildAssignments(bestPods), opponentHistory)
-
-for (let attempt = 1; attempt < ITERATIONS; attempt++) {
-  const candidatePods = runGreedy(podPlayers, numPods, numPods3, opponentHistory)
-  const score = scoreAssignment(buildAssignments(candidatePods), opponentHistory)
-  if (score < bestScore) {
-    bestScore = score
-    bestPods = candidatePods
-  }
-}
-```
-
----
 
 ## Data Flow
 
-### Round Generation with v4.0 Changes
+### 80+20 round creation
 
 ```
-Admin opens AdminControls
-  Admin toggles "Allow pods of 3" (optional)
-  Admin clicks "Generate Next Round"
-  Admin clicks timer duration (optional)
-    ↓
-AdminControls.handleGenerateRound()
-  reads: allowPodsOf3: boolean  ← [NEW state]
-  reads: activePlayers (from props)
-  reads: previousRounds (from useAllRoundsPods + useRounds)
-    ↓
-generatePods(activePlayers, previousRounds, { allowPodsOf3 })  ← [MODIFIED]
-  computePodSizes(n, allowPodsOf3)  ← [NEW]
-  buildOpponentHistory(previousRounds)  ← unchanged
-  buildByeCounts(previousRounds, playerIds)  ← unchanged
-  multi-start greedy assignment  ← [IMPROVED]
-  shuffleArray seats per pod  ← unchanged
-  → PodAssignment[] (pods may have 3 players when toggle is on)
-    ↓
-useGenerateRound.mutate({ passphrase, podAssignments })  ← UNCHANGED
-  supabase.rpc('generate_round', { p_pod_assignments: JSONB })  ← UNCHANGED
-    ↓
-generate_round() RPC — iterates JSONB, writes rows  ← UNCHANGED
-    ↓
-queryClient.invalidateQueries(['rounds', 'currentRound', 'pods', 'allRoundsPods', 'timer'])
-    ↓
-Supabase Realtime → all clients refetch
-    ↓
-RoundDisplay → PodCard[] renders with 3 or 4 players
+Admin picks "80+20" format in AdminControls (duration=80, overtimeMinutes=20)
+   ↓
+useGenerateRound.mutate({ ..., timerDurationMinutes: 80, overtimeMinutes: 20 })
+   ↓
+generate_round RPC → INSERT round_timers (duration_minutes=80, overtime_seconds=1200,
+                                          expires_at = now() + 80 min)
+   ↓
+Realtime round_timers change → useEventChannel invalidates ['timer', eventId]
+   ↓
+useTimer refetch → useCountdown derives phase every 1s → TimerDisplay + notifications
 ```
 
-### Toggle State Flow
+### The two zero crossings (notification)
 
-The `allowPodsOf3` toggle lives entirely in `AdminControls` component state. It does NOT need to:
-- Persist to the database (it is a per-round input, not a stored record)
-- Propagate to any other component
-- Affect display of historical rounds
+`useTimerNotification` currently fires once per `timer.id` when `isOvertime` (`useTimerNotification.ts:46`). For 80+20 there are **two** meaningful alerts:
+1. **main → overtime** ("Main time up — 20:00 overtime begins")
+2. **overtime → count-up** ("Overtime over — round running long")
 
-After round generation, the toggle may reset to `false` or stay sticky — either UX is acceptable. Sticky is simpler (no explicit reset needed).
+Track the **last-notified phase** per `timer.id` (not a single boolean), and fire on each forward phase transition. A plain timer (`overtime_seconds = 0`) collapses both crossings into one moment — guard against double-firing by only notifying `main→overtime` when `overtime_seconds > 0`, otherwise on the single `→countup` crossing.
 
----
+## Migration / RPC Impact (explicit)
 
-## File-Level Change Map
+**NEW migration `supabase/migrations/00005_timer_overtime.sql`:**
+- `ALTER TABLE round_timers ADD COLUMN overtime_seconds INTEGER NOT NULL DEFAULT 0;`
+  - Safe additive change. Table already has `REPLICA IDENTITY FULL` and is in `supabase_realtime`; adding a column is automatically included in Realtime payloads — **no re-publish needed**.
+- `CREATE OR REPLACE FUNCTION generate_round(...)` adding `p_overtime_minutes INTEGER DEFAULT 0`, persisting `overtime_seconds = p_overtime_minutes * 60` in the `INSERT round_timers` (`00004_timer_system.sql:110`). `DEFAULT 0` keeps existing callers valid.
+- `CREATE OR REPLACE FUNCTION pause_timer(...)` removing the `GREATEST(0, …)` clamp (signed remaining).
+- `resume_timer`, `extend_timer`, `cancel_timer`: **unchanged.**
 
-```
-src/lib/pod-algorithm.ts
-  ├── ADD: GeneratePodsOptions interface
-  ├── ADD: computePodSizes() helper
-  ├── ADD: scoreAssignment() helper
-  ├── EXTRACT: inner greedy body to runGreedy()
-  ├── MODIFY: generatePods() — accept options, use computePodSizes, multi-start loop
-  └── VERIFY: shuffleArray([1,2,3,4]) for seats (already correct)
+**No migration for mid-event join.**
 
-src/lib/pod-algorithm.test.ts
-  ├── ADD: tests for computePodSizes() with allowPodsOf3=true (all n=4–20)
-  ├── ADD: tests for generatePods with { allowPodsOf3: true }
-  └── KEEP: all existing tests unchanged (no breaking changes to public interface)
+**Type change:** `src/types/database.ts` `RoundTimer` gains `overtime_seconds: number`. (Vitest 100% coverage gate applies to any new source file — `mid-event.ts` and any new hook need co-located tests; `database.ts` is excluded from coverage.)
 
-src/lib/pod-algorithm.integration.test.ts
-  ├── ADD: multi-round scenarios with allowPodsOf3=true
-  ├── UPDATE: opponent avoidance thresholds (tighten after empirical verification)
-  └── KEEP: all existing tests unchanged
+## Build Order (dependency-aware)
 
-src/components/AdminControls.tsx
-  ├── ADD: const [allowPodsOf3, setAllowPodsOf3] = useState(false)
-  ├── ADD: toggle button with data-testid="pods-of-3-toggle"
-  └── MODIFY: generatePods() call to pass { allowPodsOf3 }
+The two features are **independent tracks** and can be separate phases or parallelized. Mid-event is the lower-risk/no-migration quick win; the timer is the headline and carries the migration.
 
-src/components/AdminControls.test.tsx
-  ├── ADD: toggle renders when isAdmin=true
-  ├── ADD: toggle changes state on click
-  ├── ADD: generatePods called with options when toggle is on
-  └── KEEP: all existing tests unchanged
+**Track A — 80+20 timer (ordered; each step depends on the prior):**
+1. `00005_timer_overtime.sql` — column + `generate_round` param + `pause_timer` signed-remaining. *(Foundation: nothing client-side works without the column.)*
+2. `src/types/database.ts` — add `overtime_seconds`. *(Unblocks all TS.)*
+3. `src/hooks/useCountdown.ts` — phase derivation + per-phase remaining; extend `CountdownState` with `phase`. *(Core logic; fully unit-testable in isolation — no UI needed.)*
+4. `src/hooks/useTimerNotification.ts` — dual-boundary firing keyed on last-notified phase. *(Depends on step 3's `phase`.)*
+5. `src/components/TimerDisplay.tsx` — phase label + styling. *(Depends on 3/4.)*
+6. `src/hooks/useGenerateRound.ts` + `src/components/AdminControls.tsx` — 80+20 picker option, pass `overtimeMinutes`. *(Wires creation; depends on 1.)*
+7. E2E `cypress/e2e/timer.cy.js` + `cypress/fixtures/timer.json` — add `overtime_seconds`; use dynamic `expires_at` per the existing "dynamic expires_at in timer E2E fixtures" decision to exercise all three phases. Then Stryker on changed hooks (critical-path: 100% kill target per global rule).
 
-src/components/PodCard.tsx
-  └── VERIFY ONLY — add unit test for 3-player pod; likely no source change needed
-      getOrdinal(1/2/3) already has explicit cases
-      sort by seatNumber works for any count
-```
+**Track B — mid-event join (ordered):**
+1. `src/lib/mid-event.ts` (+ `mid-event.test.ts`) — pure `isMidEventJoin`. *(Foundation, no deps.)*
+2. `src/pages/EventPage.tsx` — derive earliest-round timestamp, build `midEventPlayerIds` Set. *(Depends on 1; reuses `useRounds` already fetched.)*
+3. `src/components/PlayerList.tsx` → `src/components/PlayerItem.tsx` — thread flag, render badge. *(Depends on 2.)*
+4. E2E (`cypress/e2e/player-join.cy.js` extension or new `mid-event.cy.js` + fixture) + Stryker on the new helper.
 
----
+**Recommended sequencing:** Track B first or in parallel (no migration, smaller blast radius), Track A second. If sequential, run Track A's migration early so the column exists before client work begins.
 
-## Suggested Build Order
+## Anti-Patterns to Avoid
 
-The order follows data dependency direction (pure core first, UI last) and ensures each step is independently testable.
+### Anti-Pattern 1: Storing `phase` (or `is_overtime`) on `round_timers`
+**What people do:** Add a `phase` column and flip it with a scheduled job at each boundary.
+**Why it's wrong:** Requires a server tick/cron, reintroduces drift, and creates redundant state that disagrees with the clock between updates — the exact problem `expires_at`-derivation was chosen to solve.
+**Do this instead:** Derive `phase` in `useCountdown` from `expires_at` + `overtime_seconds` + `now()`.
 
-### Step 1: Pods-of-3 algorithm (pure function, no dependencies)
+### Anti-Pattern 2: A second timer row / separate "overtime timer"
+**What people do:** Create a new timer row when overtime begins.
+**Why it's wrong:** Needs a trigger/write at the boundary, breaks `useTimer`'s single-active-timer assumption (`useTimer.ts:13` `.limit(1)`), and complicates pause/resume.
+**Do this instead:** One row, one moving anchor (`expires_at` = main end), one constant offset (`overtime_seconds`).
 
-**Files:** `src/lib/pod-algorithm.ts`, `src/lib/pod-algorithm.test.ts`, `src/lib/pod-algorithm.integration.test.ts`
+### Anti-Pattern 3: Keeping the `GREATEST(0, …)` pause clamp for 80+20
+**What people do:** Leave `pause_timer` as-is.
+**Why it's wrong:** Pausing during overtime/count-up snaps `remaining_seconds` to 0, discarding position on resume.
+**Do this instead:** Store signed remaining; `resume_timer` already handles negatives correctly.
 
-- Add `GeneratePodsOptions` interface
-- Implement `computePodSizes(n, allowPodsOf3)` with the k-finding loop
-- Handle n=5 special case (fall through to bye, emit warning)
-- Add seat assignment for pods of 3 (`shuffleArray([1, 2, 3])`)
-- Unit test every n=4–20 with both `allowPodsOf3: true` and `false`
-- Integration test: generate 5 rounds with pods-of-3 enabled, assert no byes for qualifying n
-- Run Stryker — maintain >= 80% mutation score
+### Anti-Pattern 4: A `joined_round` / `is_mid_event` column on `players`
+**What people do:** Persist the mid-event flag at insert time.
+**Why it's wrong:** Redundant state that can drift; needs a migration and write-path logic; the algorithm already derives the same notion implicitly.
+**Do this instead:** Derive from `player.created_at` vs. earliest round `created_at`.
 
-**Why first:** Pure function with zero React/Supabase deps. Fastest feedback loop. Bugs here are isolated from UI.
-
-### Step 2: Multi-start greedy opponent avoidance (pure function, no dependencies)
-
-**Files:** `src/lib/pod-algorithm.ts`, `src/lib/pod-algorithm.test.ts`, `src/lib/pod-algorithm.integration.test.ts`
-
-- Extract greedy body to `runGreedy()`
-- Add `scoreAssignment()` helper
-- Wrap `generatePods()` core in multi-start loop (5 iterations)
-- Empirically measure improvement: run integration tests, check actual `maxPairCount` values
-- Update integration test thresholds to reflect improved quality
-- Run Stryker — verify `scoreAssignment` has killed mutants
-
-**Why second:** Independent of pods-of-3. Keeping it as a separate step makes each Stryker run faster and more focused.
-
-### Step 3: Seat randomization audit (verify existing behavior)
-
-**Files:** `src/lib/pod-algorithm.integration.test.ts`
-
-- Add a statistical test: 20 players, 20 rounds, collect seat assignments per player
-- Assert each player gets each seat number roughly uniformly (not exact — statistical)
-- If the test reveals a bug, fix it in `pod-algorithm.ts`; otherwise document "verified working"
-- No UI changes expected from this step
-
-**Why third:** This is verification, not implementation. It either confirms no bug (fast) or reveals one (then fix it before wiring UI).
-
-### Step 4: Admin UI toggle (depends on Step 1)
-
-**Files:** `src/components/AdminControls.tsx`, `src/components/AdminControls.test.tsx`
-
-- Add `allowPodsOf3` state and toggle button
-- Use same visual pattern as timer duration buttons (toggle-style, `data-testid="pods-of-3-toggle"`)
-- Pass `{ allowPodsOf3 }` to `generatePods()`
-- Show warning in the toggle if n=5 (the one case where toggle doesn't help) — optional UX detail
-- Unit test: toggle renders, state changes, `generatePods` receives correct options
-
-**Why fourth:** UI depends on Step 1 algorithm being correct. The component test mocks `generatePods` so algorithm bugs don't surface here.
-
-### Step 5: PodCard verification (depends on Step 4)
-
-**Files:** `src/components/PodCard.tsx`, `src/components/PodCard.test.tsx`
-
-- Add a unit test for a 3-player pod (3 players, seats 1/2/3)
-- Confirm `getOrdinal` renders "1st", "2nd", "3rd" correctly
-- Confirm sort works correctly
-- If any display bug is found, fix it here; otherwise no source changes needed
-
-**Why fifth:** Only verifiable after the full data flow is wired in Step 4.
-
-### Step 6: E2E tests (depends on Steps 4–5)
-
-**Files:** `cypress/e2e/`
-
-- E2E: generate a round with pods-of-3 toggle ON for a 9-player or 13-player event
-- Assert a 3-player pod card is visible
-- Assert seat labels "1st", "2nd", "3rd" appear in the pod
-- E2E: toggle OFF reverts to standard behavior (bye pod visible)
-- Update visual regression baselines if pod card layout changes
-
-**Why last:** E2E tests are the slowest layer and depend on all prior steps. They validate user-visible behavior, not algorithm correctness.
-
----
-
-## Anti-Patterns
-
-### Anti-Pattern 1: Adding allowPodsOf3 to the Database
-
-**What people do:** Add an `allow_pods_of_3` column to `rounds` or create a per-round config table.
-
-**Why it's wrong:** The toggle is an algorithm input, not a persistent record. Historical pods already carry their size in `pod_players` count — no stored flag is needed to display them. Adding a column means a new migration, RPC parameter change, and type update.
-
-**Do this instead:** Keep `allowPodsOf3` as `useState` in `AdminControls`. It resets on page refresh, which is correct UX (admin decides per round, not per event).
-
-### Anti-Pattern 2: Changing the useGenerateRound Hook or RPC Interface
-
-**What people do:** Add `allowPodsOf3` as a parameter to `useGenerateRound` or to the `generate_round` RPC call.
-
-**Why it's wrong:** The RPC receives already-computed pod assignments (`p_pod_assignments: JSONB`). It doesn't need to know how they were generated — it just writes them. The algorithm runs entirely client-side.
-
-**Do this instead:** Keep `allowPodsOf3` inside `generatePods()`. Only the output (`PodAssignment[]`) crosses the boundary to the hook.
-
-### Anti-Pattern 3: Hardcoding Pod Size of 4 in New Tests
-
-**What people do:** Write new integration tests that assert `pod.players.length === 4` everywhere.
-
-**Why it's wrong:** This will fail for pods-of-3 scenarios. The existing test pattern already uses `expectedByes = playerCount % 4` — new tests must handle variable sizes.
-
-**Do this instead:** For `allowPodsOf3=true` tests, compute the expected pod sizes using `computePodSizes(n, true)` and assert against those values.
-
-### Anti-Pattern 4: Using Math.random() Inside Sort for Shuffling
-
-**What people do:** `players.sort(() => Math.random() - 0.5)` to shuffle.
-
-**Why it's wrong:** Already documented in `pod-algorithm.ts` with a comment. Using random inside a sort comparator violates transitivity and produces biased orderings. The codebase already uses Fisher-Yates correctly via `shuffleArray()`.
-
-**Do this instead:** Always use `shuffleArray()` for any randomization in the algorithm. Do not introduce new sort-with-random calls.
-
-### Anti-Pattern 5: Making Seat Randomization "More Random" by Re-Shuffling
-
-**What people do:** Add additional `shuffleArray()` calls across the pipeline, thinking more shuffles = more randomness.
-
-**Why it's wrong:** The existing single `shuffleArray([1, 2, 3, 4])` per pod is already a perfect uniform random permutation. Adding more calls doesn't improve randomness and can introduce bugs if the wrong array is shuffled.
-
-**Do this instead:** Trust the existing `shuffleArray()` call. If the seat randomization test (Step 3) reveals a bug, fix the specific call site — don't add more shuffles.
-
----
+### Anti-Pattern 5: Reusing the `isNew` flash for the mid-event badge
+**What people do:** Overload `PlayerItem`'s 400ms `animate-flash` (`PlayerItem.tsx:11`) to mean "mid-event."
+**Why it's wrong:** `isNew` is a transient just-joined animation for *all* new players; mid-event is a *persistent* status for a subset. Conflating them makes both incorrect.
+**Do this instead:** Add a separate `isMidEvent` prop and a persistent badge element.
 
 ## Integration Points
 
-### Internal Boundaries
+### Internal boundaries
 
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| `AdminControls` → `pod-algorithm.ts` | Direct import, function call | Add `options` as third param; all call sites in `handleGenerateRound` only |
-| `pod-algorithm.ts` → `useGenerateRound` | `PodAssignment[]` (unchanged shape) | Pods of 3: `is_bye: false`, 3 players, seats 1–3 — no interface change |
-| `useGenerateRound` → Supabase RPC | JSONB payload | RPC iterates `jsonb_array_elements` — already handles any pod size |
-| `RoundDisplay` → `PodCard` | `players[]`, `podNumber`, `isBye` props | No prop changes; `PodCard` works for any player count |
-| `AdminControls.test.tsx` → component | React Testing Library | Mock `generatePods` at module level; assert it's called with `{ allowPodsOf3: true }` |
+| Boundary | Communication | v5.0 note |
+|----------|---------------|-----------|
+| `round_timers` ↔ `useTimer` | `.select('*')` query | Auto-picks up `overtime_seconds`; no query change |
+| `round_timers` ↔ `useEventChannel` | Realtime `postgres_changes` | Already subscribed + `REPLICA IDENTITY FULL`; column ride-along, no change |
+| `useTimer` → `useCountdown` → `TimerDisplay`/`useTimerNotification` | props | Extend `CountdownState` with `phase`; consumers read it |
+| `useRounds` + `useEventPlayers` → `EventPage` → `PlayerList` → `PlayerItem` | props | Add derived `midEventPlayerIds` Set alongside existing `newPlayerIds` |
+| `AdminControls` → `useGenerateRound` → `generate_round` | RPC params | New `p_overtime_minutes` (defaulted, backward compatible) |
 
-### External Boundaries
+### External services
 
-All external boundaries (Supabase, Realtime, PostgREST) remain unchanged.
+| Service | Integration pattern | Gotcha |
+|---------|---------------------|--------|
+| Supabase Postgres | Additive migration `00005` | `ADD COLUMN ... DEFAULT 0` is safe; `CREATE OR REPLACE FUNCTION` for RPC edits |
+| Supabase Realtime | Existing publication on `round_timers` | No re-add; `REPLICA IDENTITY FULL` already set in `00004` |
+| Browser Notifications API | `useTimerNotification` | Now two alerts; keep the iOS-PWA `try/catch` swallow and `tag` dedupe (`useTimerNotification.ts:51`) |
 
----
+## Open Questions for Roadmapping
+
+- **80+20 as a preset vs. configurable overtime length?** Recommend shipping a single "80+20" preset button in `AdminControls` first (matches the requirement); the schema (`overtime_seconds`) is already general enough for arbitrary values later — no future migration needed to generalize.
+- **Admin confirmation for mid-event joiners?** PROJECT.md mentions "any admin confirmation." The badge is the core deliverable; an optional admin toast/confirm is a thin add on top of the same derived Set. Recommend scoping the badge as required, confirmation as optional stretch.
+- **Notification copy at the two boundaries** is a UX detail, not architectural — defer to phase planning.
 
 ## Sources
 
-- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/src/lib/pod-algorithm.ts`
-- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/src/components/AdminControls.tsx`
-- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/src/components/PodCard.tsx`
-- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/src/hooks/useGenerateRound.ts`
-- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/supabase/migrations/00002_rounds_pods_admin.sql`
-- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/src/lib/pod-algorithm.integration.test.ts`
-- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/src/types/database.ts`
-- Direct inspection of `/Users/jacobstoragepug/Desktop/PodForge/.planning/PROJECT.md`
+- `supabase/migrations/00004_timer_system.sql` (round_timers schema + all timer RPCs) — HIGH
+- `src/hooks/useCountdown.ts`, `useTimer.ts`, `useTimerNotification.ts`, `useGenerateRound.ts`, `useRounds.ts` — HIGH
+- `src/components/TimerDisplay.tsx`, `AdminControls.tsx`, `PlayerItem.tsx` — HIGH
+- `src/types/database.ts` — HIGH
+- `.planning/codebase/ARCHITECTURE.md`, `STRUCTURE.md`, `INTEGRATIONS.md`, `.planning/PROJECT.md` — HIGH
 
 ---
-*Architecture research for: Commander Pod Pairer v4.0 — Pod Algorithm Improvements*
-*Researched: 2026-03-02*
+*Architecture research for: v5.0 timer + mid-event integration*
+*Researched: 2026-06-27*
