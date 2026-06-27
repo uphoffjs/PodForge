@@ -15,9 +15,14 @@ export function useTimerNotification(
   timer: RoundTimer | null,
   countdown: CountdownState | null
 ): UseTimerNotificationReturn {
-  const isSupported = typeof window !== 'undefined' && 'Notification' in window
+  // Client-only SPA (no SSR): `window` is always defined where this hook runs.
+  const isSupported = 'Notification' in window
 
   const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>(() => {
+    // Stryker disable next-line ConditionalExpression: equivalent mutant — when
+    // Notification is absent (!isSupported), the try/catch below also yields
+    // 'unsupported' (bare `Notification` throws), so removing this fast-path
+    // guard does not change the returned value.
     if (!isSupported) return 'unsupported'
     try {
       return Notification.permission
@@ -64,6 +69,10 @@ export function useTimerNotification(
     const prev = prevPhaseRef.current
     prevPhaseRef.current = phase
 
+    // Stryker disable next-line ConditionalExpression: equivalent mutant — the
+    // boundary checks below require prev === 'main' / 'overtime', which a null
+    // baseline can never satisfy, so this guard never changes whether a
+    // notification fires. It is kept as documentary refresh/reconnect safety.
     if (prev === null) return
     if (permission !== 'granted') return
 

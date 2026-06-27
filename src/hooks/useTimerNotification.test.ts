@@ -141,6 +141,35 @@ describe('useTimerNotification', () => {
     expect(result.current.permission).toBe('denied')
   })
 
+  it('requestPermission recomputes when support changes (deps include isSupported)', async () => {
+    // Mount with Notification ABSENT so isSupported is false
+    const savedNotification = window.Notification
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (window as any).Notification
+
+    const { result, rerender } = renderHook(() => useTimerNotification(null, null))
+    expect(result.current.isSupported).toBe(false)
+
+    // Restore Notification — isSupported flips to true; the callback must pick up
+    // the new value (a stale `[]` deps closure would keep isSupported=false and
+    // never call requestPermission).
+    Object.defineProperty(window, 'Notification', {
+      value: savedNotification,
+      writable: true,
+      configurable: true,
+    })
+    ;(window.Notification as unknown as { permission: string }).permission = 'default'
+    rerender()
+    expect(result.current.isSupported).toBe(true)
+
+    await act(async () => {
+      await result.current.requestPermission()
+    })
+
+    expect(mockRequestPermission).toHaveBeenCalledOnce()
+    expect(result.current.permission).toBe('granted')
+  })
+
   it('returns isSupported=false and permission="unsupported" when Notification is not in window', () => {
     // Temporarily remove Notification from window
     const savedNotification = window.Notification
@@ -302,6 +331,23 @@ describe('useTimerNotification', () => {
       icon: '/favicon.ico',
       tag: 'timer-1:countup',
     })
+  })
+
+  it('does NOT fire on a direct main->count-up transition (plain timer, overtime_seconds=0)', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    const timer = makeTimer()
+
+    const { rerender } = renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer, c: makeCountdown() } }
+    )
+
+    // Plain timer with no overtime jumps main -> count-up; only the overtime
+    // boundary ('main'->'overtime') and ('overtime'->'countup') notify.
+    rerender({ t: timer, c: makeCountupCountdown() })
+
+    expect(mockNotificationConstructor).not.toHaveBeenCalled()
   })
 
   it('does NOT fire on a same-phase re-render in main (Realtime churn)', () => {
