@@ -108,7 +108,13 @@ Plans:
   3. Pausing during overtime or count-up and resuming restores the exact signed remaining position (the `GREATEST(0,…)` clamp is removed; no reset to 0:00), and a mid-overtime page refresh re-renders the correct phase and position from server state
   4. A browser notification fires exactly once at each phase boundary (main→overtime, overtime→count-up), deduplicated per boundary even across Realtime row updates
   5. All new timer-engine branches pass Stryker mutation testing at 100%
-**Plans**: TBD
+**Plans**: 4 plans in 3 waves
+
+Plans:
+- [ ] 08-01-PLAN.md -- Migration 00005 (overtime_seconds column, generate_round overload DROP + p_overtime_minutes, pause_timer clamp removal) + schema push + SQL verify
+- [ ] 08-02-PLAN.md -- RoundTimer.overtime_seconds type contract (repo-wide factory compat) + thread overtimeMinutes through useGenerateRound
+- [ ] 08-03-PLAN.md -- useCountdown three-phase derivation (main/overtime/countup) + phase field, 100% Stryker
+- [ ] 08-04-PLAN.md -- useTimerNotification dual-boundary dedup (phase-transition + Set), 100% Stryker
 
 ### Phase 9: Timer UI & Admin Controls
 **Goal**: Admins can select and explicitly start the 80+20 format, and every player sees a glanceable, phase-distinct timer with working controls
