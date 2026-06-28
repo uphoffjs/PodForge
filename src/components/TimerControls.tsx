@@ -4,6 +4,7 @@ import { usePauseTimer } from '@/hooks/usePauseTimer'
 import { useResumeTimer } from '@/hooks/useResumeTimer'
 import { useExtendTimer } from '@/hooks/useExtendTimer'
 import { useCancelTimer } from '@/hooks/useCancelTimer'
+import { useStartTimer } from '@/hooks/useStartTimer'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import {
   isInvalidPassphraseError,
@@ -30,6 +31,7 @@ export function TimerControls({
   const resumeTimer = useResumeTimer(eventId)
   const extendTimer = useExtendTimer(eventId)
   const cancelTimer = useCancelTimer(eventId)
+  const startTimer = useStartTimer(eventId)
 
   if (timer.status === 'cancelled') return null
 
@@ -55,6 +57,14 @@ export function TimerControls({
       return
     }
     resumeTimer.mutate({ passphrase }, { onError: handlePassphraseRejection })
+  }
+
+  const handleStart = () => {
+    if (!passphrase) {
+      onPassphraseNeeded()
+      return
+    }
+    startTimer.mutate({ passphrase }, { onError: handlePassphraseRejection })
   }
 
   const handleExtend = () => {
@@ -84,6 +94,47 @@ export function TimerControls({
           handlePassphraseRejection(error)
         },
       },
+    )
+  }
+
+  // Not-started (pending) timer: only the explicit Start affordance plus Cancel.
+  // Pause/Resume/+5 are meaningless before the clock has started. Cancel on a
+  // pending timer is the locked decision (cancel_timer accepts 'pending' in 00006).
+  if (timer.status === 'pending') {
+    return (
+      <div className="w-full max-w-lg flex items-center justify-center gap-2 mt-2 mb-4">
+        <button
+          type="button"
+          onClick={handleStart}
+          disabled={startTimer.isPending}
+          data-testid="timer-start-btn"
+          className="flex items-center justify-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-surface hover:bg-accent-bright transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+        >
+          <Play className="w-4 h-4" />
+          Start Timer
+        </button>
+
+        <button
+          type="button"
+          onClick={handleCancelClick}
+          disabled={cancelTimer.isPending}
+          data-testid="timer-cancel-btn"
+          className="flex items-center justify-center gap-1.5 rounded-lg border border-error/40 px-4 py-2 text-sm font-medium text-error hover:bg-error/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+        >
+          <X className="w-4 h-4" />
+          Cancel
+        </button>
+
+        <ConfirmDialog
+          isOpen={showCancelConfirm}
+          title="Cancel Timer?"
+          message="This will remove the timer for this round."
+          confirmLabel="Cancel Timer"
+          onConfirm={handleCancelConfirm}
+          onCancel={() => setShowCancelConfirm(false)}
+          isLoading={cancelTimer.isPending}
+        />
+      </div>
     )
   }
 

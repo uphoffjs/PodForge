@@ -13,24 +13,29 @@ const {
   mockResumeMutate,
   mockExtendMutate,
   mockCancelMutate,
+  mockStartMutate,
   mockPauseHook,
   mockResumeHook,
   mockExtendHook,
   mockCancelHook,
+  mockStartHook,
 } = vi.hoisted(() => {
   const mockPauseMutate = vi.fn()
   const mockResumeMutate = vi.fn()
   const mockExtendMutate = vi.fn()
   const mockCancelMutate = vi.fn()
+  const mockStartMutate = vi.fn()
   return {
     mockPauseMutate,
     mockResumeMutate,
     mockExtendMutate,
     mockCancelMutate,
+    mockStartMutate,
     mockPauseHook: vi.fn(() => ({ mutate: mockPauseMutate, isPending: false })),
     mockResumeHook: vi.fn(() => ({ mutate: mockResumeMutate, isPending: false })),
     mockExtendHook: vi.fn(() => ({ mutate: mockExtendMutate, isPending: false })),
     mockCancelHook: vi.fn(() => ({ mutate: mockCancelMutate, isPending: false })),
+    mockStartHook: vi.fn(() => ({ mutate: mockStartMutate, isPending: false })),
   }
 })
 
@@ -51,6 +56,10 @@ vi.mock('@/hooks/useExtendTimer', () => ({
 
 vi.mock('@/hooks/useCancelTimer', () => ({
   useCancelTimer: () => mockCancelHook(),
+}))
+
+vi.mock('@/hooks/useStartTimer', () => ({
+  useStartTimer: () => mockStartHook(),
 }))
 
 // ---------------------------------------------------------------------------
@@ -90,6 +99,7 @@ describe('TimerControls', () => {
     mockResumeHook.mockReturnValue({ mutate: mockResumeMutate, isPending: false })
     mockExtendHook.mockReturnValue({ mutate: mockExtendMutate, isPending: false })
     mockCancelHook.mockReturnValue({ mutate: mockCancelMutate, isPending: false })
+    mockStartHook.mockReturnValue({ mutate: mockStartMutate, isPending: false })
   })
 
   it('returns null when timer status is cancelled', () => {
@@ -421,5 +431,105 @@ describe('TimerControls', () => {
     expect(onPassphraseNeeded).toHaveBeenCalledWith(INVALID_PASSPHRASE_RETRY_MESSAGE)
     // Confirm dialog also closes on error
     expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
+  })
+
+  // --- Pending (not-started) branch: Start Timer + Cancel ---
+
+  it('renders Start Timer and Cancel (not pause/resume/+5) when timer is pending', () => {
+    render(<TimerControls {...defaultProps} timer={makeTimer({ status: 'pending' })} />)
+
+    const startBtn = screen.getByTestId('timer-start-btn')
+    expect(startBtn).toBeInTheDocument()
+    expect(startBtn).toHaveTextContent('Start Timer')
+    expect(startBtn.className).toContain('bg-accent')
+    expect(screen.getByTestId('timer-cancel-btn')).toBeInTheDocument()
+
+    expect(screen.queryByTestId('timer-pause-btn')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('timer-resume-btn')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('timer-extend-btn')).not.toBeInTheDocument()
+  })
+
+  it('calls startTimer.mutate with passphrase when Start is clicked', async () => {
+    const user = userEvent.setup()
+
+    render(<TimerControls {...defaultProps} timer={makeTimer({ status: 'pending' })} />)
+
+    await user.click(screen.getByTestId('timer-start-btn'))
+
+    expect(mockStartMutate).toHaveBeenCalledTimes(1)
+    expect(mockStartMutate).toHaveBeenCalledWith(
+      { passphrase: 'secret123' },
+      expect.objectContaining({ onError: expect.any(Function) })
+    )
+  })
+
+  it('calls onPassphraseNeeded when Start is clicked with empty passphrase', async () => {
+    const user = userEvent.setup()
+    const onPassphraseNeeded = vi.fn()
+
+    render(
+      <TimerControls
+        {...defaultProps}
+        passphrase=""
+        onPassphraseNeeded={onPassphraseNeeded}
+        timer={makeTimer({ status: 'pending' })}
+      />
+    )
+
+    await user.click(screen.getByTestId('timer-start-btn'))
+
+    expect(onPassphraseNeeded).toHaveBeenCalledTimes(1)
+    expect(mockStartMutate).not.toHaveBeenCalled()
+  })
+
+  it('disables Start button when startTimer.isPending is true', () => {
+    mockStartHook.mockReturnValue({ mutate: mockStartMutate, isPending: true })
+
+    render(<TimerControls {...defaultProps} timer={makeTimer({ status: 'pending' })} />)
+
+    expect(screen.getByTestId('timer-start-btn')).toBeDisabled()
+  })
+
+  it('Cancel on a pending timer opens ConfirmDialog and confirm calls cancelTimer.mutate', async () => {
+    const user = userEvent.setup()
+
+    render(<TimerControls {...defaultProps} timer={makeTimer({ status: 'pending' })} />)
+
+    await user.click(screen.getByTestId('timer-cancel-btn'))
+    expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument()
+
+    await user.click(screen.getByTestId('confirm-dialog-confirm-btn'))
+
+    expect(mockCancelMutate).toHaveBeenCalledTimes(1)
+    expect(mockCancelMutate).toHaveBeenCalledWith(
+      { passphrase: 'secret123' },
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      })
+    )
+  })
+
+  it('Start onError re-opens passphrase modal on invalid passphrase', async () => {
+    const user = userEvent.setup()
+    const onPassphraseNeeded = vi.fn()
+    mockStartMutate.mockImplementation(
+      (_params: unknown, options: { onError?: (e: unknown) => void }) => {
+        options.onError?.(new Error('invalid passphrase provided'))
+      }
+    )
+
+    render(
+      <TimerControls
+        {...defaultProps}
+        timer={makeTimer({ status: 'pending' })}
+        onPassphraseNeeded={onPassphraseNeeded}
+      />
+    )
+
+    await user.click(screen.getByTestId('timer-start-btn'))
+
+    expect(onPassphraseNeeded).toHaveBeenCalledTimes(1)
+    expect(onPassphraseNeeded).toHaveBeenCalledWith(INVALID_PASSPHRASE_RETRY_MESSAGE)
   })
 })
