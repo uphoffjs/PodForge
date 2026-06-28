@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Mid-Event Flow & Round Formats
-status: verifying
+status: completed
 stopped_at: Completed 08-04-PLAN.md (TIMER-05); phase 08 ready for verification
-last_updated: "2026-06-28T12:28:02.784Z"
-last_activity: 2026-06-28
+last_updated: "2026-06-28T12:44:28.269Z"
+last_activity: 2026-06-28 -- Phase 08 marked complete
 progress:
   total_phases: 6
   completed_phases: 3
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-27)
 
 ## Current Position
 
-Phase: 08 (timer-migration-core-engine) — EXECUTING
+Phase: 08 — COMPLETE
 Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-06-28
+Status: Phase 08 complete
+Last activity: 2026-06-28 -- Phase 08 marked complete
 
 **v5.0 phase map:**
 
