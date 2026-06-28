@@ -281,10 +281,10 @@ cy.getByTestId('timer-status').should('contain', 'OVERTIME')
 | A2 | `p_overtime_minutes > 0` is a safe proxy for "explicit-start flow" | generate_round conditional | If a future plain timer ever wants overtime>0 with auto-start, would need an explicit param. CONTEXT defers configurable overtime, so safe now. |
 | A3 | Non-admin players should also see the `READY TO START` card | not-started rendering | If undesired, gate the card render to admin in EventPage. UI-SPEC implies all viewers see the timer card. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **`ROUND TIMER` vs `Round Timer` literal** — UI-SPEC pins `ROUND TIMER` (uppercased anyway by CSS). Recommendation: keep `Round Timer` literal to avoid touching `timer.cy.js:104`, OR change literal and update that line. Planner picks one.
-2. **Start button: also offer Cancel on the not-started card?** Admin may generate the wrong round before starting. Recommendation: render Start + Cancel in the `pending` branch of `TimerControls` (Cancel RPC already handles only running/paused — would need `'pending'` added to `cancel_timer`'s `IN` list if Cancel-while-pending is wanted). Flag for planner; default to Start-only to keep `cancel_timer` untouched.
+1. **`ROUND TIMER` vs `Round Timer` literal** — UI-SPEC pins `ROUND TIMER`. **RESOLVED:** render the `ROUND TIMER` literal (Plan 09-03) and update the `timer.cy.js:~104` assertion to `'ROUND TIMER'` (Plan 09-04) — changing display copy is in-scope for this UI phase.
+2. **Start button: also offer Cancel on the not-started card?** **RESOLVED:** render BOTH Start + Cancel in the `pending` branch of `TimerControls` (Plan 09-03); migration `00006` widens `cancel_timer` to accept `'pending'` (Plan 09-01 T1), so an admin can cancel a generated-but-not-started round.
 
 ## Environment Availability
 

@@ -167,7 +167,7 @@ const countupTimer = { ...base, status: 'running', overtime_seconds: 1200,
 - **Status label assertion**: `cy.getByTestId('timer-status').should('contain', 'OVERTIME' | 'OVERRUN' | 'READY TO START')`.
 - **RPC body assertions** via `cy.intercept('POST', '**/rest/v1/rpc/generate_round*')` asserting `p_overtime_minutes === 20`, and `**/rest/v1/rpc/start_timer*` on the `timer-start-btn` click.
 - **Selectors**: `data-testid` kebab-case only; no `cy.wait(ms)` — use intercept aliases (CLAUDE.md Cypress standard).
-- **Pitfall 3**: existing `timer.cy.js:104` asserts `'Round Timer'`. Keep the main-phase literal `Round Timer` (CSS uppercases it) so this assertion stays green; only the new phases use the `OVERTIME`/`OVERRUN` literals.
+- **Pitfall 3 (RESOLVED)**: existing `timer.cy.js:~104` asserts `'Round Timer'`. LOCKED decision: render the main-phase literal as `ROUND TIMER` (matching the verified UI-SPEC) and UPDATE that E2E assertion to `'ROUND TIMER'` in Plan 09-04 — changing display copy is in-scope for this UI phase. New phases use the `OVERTIME`/`OVERRUN` literals.
 
 ---
 
@@ -237,7 +237,7 @@ const statusLabel = countdown.isPaused ? 'PAUSED'
   : countdown.phase === 'not-started' ? 'READY TO START'
   : countdown.phase === 'overtime' ? 'OVERTIME'
   : countdown.phase === 'countup' ? 'OVERRUN'
-  : 'Round Timer'   // main — keep literal so timer.cy.js:104 stays green (Pitfall 3)
+  : 'ROUND TIMER'   // main — UI-SPEC literal; timer.cy.js:~104 assertion updated to 'ROUND TIMER' in Plan 09-04 (Pitfall 3 RESOLVED)
 ```
 Add `data-phase={countdown.phase}` to the `timer-display` div (line 29-32) — the E2E phase hook (UI-SPEC:108). Apply `${band} ${dimmed}` in the className. Keep the existing `timer-countdown`, `timer-status`, and notification-prompt blocks (lines 33-67) untouched.
 
@@ -273,7 +273,7 @@ if (timer.status === 'pending') {
   )
 }
 ```
-Keep the existing `if (timer.status === 'cancelled') return null` guard (line 34). Default to Start-only (no Cancel) to leave `cancel_timer` untouched (RESEARCH Open Question 2).
+Keep the existing `if (timer.status === 'cancelled') return null` guard (line 34). LOCKED decision (RESEARCH Open Question 2 RESOLVED): the `pending` branch renders BOTH `timer-start-btn` AND `timer-cancel-btn` — an admin who generated a round but isn't ready can cancel the clock. `cancel_timer` is widened to accept `pending` in migration `00006` (Plan 09-01 T1).
 
 ---
 

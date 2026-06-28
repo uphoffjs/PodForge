@@ -123,7 +123,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Admin sees an "80+20" option alongside the existing 60/90/120 presets in the duration picker
   2. The 80-minute main countdown begins only when the admin presses an explicit "Start timer" action — it does not auto-start at round generation
-  3. Each phase is visually distinct (labeled MAIN / OVERTIME / OVERTIME ELAPSED, its own urgency styling, `+mm:ss` prefix in count-up) and updates in real time across all clients
+  3. Each phase is visually distinct (labeled ROUND TIMER / OVERTIME / OVERRUN, its own per-phase styling — main keeps the existing urgency progression, overtime flat amber, count-up red-pulse with `+mm:ss` prefix) and updates in real time across all clients
   4. Pause, resume, +5 min, and cancel all operate correctly during the main, overtime, and count-up phases
   5. Cypress E2E covers selecting and starting 80+20 and walking through all three phase transitions; timer logic meets the 100% Stryker target
 **Plans**: 4 plans in 4 waves
