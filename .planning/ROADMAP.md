@@ -126,8 +126,14 @@ Plans:
   3. Each phase is visually distinct (labeled MAIN / OVERTIME / OVERTIME ELAPSED, its own urgency styling, `+mm:ss` prefix in count-up) and updates in real time across all clients
   4. Pause, resume, +5 min, and cancel all operate correctly during the main, overtime, and count-up phases
   5. Cypress E2E covers selecting and starting 80+20 and walking through all three phase transitions; timer logic meets the 100% Stryker target
-**Plans**: TBD
+**Plans**: 4 plans in 4 waves
 **UI hint**: yes
+
+Plans:
+- [ ] 09-01-PLAN.md — Migration 00006 (pending status + start_timer RPC + cancel-pending) + schema push + SQL verify
+- [ ] 09-02-PLAN.md — Client data layer: status union, useTimer filter, useCountdown not-started branch, useStartTimer hook (100% Stryker)
+- [ ] 09-03-PLAN.md — UI: TimerDisplay phase bands + not-started card, TimerControls Start/Cancel, AdminControls 80+20 preset
+- [ ] 09-04-PLAN.md — E2E timer-80-20 + timer.cy.js label/controls + Stryker 100% gate
 
 ### Phase 10: Mid-Event Join UX
 **Goal**: Players who join after pairing has begun are clearly flagged and automatically flow into the next round with no admin friction
