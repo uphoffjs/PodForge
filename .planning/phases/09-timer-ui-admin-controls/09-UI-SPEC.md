@@ -45,6 +45,8 @@ created: 2026-06-28
 
 > shadcn gate: not initialized. Project is React/Vite but already ships a complete, consistent `@theme` token system and a component library of its own; introducing shadcn mid-project would fragment the design system. `components.json` intentionally absent. Registry safety gate therefore **not applicable**.
 
+**Primary visual anchor:** the timer numerals (`text-4xl md:text-5xl`, `font-mono`) are the focal point in BOTH the running and not-started card states; every other element (phase band, status label, Start Timer button, controls) is subordinate to them.
+
 ---
 
 ## Spacing Scale
