@@ -534,3 +534,94 @@ describe('useCountdown three-phase derivation (80+20)', () => {
     expect(result.current!.isCancelled).toBe(false)
   })
 })
+
+describe('useCountdown not-started (pending) state', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("returns a static not-started state for a pending 80+20 timer (80:00)", () => {
+    const timer = makeTimer({
+      status: 'pending',
+      duration_minutes: 80,
+      overtime_seconds: 1200,
+    })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current).not.toBeNull()
+    expect(result.current!.phase).toBe('not-started')
+    expect(result.current!.display).toBe('80:00')
+    expect(result.current!.remainingSeconds).toBe(80 * 60)
+    expect(result.current!.isOvertime).toBe(false)
+    expect(result.current!.isPaused).toBe(false)
+    expect(result.current!.isCancelled).toBe(false)
+    expect(result.current!.urgency).toBe('normal')
+  })
+
+  it("derives the pending display from duration_minutes, not expires_at (60:00)", () => {
+    // expires_at is in the past — a pending timer must IGNORE it and show duration.
+    const timer = makeTimer({
+      status: 'pending',
+      duration_minutes: 60,
+      overtime_seconds: 0,
+      expires_at: new Date(Date.now() - 5000 * 1000).toISOString(),
+    })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('not-started')
+    expect(result.current!.display).toBe('60:00')
+    expect(result.current!.remainingSeconds).toBe(60 * 60)
+    expect(result.current!.isOvertime).toBe(false)
+  })
+
+  it("does NOT start a setInterval for a pending timer", () => {
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval')
+    const timer = makeTimer({
+      status: 'pending',
+      duration_minutes: 80,
+      overtime_seconds: 1200,
+    })
+
+    renderHook(() => useCountdown(timer))
+
+    expect(setIntervalSpy).not.toHaveBeenCalled()
+    setIntervalSpy.mockRestore()
+  })
+
+  it("static pending display does not change when fake timers advance", () => {
+    const timer = makeTimer({
+      status: 'pending',
+      duration_minutes: 80,
+      overtime_seconds: 1200,
+    })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.display).toBe('80:00')
+
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+
+    expect(result.current!.display).toBe('80:00')
+    expect(result.current!.remainingSeconds).toBe(80 * 60)
+  })
+
+  it("regression: a running 80+20 timer still derives main/overtime via derivePhase", () => {
+    // 75:00 of main remaining, 1200s overtime — must NOT be treated as not-started.
+    const timer = makeTimer({
+      status: 'running',
+      duration_minutes: 80,
+      overtime_seconds: 1200,
+      expires_at: new Date(Date.now() + 4500 * 1000).toISOString(),
+    })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('main')
+    expect(result.current!.display).toBe('75:00')
+    expect(result.current!.isOvertime).toBe(false)
+  })
+})

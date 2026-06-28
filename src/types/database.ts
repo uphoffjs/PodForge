@@ -39,7 +39,7 @@ export type RoundTimer = {
   round_id: string
   event_id: string
   duration_minutes: number
-  status: 'running' | 'paused' | 'cancelled'
+  status: 'running' | 'paused' | 'cancelled' | 'pending'
   started_at: string
   remaining_seconds: number | null   // now SIGNED (negative = into overtime/count-up)
   overtime_seconds: number           // 0 for plain timers, 1200 for 80+20

@@ -99,7 +99,7 @@ describe('useTimer', () => {
     expect(mockFrom).toHaveBeenCalledWith('round_timers')
     expect(mockSelect).toHaveBeenCalledWith('*')
     expect(mockEq).toHaveBeenCalledWith('event_id', 'evt-abc')
-    expect(mockIn).toHaveBeenCalledWith('status', ['running', 'paused'])
+    expect(mockIn).toHaveBeenCalledWith('status', ['running', 'paused', 'pending'])
     expect(mockOrder).toHaveBeenCalledWith('created_at', { ascending: false })
     expect(mockLimit).toHaveBeenCalledWith(1)
   })

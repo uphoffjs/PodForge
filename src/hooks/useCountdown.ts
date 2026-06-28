@@ -15,7 +15,7 @@ export interface CountdownState {
   /** Urgency level for styling */
   urgency: 'normal' | 'warning' | 'danger' | 'expired'
   /** Current timer phase (source of truth for three-phase 80+20 timers) */
-  phase: 'main' | 'overtime' | 'countup'
+  phase: 'main' | 'overtime' | 'countup' | 'not-started'
 }
 
 function computeRemaining(timer: RoundTimer): number {
@@ -108,6 +108,23 @@ export function useCountdown(timer: RoundTimer | null): CountdownState | null {
 
   if (!timer || timer.status === 'cancelled') {
     return null
+  }
+
+  // Not-started (pending) timer: a generated-but-not-yet-started 80+20 round.
+  // Return a static state straight from duration_minutes BEFORE derivePhase so
+  // the three-phase engine (derivePhase/phaseUrgency) stays exhaustive and
+  // 100%-Stryker-covered. The running-only tick guard above never starts an
+  // interval for pending, so this display never ticks.
+  if (timer.status === 'pending') {
+    return {
+      remainingSeconds: timer.duration_minutes * 60,
+      display: `${timer.duration_minutes}:00`,
+      isOvertime: false,
+      isPaused: false,
+      isCancelled: false,
+      urgency: 'normal',
+      phase: 'not-started',
+    }
   }
 
   // remainingSeconds holds the signed mainRemaining (see computeRemaining); the
