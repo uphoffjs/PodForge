@@ -51,7 +51,7 @@ Requirements for the Mid-Event Flow & Round Formats milestone.
 - [ ] **TIMER-02**: Admin starts the 80+20 timer with an explicit action; the 80-minute main countdown begins on start rather than auto-starting at round generation
 - [x] **TIMER-03**: When the main period reaches 0:00 the timer transitions to a 20-minute overtime countdown; when overtime reaches 0:00 it counts up (+M:SS) indefinitely until an admin acts
 - [ ] **TIMER-04**: Each phase (main / overtime / overrun count-up) is visually distinct with its own label and urgency styling, synced to all clients in real time
-- [ ] **TIMER-05**: A browser notification fires once at each phase boundary (main→overtime and overtime→count-up), de-duplicated per boundary
+- [x] **TIMER-05**: A browser notification fires once at each phase boundary (main→overtime and overtime→count-up), de-duplicated per boundary
 - [x] **TIMER-06**: The timer stays server-authoritative and renders correctly across refresh/reconnect; pausing during overtime or count-up preserves the signed remaining position on resume
 - [ ] **TIMER-07**: Existing admin timer controls (pause, resume, +5 min, cancel) operate correctly in all three phases
 
@@ -116,7 +116,7 @@ Requirements for the Mid-Event Flow & Round Formats milestone.
 | TIMER-02 | Phase 9 | Pending |
 | TIMER-03 | Phase 8 | Complete |
 | TIMER-04 | Phase 9 | Pending |
-| TIMER-05 | Phase 8 | Pending |
+| TIMER-05 | Phase 8 | Complete |
 | TIMER-06 | Phase 8 | Complete |
 | TIMER-07 | Phase 9 | Pending |
 | TEST-04 | Phase 10 | Pending |

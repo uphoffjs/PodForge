@@ -58,7 +58,7 @@ Commander Pod Pairer is a web app for casual MTG Commander playgroups. Players j
 
 **Build tracks:** The timer track (Phases 8→9) is strictly ordered — the `00005` migration must land before any client work. The mid-event-join track (Phase 10) and the fault-injection track (Phase 11) carry zero migration dependency and parallelize with the timer track.
 
-- [ ] **Phase 8: Timer Migration & Core Engine** - Additive `00005` migration (overtime column, `generate_round` param, `pause_timer` clamp removal), three-phase `useCountdown` engine, dual-boundary notification dedup, server-authoritative pause/reconnect — 100% Stryker
+- [x] **Phase 8: Timer Migration & Core Engine** - Additive `00005` migration (overtime column, `generate_round` param, `pause_timer` clamp removal), three-phase `useCountdown` engine, dual-boundary notification dedup, server-authoritative pause/reconnect — 100% Stryker (completed 2026-06-28)
 - [ ] **Phase 9: Timer UI & Admin Controls** - 80+20 preset picker, explicit start action, phase-distinct `TimerDisplay` styling, pause/resume/+5/cancel across all phases, full timer E2E
 - [ ] **Phase 10: Mid-Event Join UX** - Pod-participation detection, persistent "Joined R{N}" badge, auto-flow into next round with no approval gate
 - [ ] **Phase 11: Fault-Injection Campaign Completion** - Run remaining 21 batch-1 faults with revert discipline, narrow the `uncaught:exception` suppressor, close every SURVIVED gap
@@ -114,7 +114,7 @@ Plans:
 - [x] 08-01-PLAN.md -- Migration 00005 (overtime_seconds column, generate_round overload DROP + p_overtime_minutes, pause_timer clamp removal) + schema push + SQL verify
 - [x] 08-02-PLAN.md -- RoundTimer.overtime_seconds type contract (repo-wide factory compat) + thread overtimeMinutes through useGenerateRound
 - [x] 08-03-PLAN.md -- useCountdown three-phase derivation (main/overtime/countup) + phase field, 100% Stryker
-- [ ] 08-04-PLAN.md -- useTimerNotification dual-boundary dedup (phase-transition + Set), 100% Stryker
+- [x] 08-04-PLAN.md -- useTimerNotification dual-boundary dedup (phase-transition + Set), 100% Stryker
 
 ### Phase 9: Timer UI & Admin Controls
 **Goal**: Admins can select and explicitly start the 80+20 format, and every player sees a glanceable, phase-distinct timer with working controls
@@ -176,7 +176,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11. Within v5.0,
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 8. Timer Migration & Core Engine | v5.0 | 3/4 | In Progress|  |
+| 8. Timer Migration & Core Engine | v5.0 | 4/4 | Complete   | 2026-06-28 |
 | 9. Timer UI & Admin Controls | v5.0 | 0/0 | Not started | - |
 | 10. Mid-Event Join UX | v5.0 | 0/0 | Not started | - |
 | 11. Fault-Injection Campaign Completion | v5.0 | 0/0 | Not started | - |
