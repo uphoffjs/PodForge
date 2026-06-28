@@ -130,7 +130,7 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [~] 09-01-PLAN.md — Migration 00006 (pending status + start_timer RPC + cancel-pending) applied to live DB; SQL human-verify checkpoint pending
+- [x] 09-01-PLAN.md — Migration 00006 (pending status + start_timer RPC + cancel-pending) applied to live DB; SQL human-verify checkpoint approved
 - [ ] 09-02-PLAN.md — Client data layer: status union, useTimer filter, useCountdown not-started branch, useStartTimer hook (100% Stryker)
 - [ ] 09-03-PLAN.md — UI: TimerDisplay phase bands + not-started card, TimerControls Start/Cancel, AdminControls 80+20 preset
 - [ ] 09-04-PLAN.md — E2E timer-80-20 + timer.cy.js label/controls + Stryker 100% gate
