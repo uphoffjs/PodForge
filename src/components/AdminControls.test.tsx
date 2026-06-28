@@ -515,6 +515,79 @@ describe('AdminControls', () => {
     )
   })
 
+  it('renders the 80+20 preset chip alongside 60/90/120', () => {
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    const chip = screen.getByTestId('timer-duration-80-20')
+    expect(chip).toBeInTheDocument()
+    expect(chip).toHaveTextContent('80+20')
+    expect(screen.getByTestId('timer-duration-60')).toBeInTheDocument()
+    expect(screen.getByTestId('timer-duration-90')).toBeInTheDocument()
+    expect(screen.getByTestId('timer-duration-120')).toBeInTheDocument()
+  })
+
+  it('selecting the 80+20 chip applies the accent style; re-clicking deselects', async () => {
+    const user = userEvent.setup()
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    const chip = screen.getByTestId('timer-duration-80-20')
+    expect(chip.className).toContain('bg-surface')
+
+    await user.click(chip)
+    expect(chip.className).toContain('bg-accent')
+
+    await user.click(chip)
+    expect(chip.className).toContain('bg-surface')
+  })
+
+  it('passes timerDurationMinutes=80 and overtimeMinutes=20 when 80+20 is selected', async () => {
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({ assignments: [{ playerIds: ['p1', 'p2', 'p3', 'p4'], isBye: false }], warnings: [] })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('timer-duration-80-20'))
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(mockMutate).toHaveBeenCalledTimes(1)
+    expect(mockMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ timerDurationMinutes: 80, overtimeMinutes: 20 }),
+      expect.any(Object)
+    )
+  })
+
+  it('passes overtimeMinutes=0 for a plain 90 preset', async () => {
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({ assignments: [{ playerIds: ['p1', 'p2', 'p3', 'p4'], isBye: false }], warnings: [] })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('timer-duration-90'))
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(mockMutate).toHaveBeenCalledTimes(1)
+    expect(mockMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ timerDurationMinutes: 90, overtimeMinutes: 0 }),
+      expect.any(Object)
+    )
+  })
+
+  it('passes overtimeMinutes=0 when no preset is selected', async () => {
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(mockMutate).toHaveBeenCalledTimes(1)
+    expect(mockMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ timerDurationMinutes: undefined, overtimeMinutes: 0 }),
+      expect.any(Object)
+    )
+  })
+
   // --- Generate round success/error callbacks ---
 
   it('onSuccess callback shows toast, resets isGenerating, and resets selectedDuration', async () => {
