@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Mid-Event Flow & Round Formats
 status: executing
-stopped_at: Completed 09-01-PLAN.md — migration 00006 applied to live DB; Task 3 human-verify APPROVED
-last_updated: "2026-06-28T14:25:00.000Z"
-last_activity: 2026-06-28 -- 09-01 complete (migration 00006 pending lifecycle); human-verify approved
+stopped_at: Completed 09-02-PLAN.md — pending-aware client data layer (types/query/countdown + useStartTimer)
+last_updated: "2026-06-28T10:48:00.000Z"
+last_activity: 2026-06-28 -- 09-02 complete (client data layer; useStartTimer + useCountdown not-started at 100% Stryker)
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 13
-  completed_plans: 10
-  percent: 54
+  completed_plans: 11
+  percent: 58
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-06-27)
 ## Current Position
 
 Phase: 09 (timer-ui-admin-controls) — EXECUTING
-Plan: 2 of 4 (09-01 complete; next: 09-02 client data layer)
+Plan: 3 of 4 (09-01, 09-02 complete; next: 09-03 UI components)
 Status: Executing Phase 09
-Last activity: 2026-06-28 -- 09-01 complete (migration 00006 pending lifecycle); human-verify approved
+Last activity: 2026-06-28 -- 09-02 complete (client data layer; useStartTimer + useCountdown not-started at 100% Stryker)
 
 **v5.0 phase map:**
 
@@ -55,6 +55,7 @@ Last activity: 2026-06-28 -- 09-01 complete (migration 00006 pending lifecycle);
 | Phase 08 P03 | 32min | 2 tasks | 3 files |
 | Phase 08 P04 | 27min | 2 tasks | 2 files |
 | Phase 09 P01 | ~10min | 3 tasks | 1 files |
+| Phase 09 P02 | ~25min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,7 @@ Recent decisions affecting current work:
 - [08-02]: RoundTimer.overtime_seconds is a REQUIRED field (forces compile-time consumer audit); remaining_seconds documented SIGNED. useGenerateRound threads p_overtime_minutes: overtimeMinutes ?? 0. Suite green (849 tests), useGenerateRound.ts at 100% Stryker. Did NOT add CountdownState.phase (deferred to 08-03).
 - [08-03]: useCountdown derives 3 phases (main/overtime/countup) from expires_at + overtime_seconds + Date.now() via single-signed-value model (overtimeRemaining = mainRemaining + overtime_seconds). Added CountdownState.phase as source of truth; kept 4-value urgency union (overtime→danger, countup→expired) per locked Q1. Dropped dead `?? 0` (overtime_seconds is NOT NULL) and narrowed computeUrgency to positive-only for 100% coverage; one equivalent mutant inline-disabled. 100% Stryker (60 killed), 865 tests green. useTimerNotification factories got a phase field (ripple); the notification hook itself is plan 08-04.
 - [09-01]: Migration 00006 applied to live DB — additive `'pending'` status (CHECK widened), `generate_round` inserts `pending` for 80+20 / `running` for plain (cancel sweep widened to pending), new passphrase-gated `start_timer` RPC (pending→running, sets started_at + real expires_at), `cancel_timer` widened to cancel pending. pause/resume/extend untouched. SQL behaviors human-verified (Task 3 APPROVED). TIMER-02/TIMER-07 server foundation only — full requirements delivered by 09-02/03/04.
+- [09-02]: Client data layer surfaces the 00006 `pending` contract. RoundTimer.status widened to include `'pending'`; useTimer filter `.in('status', ['running','paused','pending'])`. useCountdown gets a static `not-started` early-return (display from duration_minutes, NO setInterval) placed AFTER the cancelled guard and BEFORE derivePhase, keeping the three-phase engine untouched and 100%-Stryker. New `useStartTimer` hook is a verbatim-shape mirror of useResumeTimer (rpc `start_timer`). Both useCountdown.ts (66 killed) and useStartTimer.ts (18 killed) at 100% Stryker; suite green (880 tests). UI wiring is 09-03.
 - [Phase 08]: [08-04]: useTimerNotification fires one notification per phase boundary (main->overtime 'Overtime started', overtime->countup 'Round over'), deduped via Set keyed ${timer.id}:boundary; prevPhaseRef null-baseline + per-timer reset makes refresh/switch-into-phase fire nothing. Consolidated timer-reset into the trigger effect (prevTimerIdRef) to avoid an effect-ordering bug. 100% Stryker (46 killed), 870 tests green. TIMER-05 done; phase 08 fully delivered.
 
 ### Pending Todos
@@ -97,6 +99,6 @@ None. Phase 8 planner should make two explicit design sign-offs before coding (p
 
 ## Session Continuity
 
-Last session: 2026-06-28T14:25:00.000Z
-Stopped at: Completed 09-01-PLAN.md — migration 00006 applied to live DB; Task 3 human-verify APPROVED
-Resume file: None (next: 09-02-PLAN.md client data layer)
+Last session: 2026-06-28T10:48:00.000Z
+Stopped at: Completed 09-02-PLAN.md — pending-aware client data layer (types/query/countdown + useStartTimer)
+Resume file: None (next: 09-03-PLAN.md UI components)
