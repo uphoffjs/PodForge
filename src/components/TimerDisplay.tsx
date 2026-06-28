@@ -13,22 +13,44 @@ const urgencyStyles = {
   expired: 'bg-red-900/50 text-red-300 border-red-500 animate-pulse',
 } as const
 
+// Flat, single-color bands for the non-main phases of an 80+20 timer. The main
+// phase deliberately keeps the urgencyStyles progression above so plain
+// 60/90/120 timers do not regress (09-UI-SPEC Open Question Resolution).
+const phaseBands = {
+  'not-started': 'bg-surface-raised text-text-secondary border-border',
+  overtime: 'bg-accent/15 text-accent-bright border-accent',
+  countup: 'bg-red-900/50 text-red-300 border-red-500 animate-pulse',
+} as const
+
 export function TimerDisplay({ timer }: TimerDisplayProps) {
   const countdown = useCountdown(timer)
   const { isSupported, permission, requestPermission } = useTimerNotification(timer, countdown)
 
   if (!countdown) return null
 
+  // Phase-first band selection: main falls back to the urgency progression;
+  // every other phase uses its flat band.
+  const band =
+    countdown.phase === 'main'
+      ? urgencyStyles[countdown.urgency]
+      : phaseBands[countdown.phase]
+  const dimmed = countdown.isPaused ? 'opacity-70' : ''
+
   const statusLabel = countdown.isPaused
     ? 'PAUSED'
-    : countdown.isOvertime
-      ? 'OVERTIME'
-      : `Round Timer`
+    : countdown.phase === 'not-started'
+      ? 'READY TO START'
+      : countdown.phase === 'overtime'
+        ? 'OVERTIME'
+        : countdown.phase === 'countup'
+          ? 'OVERRUN'
+          : 'ROUND TIMER'
 
   return (
     <div
-      className={`sticky top-0 z-40 w-full max-w-lg border rounded-xl p-4 text-center ${urgencyStyles[countdown.urgency]}`}
+      className={`sticky top-0 z-40 w-full max-w-lg border rounded-xl p-4 text-center ${band} ${dimmed}`}
       data-testid="timer-display"
+      data-phase={countdown.phase}
     >
       <div
         className="text-4xl md:text-5xl font-mono font-bold"
