@@ -55,9 +55,10 @@ Declared values (all multiples of 4), reflecting the tokens already in use acros
 |-------|-------|-------|
 | xs | 4px | Icon-to-label gaps (`gap-1`), tight insets |
 | sm | 8px | Button row gaps (`gap-2`), control spacing |
-| md | 12px | Section rhythm inside cards (`mb-3`, `mt-3`, `py-3`) |
 | lg | 16px | Card padding (`p-4`), control row gaps (`mb-4`) |
 | xl | 24px | Panel bottom margin (`mb-6`) |
+
+> Inherited note: the existing components use Tailwind `spacing-3` (12px) for `mb-3`/`mt-3`/`py-3` internal rhythm. Phase 9 declares no new 12px usages, so 12px is intentionally omitted from the named scale above; existing `spacing-3` usages are left untouched.
 
 Exceptions:
 - `min-h-[44px]` — primary/control touch targets (Start Timer, pause/resume/+5/cancel, Generate). Accessibility minimum, retained.
@@ -67,16 +68,16 @@ Exceptions:
 
 ## Typography
 
-Inherited app scale (this phase introduces no new type roles). The 80+20 preset and Start button reuse the existing button type; the timer numerals reuse the existing display style.
+Phase 9's **new** elements use exactly two weights — 700 for the timer numerals and 500 for the Start Timer button, duration presets, and labels:
 
 | Role | Size | Weight | Line Height |
 |------|------|--------|-------------|
 | Timer display (numerals) | 36px mobile / 48px md (`text-4xl md:text-5xl`), `font-mono` | 700 (bold) | 1 (default) |
-| Heading (panel title) | 18px (`text-lg`) | 600 (semibold) | 1.2 |
-| Button / body | 14–16px (`text-sm` / `text-base`) | 500 (medium) | 1.5 |
+| Button / preset / body | 14px (`text-sm`) | 500 (medium) | 1.5 |
 | Status / micro label | 12px (`text-xs`), `uppercase tracking-wide` | 500 (medium) | 1.4 |
 
-> Weight note: the inherited system uses 400/500/600/700. This exceeds the 2-weight guideline because we are extending an existing design system, not authoring a new one. No new weights are introduced by Phase 9.
+### Inherited scale reference (not introduced by Phase 9)
+The surrounding app uses a 400/500/600/700 weight inventory. Phase 9 introduces no new headings — the existing panel title (`text-lg font-semibold`, 600) in `AdminControls.tsx` is reused as-is and sits outside this phase's new type roles.
 
 ---
 
