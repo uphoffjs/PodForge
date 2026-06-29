@@ -221,6 +221,22 @@ describe('TimerDisplay', () => {
     expect(el.className).toContain('border-border')
   })
 
+  it('non-paused timer has no dim class and no stray fallback token', () => {
+    mockUseCountdown.mockReturnValue(
+      makeCountdown({ phase: 'main', urgency: 'normal', isPaused: false })
+    )
+
+    render(<TimerDisplay timer={makeTimer()} />)
+
+    const el = screen.getByTestId('timer-display')
+    expect(el.className).not.toContain('opacity-70')
+    // The dimmed slot is empty when not paused: the class list must end on the
+    // band's last token, never a stray fallback string.
+    expect(el.className.replace(/\s+/g, ' ').trim()).toBe(
+      'sticky top-0 z-40 w-full max-w-lg border rounded-xl p-4 text-center bg-surface-raised text-text-primary border-border'
+    )
+  })
+
   it('paused (overtime phase): PAUSED label, keeps accent band, adds opacity-70', () => {
     mockUseCountdown.mockReturnValue(
       makeCountdown({ phase: 'overtime', isPaused: true })

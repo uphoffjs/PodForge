@@ -510,6 +510,20 @@ describe('TimerControls', () => {
     )
   })
 
+  it('dismissing the pending Cancel dialog closes it without calling mutate', async () => {
+    const user = userEvent.setup()
+
+    render(<TimerControls {...defaultProps} timer={makeTimer({ status: 'pending' })} />)
+
+    await user.click(screen.getByTestId('timer-cancel-btn'))
+    expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument()
+
+    await user.click(screen.getByTestId('confirm-dialog-cancel-btn'))
+
+    expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument()
+    expect(mockCancelMutate).not.toHaveBeenCalled()
+  })
+
   it('Start onError re-opens passphrase modal on invalid passphrase', async () => {
     const user = userEvent.setup()
     const onPassphraseNeeded = vi.fn()
