@@ -133,7 +133,7 @@ Plans:
 - [x] 09-01-PLAN.md — Migration 00006 (pending status + start_timer RPC + cancel-pending) applied to live DB; SQL human-verify checkpoint approved
 - [x] 09-02-PLAN.md — Client data layer: status union, useTimer filter, useCountdown not-started branch, useStartTimer hook (both 100% Stryker; suite green)
 - [x] 09-03-PLAN.md — UI: TimerDisplay phase bands + not-started card, TimerControls Start/Cancel, AdminControls 80+20 preset (TimerDisplay + TimerControls 100% Stryker; suite green)
-- [ ] 09-04-PLAN.md — E2E timer-80-20 + timer.cy.js label/controls + Stryker 100% gate
+- [x] 09-04-PLAN.md — E2E timer-80-20 + timer.cy.js ROUND TIMER label/controls + Stryker gate (hooks 100%, components 95.35%)
 
 ### Phase 10: Mid-Event Join UX
 **Goal**: Players who join after pairing has begun are clearly flagged and automatically flow into the next round with no admin friction
@@ -183,7 +183,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11. Within v5.0,
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 8. Timer Migration & Core Engine | v5.0 | 4/4 | Complete   | 2026-06-28 |
-| 9. Timer UI & Admin Controls | v5.0 | 0/0 | Not started | - |
+| 9. Timer UI & Admin Controls | v5.0 | 3/4 | In Progress|  |
 | 10. Mid-Event Join UX | v5.0 | 0/0 | Not started | - |
 | 11. Fault-Injection Campaign Completion | v5.0 | 0/0 | Not started | - |
 </content>

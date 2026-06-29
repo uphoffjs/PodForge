@@ -58,7 +58,7 @@ Requirements for the Mid-Event Flow & Round Formats milestone.
 ### Test Coverage
 
 - [ ] **TEST-04**: Unit + Cypress E2E tests cover the mid-event-join indicator and detection edge cases (joined-before-round-1, reactivated dropout) with >=80% Stryker mutation score
-- [ ] **TEST-05**: Unit/integration tests cover the 80+20 three-phase timer engine and dual-boundary notification dedup (target 100% Stryker on timer logic); Cypress E2E covers selecting/starting 80+20 and its phase transitions
+- [x] **TEST-05**: Unit/integration tests cover the 80+20 three-phase timer engine and dual-boundary notification dedup (target 100% Stryker on timer logic); Cypress E2E covers selecting/starting 80+20 and its phase transitions
 
 ### Fault-Injection Campaign
 
@@ -120,7 +120,7 @@ Requirements for the Mid-Event Flow & Round Formats milestone.
 | TIMER-06 | Phase 8 | Complete |
 | TIMER-07 | Phase 9 | Complete |
 | TEST-04 | Phase 10 | Pending |
-| TEST-05 | Phase 9 | Pending |
+| TEST-05 | Phase 9 | Complete |
 | FAULT-01 | Phase 11 | Pending |
 | FAULT-02 | Phase 11 | Pending |
 | FAULT-03 | Phase 11 | Pending |

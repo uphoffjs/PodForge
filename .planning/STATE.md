@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Mid-Event Flow & Round Formats
-status: executing
-stopped_at: Completed 09-03-PLAN.md — timer UI (TimerDisplay phase bands, TimerControls pending Start/Cancel, AdminControls 80+20 preset)
-last_updated: "2026-06-29T00:00:00.000Z"
-last_activity: 2026-06-29 -- 09-03 complete (timer UI components; TimerDisplay + TimerControls at 100% Stryker, suite green)
+status: verifying
+stopped_at: Completed 09-04-PLAN.md — 80+20 E2E + timer.cy.js ROUND TIMER label/controls + Stryker gate (hooks 100%, components 95.35%)
+last_updated: "2026-06-29T12:16:04.295Z"
+last_activity: 2026-06-29 -- 09-04 complete (E2E + Stryker gate; TIMER-07 + TEST-05 closed; Phase 09 ready for verification)
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 13
-  completed_plans: 12
-  percent: 62
+  completed_plans: 13
+  percent: 50
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-06-27)
 ## Current Position
 
 Phase: 09 (timer-ui-admin-controls) — EXECUTING
-Plan: 4 of 4 (09-01, 09-02, 09-03 complete; next: 09-04 E2E + Stryker gate)
-Status: Executing Phase 09
-Last activity: 2026-06-29 -- 09-03 complete (timer UI components; TimerDisplay + TimerControls at 100% Stryker, suite green)
+Plan: 4 of 4 (09-01, 09-02, 09-03, 09-04 all complete)
+Status: Phase complete — ready for verification
+Last activity: 2026-06-29 -- 09-04 complete (E2E + Stryker gate; TIMER-07 + TEST-05 closed)
 
 **v5.0 phase map:**
 
@@ -57,6 +57,7 @@ Last activity: 2026-06-29 -- 09-03 complete (timer UI components; TimerDisplay +
 | Phase 09 P01 | ~10min | 3 tasks | 1 files |
 | Phase 09 P02 | ~25min | 2 tasks | 7 files |
 | Phase 09 P03 | ~30min | 3 tasks | 6 files |
+| Phase 09 P04 | 20min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -80,6 +81,7 @@ Recent decisions affecting current work:
 - [09-02]: Client data layer surfaces the 00006 `pending` contract. RoundTimer.status widened to include `'pending'`; useTimer filter `.in('status', ['running','paused','pending'])`. useCountdown gets a static `not-started` early-return (display from duration_minutes, NO setInterval) placed AFTER the cancelled guard and BEFORE derivePhase, keeping the three-phase engine untouched and 100%-Stryker. New `useStartTimer` hook is a verbatim-shape mirror of useResumeTimer (rpc `start_timer`). Both useCountdown.ts (66 killed) and useStartTimer.ts (18 killed) at 100% Stryker; suite green (880 tests). UI wiring is 09-03.
 - [Phase 08]: [08-04]: useTimerNotification fires one notification per phase boundary (main->overtime 'Overtime started', overtime->countup 'Round over'), deduped via Set keyed ${timer.id}:boundary; prevPhaseRef null-baseline + per-timer reset makes refresh/switch-into-phase fire nothing. Consolidated timer-reset into the trigger effect (prevTimerIdRef) to avoid an effect-ordering bug. 100% Stryker (46 killed), 870 tests green. TIMER-05 done; phase 08 fully delivered.
 - [09-03]: Timer UI shipped to the verified 09-UI-SPEC. TimerDisplay selects band by phase first (phaseBands const for not-started/overtime/countup) and falls back to urgencyStyles only for main (no regression to plain 60/90/120); labels ROUND TIMER/OVERTIME/OVERRUN/READY TO START/PAUSED; added data-phase + opacity-70 pause dim. TimerControls pending branch renders accent timer-start-btn (useStartTimer) + timer-cancel-btn (locked Cancel-on-pending); running/paused branch untouched. AdminControls replaced selectedDuration:number with a PRESETS object model ({id,label,duration,overtime}), added timer-duration-80-20 chip, and finally threaded overtimeMinutes into generateRound.mutate (80+20 → p_overtime_minutes=20; plain → 0). TimerDisplay + TimerControls at 100% Stryker; AdminControls 91% (8 pre-existing End Event survivors, untouched). Suite green (900 tests). UI half of TIMER-01/04/07 done; E2E + 100% gate is 09-04.
+- [Phase ?]: [09-04]: Closed TEST-05 + E2E half of TIMER-07. New cypress/e2e/timer-80-20.cy.js covers select-80+20 → generate (asserts generate_round body p_overtime_minutes=20 + p_timer_duration_minutes=80) → READY TO START pending card (data-phase not-started, 80:00, Start btn) → start_timer RPC fires → overtime (OVERTIME) + countup (OVERRUN, + prefix) via computed expires_at. timer.cy.js: main label 'Round Timer'→'ROUND TIMER'; added pause/+5/cancel across overtime+countup. Stryker: useCountdown 100% (66) + useStartTimer 100% (18); components 95.35% (TimerDisplay 100%, TimerControls 100%, AdminControls 91.01% — 8 survivors all pre-existing End Event/presentational, none in the 80+20 branch). Task 3 needed no test-code changes; prior plans already met the gate. 21 cypress + 900 vitest green.
 
 ### Pending Todos
 
@@ -101,6 +103,6 @@ None. Phase 8 planner should make two explicit design sign-offs before coding (p
 
 ## Session Continuity
 
-Last session: 2026-06-29T00:00:00.000Z
+Last session: 2026-06-29T12:15:11.915Z
 Stopped at: Completed 09-03-PLAN.md — timer UI (TimerDisplay phase bands, TimerControls pending Start/Cancel, AdminControls 80+20 preset)
-Resume file: None (next: 09-04-PLAN.md E2E + Stryker 100% gate)
+Resume file: None
