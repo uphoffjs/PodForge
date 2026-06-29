@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Mid-Event Flow & Round Formats
 status: completed
-stopped_at: Completed 09-03-PLAN.md — timer UI (TimerDisplay phase bands, TimerControls pending Start/Cancel, AdminControls 80+20 preset)
+stopped_at: Phase 9 (Timer UI & Admin Controls) COMPLETE and verified. v5.0 Phases 10 + 11 remain. All work local/unpushed; migrations 00005+00006 applied to live DB.
 last_updated: "2026-06-29T13:10:48.156Z"
 last_activity: 2026-06-29 -- Phase 09 marked complete
 progress:
@@ -103,6 +103,22 @@ None. Phase 8 planner should make two explicit design sign-offs before coding (p
 
 ## Session Continuity
 
-Last session: 2026-06-29T12:15:11.915Z
-Stopped at: Completed 09-03-PLAN.md — timer UI (TimerDisplay phase bands, TimerControls pending Start/Cancel, AdminControls 80+20 preset)
+Last session: 2026-06-29
+Stopped at: **Phase 9 (Timer UI & Admin Controls) COMPLETE and verified (5/5 criteria).** v5.0 is half done — Phases 8 + 9 shipped; Phases 10 + 11 remain.
 Resume file: None
+
+### Resume notes for the next session (read first)
+
+**Git / publishing (IMPORTANT):**
+- All v5.0 work is **local and unpushed by explicit user instruction — do NOT push to the remote git repo** unless the user asks.
+- `main` is kept **fast-forwarded to the feature branch HEAD** (both currently at the same commit on `feature/v4.0-pod-improvements`; `main` is ~79 commits ahead of `origin/main`, all local). After finishing a unit of work, re-consolidate with `git branch -f main HEAD` (always a clean fast-forward).
+
+**Live database (IMPORTANT):**
+- Migrations **`00005_timer_overtime.sql`** and **`00006_timer_pending.sql`** are **already applied to the LIVE Supabase DB** (`supabase db push --linked`; project linked, `.env` has `SUPABASE_DB_PASSWORD`). Do NOT re-push.
+- `psql` is not installed locally — SQL behavior is verified via `supabase migration list --linked` + source inspection + approved human-verify checkpoints (no SQL test harness in the repo).
+
+**Execution convention:** executors run SEQUENTIALLY on the main working tree (no worktree isolation) because migration plans (08-01, 09-01) need `.env` for `supabase db push` and carry human-verify checkpoints. Keep this for any further migration-bearing plans.
+
+**Phase 9 open (non-blocking):** two optional human-visual confirmations remain — eyeball the per-phase band colors in a browser (amber overtime / red-pulse count-up) and multi-client real-time sync after Start. Code is 5/5 verified; 900 unit + 21 Cypress E2E green.
+
+**Next step:** `/gsd-plan-phase 10` (Mid-Event Join UX — JOIN-01..03 + TEST-04; zero migration, pure client + a pod-participation helper) or `/gsd-plan-phase 11` (Fault-Injection campaign — FAULT-01..04; test-only). Both are independent of the timer track and of each other.
