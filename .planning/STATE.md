@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Mid-Event Flow & Round Formats
 status: executing
-stopped_at: Completed 09-02-PLAN.md — pending-aware client data layer (types/query/countdown + useStartTimer)
-last_updated: "2026-06-28T10:48:00.000Z"
-last_activity: 2026-06-28 -- 09-02 complete (client data layer; useStartTimer + useCountdown not-started at 100% Stryker)
+stopped_at: Completed 09-03-PLAN.md — timer UI (TimerDisplay phase bands, TimerControls pending Start/Cancel, AdminControls 80+20 preset)
+last_updated: "2026-06-29T00:00:00.000Z"
+last_activity: 2026-06-29 -- 09-03 complete (timer UI components; TimerDisplay + TimerControls at 100% Stryker, suite green)
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 13
-  completed_plans: 11
-  percent: 58
+  completed_plans: 12
+  percent: 62
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-06-27)
 ## Current Position
 
 Phase: 09 (timer-ui-admin-controls) — EXECUTING
-Plan: 3 of 4 (09-01, 09-02 complete; next: 09-03 UI components)
+Plan: 4 of 4 (09-01, 09-02, 09-03 complete; next: 09-04 E2E + Stryker gate)
 Status: Executing Phase 09
-Last activity: 2026-06-28 -- 09-02 complete (client data layer; useStartTimer + useCountdown not-started at 100% Stryker)
+Last activity: 2026-06-29 -- 09-03 complete (timer UI components; TimerDisplay + TimerControls at 100% Stryker, suite green)
 
 **v5.0 phase map:**
 
@@ -56,6 +56,7 @@ Last activity: 2026-06-28 -- 09-02 complete (client data layer; useStartTimer + 
 | Phase 08 P04 | 27min | 2 tasks | 2 files |
 | Phase 09 P01 | ~10min | 3 tasks | 1 files |
 | Phase 09 P02 | ~25min | 2 tasks | 7 files |
+| Phase 09 P03 | ~30min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,7 @@ Recent decisions affecting current work:
 - [09-01]: Migration 00006 applied to live DB — additive `'pending'` status (CHECK widened), `generate_round` inserts `pending` for 80+20 / `running` for plain (cancel sweep widened to pending), new passphrase-gated `start_timer` RPC (pending→running, sets started_at + real expires_at), `cancel_timer` widened to cancel pending. pause/resume/extend untouched. SQL behaviors human-verified (Task 3 APPROVED). TIMER-02/TIMER-07 server foundation only — full requirements delivered by 09-02/03/04.
 - [09-02]: Client data layer surfaces the 00006 `pending` contract. RoundTimer.status widened to include `'pending'`; useTimer filter `.in('status', ['running','paused','pending'])`. useCountdown gets a static `not-started` early-return (display from duration_minutes, NO setInterval) placed AFTER the cancelled guard and BEFORE derivePhase, keeping the three-phase engine untouched and 100%-Stryker. New `useStartTimer` hook is a verbatim-shape mirror of useResumeTimer (rpc `start_timer`). Both useCountdown.ts (66 killed) and useStartTimer.ts (18 killed) at 100% Stryker; suite green (880 tests). UI wiring is 09-03.
 - [Phase 08]: [08-04]: useTimerNotification fires one notification per phase boundary (main->overtime 'Overtime started', overtime->countup 'Round over'), deduped via Set keyed ${timer.id}:boundary; prevPhaseRef null-baseline + per-timer reset makes refresh/switch-into-phase fire nothing. Consolidated timer-reset into the trigger effect (prevTimerIdRef) to avoid an effect-ordering bug. 100% Stryker (46 killed), 870 tests green. TIMER-05 done; phase 08 fully delivered.
+- [09-03]: Timer UI shipped to the verified 09-UI-SPEC. TimerDisplay selects band by phase first (phaseBands const for not-started/overtime/countup) and falls back to urgencyStyles only for main (no regression to plain 60/90/120); labels ROUND TIMER/OVERTIME/OVERRUN/READY TO START/PAUSED; added data-phase + opacity-70 pause dim. TimerControls pending branch renders accent timer-start-btn (useStartTimer) + timer-cancel-btn (locked Cancel-on-pending); running/paused branch untouched. AdminControls replaced selectedDuration:number with a PRESETS object model ({id,label,duration,overtime}), added timer-duration-80-20 chip, and finally threaded overtimeMinutes into generateRound.mutate (80+20 → p_overtime_minutes=20; plain → 0). TimerDisplay + TimerControls at 100% Stryker; AdminControls 91% (8 pre-existing End Event survivors, untouched). Suite green (900 tests). UI half of TIMER-01/04/07 done; E2E + 100% gate is 09-04.
 
 ### Pending Todos
 
@@ -99,6 +101,6 @@ None. Phase 8 planner should make two explicit design sign-offs before coding (p
 
 ## Session Continuity
 
-Last session: 2026-06-28T10:48:00.000Z
-Stopped at: Completed 09-02-PLAN.md — pending-aware client data layer (types/query/countdown + useStartTimer)
-Resume file: None (next: 09-03-PLAN.md UI components)
+Last session: 2026-06-29T00:00:00.000Z
+Stopped at: Completed 09-03-PLAN.md — timer UI (TimerDisplay phase bands, TimerControls pending Start/Cancel, AdminControls 80+20 preset)
+Resume file: None (next: 09-04-PLAN.md E2E + Stryker 100% gate)

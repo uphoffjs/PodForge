@@ -47,13 +47,13 @@ Requirements for the Mid-Event Flow & Round Formats milestone.
 
 ### Round Timer (80+20 Format)
 
-- [ ] **TIMER-01**: Admin can select an "80+20" round-timer format (80-minute main period + 20-minute overtime) alongside the existing 60/90/120 presets
+- [x] **TIMER-01**: Admin can select an "80+20" round-timer format (80-minute main period + 20-minute overtime) alongside the existing 60/90/120 presets
 - [ ] **TIMER-02**: Admin starts the 80+20 timer with an explicit action; the 80-minute main countdown begins on start rather than auto-starting at round generation
 - [x] **TIMER-03**: When the main period reaches 0:00 the timer transitions to a 20-minute overtime countdown; when overtime reaches 0:00 it counts up (+M:SS) indefinitely until an admin acts
-- [ ] **TIMER-04**: Each phase (main / overtime / overrun count-up) is visually distinct with its own label and urgency styling, synced to all clients in real time
+- [x] **TIMER-04**: Each phase (main / overtime / overrun count-up) is visually distinct with its own label and urgency styling, synced to all clients in real time
 - [x] **TIMER-05**: A browser notification fires once at each phase boundary (main→overtime and overtime→count-up), de-duplicated per boundary
 - [x] **TIMER-06**: The timer stays server-authoritative and renders correctly across refresh/reconnect; pausing during overtime or count-up preserves the signed remaining position on resume
-- [ ] **TIMER-07**: Existing admin timer controls (pause, resume, +5 min, cancel) operate correctly in all three phases
+- [x] **TIMER-07**: Existing admin timer controls (pause, resume, +5 min, cancel) operate correctly in all three phases
 
 ### Test Coverage
 
@@ -112,13 +112,13 @@ Requirements for the Mid-Event Flow & Round Formats milestone.
 | JOIN-01 | Phase 10 | Pending |
 | JOIN-02 | Phase 10 | Pending |
 | JOIN-03 | Phase 10 | Pending |
-| TIMER-01 | Phase 9 | Pending |
+| TIMER-01 | Phase 9 | Complete |
 | TIMER-02 | Phase 9 | Pending |
 | TIMER-03 | Phase 8 | Complete |
-| TIMER-04 | Phase 9 | Pending |
+| TIMER-04 | Phase 9 | Complete |
 | TIMER-05 | Phase 8 | Complete |
 | TIMER-06 | Phase 8 | Complete |
-| TIMER-07 | Phase 9 | Pending |
+| TIMER-07 | Phase 9 | Complete |
 | TEST-04 | Phase 10 | Pending |
 | TEST-05 | Phase 9 | Pending |
 | FAULT-01 | Phase 11 | Pending |
