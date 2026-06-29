@@ -59,7 +59,7 @@ Commander Pod Pairer is a web app for casual MTG Commander playgroups. Players j
 **Build tracks:** The timer track (Phases 8→9) is strictly ordered — the `00005` migration must land before any client work. The mid-event-join track (Phase 10) and the fault-injection track (Phase 11) carry zero migration dependency and parallelize with the timer track.
 
 - [x] **Phase 8: Timer Migration & Core Engine** - Additive `00005` migration (overtime column, `generate_round` param, `pause_timer` clamp removal), three-phase `useCountdown` engine, dual-boundary notification dedup, server-authoritative pause/reconnect — 100% Stryker (completed 2026-06-28)
-- [ ] **Phase 9: Timer UI & Admin Controls** - 80+20 preset picker, explicit start action, phase-distinct `TimerDisplay` styling, pause/resume/+5/cancel across all phases, full timer E2E
+- [x] **Phase 9: Timer UI & Admin Controls** - 80+20 preset picker, explicit start action, phase-distinct `TimerDisplay` styling, pause/resume/+5/cancel across all phases, full timer E2E (completed 2026-06-29)
 - [ ] **Phase 10: Mid-Event Join UX** - Pod-participation detection, persistent "Joined R{N}" badge, auto-flow into next round with no approval gate
 - [ ] **Phase 11: Fault-Injection Campaign Completion** - Run remaining 21 batch-1 faults with revert discipline, narrow the `uncaught:exception` suppressor, close every SURVIVED gap
 
@@ -183,7 +183,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 → 10 → 11. Within v5.0,
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 8. Timer Migration & Core Engine | v5.0 | 4/4 | Complete   | 2026-06-28 |
-| 9. Timer UI & Admin Controls | v5.0 | 3/4 | In Progress|  |
+| 9. Timer UI & Admin Controls | v5.0 | 4/4 | Complete | 2026-06-29 |
 | 10. Mid-Event Join UX | v5.0 | 0/0 | Not started | - |
 | 11. Fault-Injection Campaign Completion | v5.0 | 0/0 | Not started | - |
 </content>

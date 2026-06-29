@@ -183,11 +183,13 @@ No third-party registries declared. No `npx shadcn view` vetting required.
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS (focal-point sentence added after initial FLAG)
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS (revision: 2-weight table)
+- [x] Dimension 5 Spacing: PASS (revision: dropped 12px token)
+- [x] Dimension 6 Registry Safety: PASS
+
+> gsd-ui-checker verdict: UI-SPEC VERIFIED (6/6) on 2026-06-28 after 1 revision.
 
 **Approval:** pending

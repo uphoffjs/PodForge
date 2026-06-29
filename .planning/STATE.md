@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Mid-Event Flow & Round Formats
-status: verifying
-stopped_at: Completed 09-04-PLAN.md — 80+20 E2E + timer.cy.js ROUND TIMER label/controls + Stryker gate (hooks 100%, components 95.35%)
-last_updated: "2026-06-29T12:16:04.295Z"
-last_activity: 2026-06-29 -- 09-04 complete (E2E + Stryker gate; TIMER-07 + TEST-05 closed; Phase 09 ready for verification)
+status: completed
+stopped_at: Completed 09-03-PLAN.md — timer UI (TimerDisplay phase bands, TimerControls pending Start/Cancel, AdminControls 80+20 preset)
+last_updated: "2026-06-29T13:10:48.156Z"
+last_activity: 2026-06-29 -- Phase 09 marked complete
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 13
   completed_plans: 13
-  percent: 50
+  percent: 67
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-06-27)
 
 ## Current Position
 
-Phase: 09 (timer-ui-admin-controls) — EXECUTING
+Phase: 09 — COMPLETE
 Plan: 4 of 4 (09-01, 09-02, 09-03, 09-04 all complete)
-Status: Phase complete — ready for verification
-Last activity: 2026-06-29 -- 09-04 complete (E2E + Stryker gate; TIMER-07 + TEST-05 closed)
+Status: Phase 09 complete
+Last activity: 2026-06-29 -- Phase 09 marked complete
 
 **v5.0 phase map:**
 
