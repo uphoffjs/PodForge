@@ -100,8 +100,8 @@ describe('Timer Display and Admin Controls', () => {
 
         cy.getByTestId('timer-display').should('be.visible')
         cy.getByTestId('timer-countdown').should('be.visible')
-        // Running timer shows "Round Timer" status label
-        cy.getByTestId('timer-status').should('contain', 'Round Timer')
+        // Running (main-phase) timer shows the UI-SPEC status label "ROUND TIMER"
+        cy.getByTestId('timer-status').should('contain', 'ROUND TIMER')
       })
     })
   })
@@ -280,6 +280,90 @@ describe('Timer Display and Admin Controls', () => {
         cy.getByTestId('timer-resume-btn').click()
 
         cy.wait('@resumeTimer')
+      })
+    })
+  })
+
+  describe('Timer admin controls - operable across overtime and count-up phases', () => {
+    // TIMER-07 across phases: the pause/+5/cancel controls must remain operable
+    // once an 80+20 timer crosses into overtime and count-up. Each phase is
+    // mounted deterministically via a computed expires_at (no cy.wait(ms)).
+    const phaseCases = [
+      {
+        phase: 'overtime',
+        label: 'OVERTIME',
+        // Main phase expired 60s ago; 1140s of the 1200s overtime remain.
+        expiresOffsetSeconds: -60,
+      },
+      {
+        phase: 'countup',
+        label: 'OVERRUN',
+        // Main + the full 1200s overtime both elapsed 60s ago → count-up.
+        expiresOffsetSeconds: -(1200 + 60),
+      },
+    ]
+
+    function makePhaseTimer(running, offsetSeconds) {
+      return {
+        ...running,
+        status: 'running',
+        duration_minutes: 80,
+        overtime_seconds: 1200,
+        expires_at: new Date(Date.now() + offsetSeconds * 1000).toISOString(),
+      }
+    }
+
+    phaseCases.forEach(({ phase, label, expiresOffsetSeconds }) => {
+      describe(`${phase} phase`, () => {
+        it(`renders the ${label} band and fires pause_timer on Pause`, () => {
+          cy.fixture('timer.json').then((timerFixtures) => {
+            const timer = makePhaseTimer(timerFixtures.running, expiresOffsetSeconds)
+            setupTimerPage({ timer, asAdmin: true })
+
+            cy.intercept('POST', '**/rest/v1/rpc/pause_timer', {
+              statusCode: 200,
+              body: null,
+            }).as('pauseTimer')
+
+            cy.getByTestId('timer-display').should('have.attr', 'data-phase', phase)
+            cy.getByTestId('timer-status').should('contain', label)
+
+            cy.getByTestId('timer-pause-btn').should('be.visible').click()
+            cy.wait('@pauseTimer')
+          })
+        })
+
+        it(`fires extend_timer on +5 min`, () => {
+          cy.fixture('timer.json').then((timerFixtures) => {
+            const timer = makePhaseTimer(timerFixtures.running, expiresOffsetSeconds)
+            setupTimerPage({ timer, asAdmin: true })
+
+            cy.intercept('POST', '**/rest/v1/rpc/extend_timer', {
+              statusCode: 200,
+              body: null,
+            }).as('extendTimer')
+
+            cy.getByTestId('timer-extend-btn').should('be.visible').click()
+            cy.wait('@extendTimer')
+          })
+        })
+
+        it(`opens the ConfirmDialog and fires cancel_timer on confirm`, () => {
+          cy.fixture('timer.json').then((timerFixtures) => {
+            const timer = makePhaseTimer(timerFixtures.running, expiresOffsetSeconds)
+            setupTimerPage({ timer, asAdmin: true })
+
+            cy.intercept('POST', '**/rest/v1/rpc/cancel_timer', {
+              statusCode: 200,
+              body: null,
+            }).as('cancelTimer')
+
+            cy.getByTestId('timer-cancel-btn').should('be.visible').click()
+            cy.getByTestId('confirm-dialog').should('be.visible')
+            cy.getByTestId('confirm-dialog-confirm-btn').click()
+            cy.wait('@cancelTimer')
+          })
+        })
       })
     })
   })
