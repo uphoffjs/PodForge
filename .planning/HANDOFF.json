@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-06-29T13:31:34.894Z",
+  "phase": "09",
+  "phase_name": "timer-ui-admin-controls",
+  "phase_dir": ".planning/phases/09-timer-ui-admin-controls",
+  "plan": 4,
+  "task": 3,
+  "total_tasks": 3,
+  "status": "paused",
+  "context_note": "Paused at a clean phase BOUNDARY, not mid-task. Phase 9 is COMPLETE and verified (5/5 criteria). Milestone v5.0 is half done: Phases 8 + 9 shipped; Phases 10 + 11 remain.",
+  "completed_tasks": [
+    {"id": "09-01", "name": "Migration 00006: pending status + start_timer RPC + cancel-pending; applied to live DB", "status": "done", "commit": "f1791e1"},
+    {"id": "09-02", "name": "Client data layer: status union + useTimer filter + useCountdown not-started early-return + useStartTimer hook (100% Stryker)", "status": "done", "commit": "0ec30d0"},
+    {"id": "09-03", "name": "UI: TimerDisplay phase bands + not-started card, TimerControls pending Start/Cancel, AdminControls 80+20 preset + threaded overtimeMinutes", "status": "done", "commit": "2157c82"},
+    {"id": "09-04", "name": "E2E timer-80-20.cy.js + timer.cy.js ROUND TIMER label + Stryker gate (21 Cypress + 900 vitest green)", "status": "done", "commit": "11c9db5"}
+  ],
+  "remaining_tasks": [
+    {"id": "phase-10", "name": "Plan + execute Phase 10: Mid-Event Join UX (JOIN-01..03, TEST-04) — zero migration, pure client + pod-participation helper", "status": "not_started"},
+    {"id": "phase-11", "name": "Plan + execute Phase 11: Fault-Injection Campaign Completion (FAULT-01..04) — test-only", "status": "not_started"}
+  ],
+  "blockers": [],
+  "human_actions_pending": [
+    {"action": "Optional: eyeball Phase 9 per-phase timer band colors in a browser (amber overtime, red-pulse count-up) and multi-client real-time sync after Start", "context": "Verifier left these as human-visual confirmations; code is 5/5 verified, E2E proves structural rendering, colors are UI-checker token-validated", "blocking": false}
+  ],
+  "decisions": [
+    {"decision": "All v5.0 work stays LOCAL — do not push to remote git without explicit ask; keep main fast-forwarded to feature HEAD", "rationale": "Explicit user instruction", "phase": "v5.0"},
+    {"decision": "Migrations 00005 + 00006 already applied to the LIVE Supabase DB via supabase db push --linked", "rationale": "Server-authoritative timer needs the schema live; user authorizes db push per-phase", "phase": "08/09"},
+    {"decision": "Executors run sequentially on the main working tree (no worktree isolation) for migration plans", "rationale": "supabase db push needs .env (gitignored, absent from worktrees) + human-verify checkpoints surface cleanly", "phase": "08/09"},
+    {"decision": "80+20 not-started timer represented by a new 'pending' status (migration 00006) + start_timer RPC; admin explicitly starts", "rationale": "Smallest correct additive change; stays server-authoritative", "phase": "09"}
+  ],
+  "uncommitted_files": [".planning/config.json (modified, pre-existing)", ".planning/debug/*.md (untracked, pre-existing)", ".planning/phases/06-.../06-01-PLAN.md (untracked, pre-existing)"],
+  "next_action": "Run /gsd-plan-phase 10 (Mid-Event Join UX) — or /gsd-plan-phase 11 (Fault-Injection). Both independent of the timer track and of each other.",
+  "context_notes": "Branch feature/v4.0-pod-improvements == main == HEAD fad3fd8, ~80 commits ahead of origin (all local/unpushed). psql NOT installed locally; SQL verified via supabase migration list --linked + source inspection + approved human-verify checkpoints. Full unit suite 900 green, 21 Cypress E2E green, tsc + lint clean."
+}
