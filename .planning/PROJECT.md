@@ -42,11 +42,21 @@ When an admin hits "Generate Next Round," every player instantly sees their pod 
 - ✓ Deployment documentation for Vercel + Supabase — v3.0
 - ✓ 678 Vitest unit tests with 100% coverage and 100% mutation score on critical hooks — v3.0
 - ✓ Bulletproof CI/CD: GitHub Actions CI, Stryker PR gate, Husky pre-commit hooks — v3.0
+- ✓ Opponent diversity: quadratic penalty scoring, multi-start greedy, and post-greedy swap pass — v4.0
+- ✓ Per-round "allow pods of 3" toggle (13 players → 1×4 + 3×3 instead of 3×4 + 1 bye) — v4.0
+- ✓ `computePodSizes()` handles all player counts 4-20 for both toggle states — v4.0
+- ✓ Empirical seat-randomization verification (Fisher-Yates uniform, chi-squared) — v4.0
+- ✓ Full unit/integration/E2E coverage for algorithm + pods-of-3 (89%+ Stryker) — v4.0
 
 ### Active
 
+#### v5.0 Mid-Event Flow & Round Formats
+- [ ] Mid-event join UX — indicator/flag for players who join after round 1 (algorithm already handles empty history + 0 byes)
+- [ ] 80+20 round timer format — 80-min main timer counts down, then a 20-min overtime counts down, then counts up past zero
+- [ ] Finish batch-1 fault-injection campaign — run the remaining 21 pending faults to verify E2E coverage
+
+#### Carry-forward
 - [ ] Multiple simultaneous admins supported per event
-- [ ] Player joining mid-event enters pool for next round with empty history and 0 bye count
 
 ### Out of Scope
 
@@ -114,5 +124,31 @@ DB password stored in .env as SUPABASE_DB_PASSWORD (gitignored) for CLI push ope
 | Husky + lint-staged pre-commit | ESLint auto-fix on staged .ts/.tsx files before commit | ✓ Good |
 | Excluded src/types/** from coverage | Type-only files have no runtime code to instrument | ✓ Good |
 
+## Current Milestone: v5.0 Mid-Event Flow & Round Formats
+
+**Goal:** Support players joining mid-event with clear UX, add an 80+20 minute round-timer format, and close out E2E coverage gaps from the fault-injection campaign.
+
+**Target features:**
+- Mid-event join UX — surface a clear indicator (and any admin confirmation) for players who join after round 1; the pairing algorithm already handles empty opponent history and 0 bye count
+- 80+20 round timer format — an 80-minute main timer counts down; when it hits zero a 20-minute overtime period counts down; after that it counts up to show how far past the round has run
+- Finish the batch-1 fault-injection campaign — run the remaining 21 pending faults (2.2–5.6) to verify E2E coverage of event-creation, player-join, admin-add-player, and admin-player-management flows
+
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd:complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
-*Last updated: 2026-02-27 after v3.0 milestone complete*
+*Last updated: 2026-06-27 after v5.0 milestone started*

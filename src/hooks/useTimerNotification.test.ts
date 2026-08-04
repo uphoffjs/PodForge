@@ -13,6 +13,7 @@ function makeTimer(overrides: Partial<RoundTimer> = {}): RoundTimer {
     status: 'running',
     started_at: '2026-01-01T00:00:00Z',
     remaining_seconds: null,
+    overtime_seconds: 0,
     paused_at: null,
     expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
     created_at: '2026-01-01T00:00:00Z',
@@ -28,16 +29,29 @@ function makeCountdown(overrides: Partial<CountdownState> = {}): CountdownState 
     isPaused: false,
     isCancelled: false,
     urgency: 'danger',
+    phase: 'main',
     ...overrides,
   }
 }
 
-function makeExpiredCountdown(overrides: Partial<CountdownState> = {}): CountdownState {
+function makeOvertimeCountdown(overrides: Partial<CountdownState> = {}): CountdownState {
   return makeCountdown({
-    remainingSeconds: -10,
-    display: '+0:10',
+    remainingSeconds: -300,
+    display: '15:00',
+    isOvertime: true,
+    urgency: 'danger',
+    phase: 'overtime',
+    ...overrides,
+  })
+}
+
+function makeCountupCountdown(overrides: Partial<CountdownState> = {}): CountdownState {
+  return makeCountdown({
+    remainingSeconds: -1320,
+    display: '+2:00',
     isOvertime: true,
     urgency: 'expired',
+    phase: 'countup',
     ...overrides,
   })
 }
@@ -74,6 +88,10 @@ describe('useTimerNotification', () => {
       })
     }
   })
+
+  // ---------------------------------------------------------------------------
+  // Support / permission surface (unchanged behavior)
+  // ---------------------------------------------------------------------------
 
   it('isSupported is true when Notification exists in window', () => {
     const { result } = renderHook(() =>
@@ -123,145 +141,33 @@ describe('useTimerNotification', () => {
     expect(result.current.permission).toBe('denied')
   })
 
-  it('fires notification when countdown transitions to overtime', () => {
-    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+  it('requestPermission recomputes when support changes (deps include isSupported)', async () => {
+    // Mount with Notification ABSENT so isSupported is false
+    const savedNotification = window.Notification
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (window as any).Notification
 
-    const timer = makeTimer()
-    const countdown = makeExpiredCountdown()
+    const { result, rerender } = renderHook(() => useTimerNotification(null, null))
+    expect(result.current.isSupported).toBe(false)
 
-    const { result } = renderHook(
-      ({ t, c }) => useTimerNotification(t, c),
-      { initialProps: { t: timer, c: countdown } }
-    )
+    // Restore Notification — isSupported flips to true; the callback must pick up
+    // the new value (a stale `[]` deps closure would keep isSupported=false and
+    // never call requestPermission).
+    Object.defineProperty(window, 'Notification', {
+      value: savedNotification,
+      writable: true,
+      configurable: true,
+    })
+    ;(window.Notification as unknown as { permission: string }).permission = 'default'
+    rerender()
+    expect(result.current.isSupported).toBe(true)
 
-    // Notification should fire because permission is granted and we force-read it on init
-    // We need to re-init the hook so it reads 'granted' from start
+    await act(async () => {
+      await result.current.requestPermission()
+    })
+
+    expect(mockRequestPermission).toHaveBeenCalledOnce()
     expect(result.current.permission).toBe('granted')
-    expect(mockNotificationConstructor).toHaveBeenCalledWith(
-      "Time's Up!",
-      expect.objectContaining({
-        body: 'Round timer has expired',
-        icon: '/favicon.ico',
-        tag: 'timer-expired',
-      })
-    )
-  })
-
-  it('does NOT fire notification twice for the same timer', () => {
-    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
-
-    const timer = makeTimer()
-    const expired = makeExpiredCountdown()
-
-    const { rerender } = renderHook(
-      ({ t, c }) => useTimerNotification(t, c),
-      { initialProps: { t: timer, c: expired } }
-    )
-
-    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
-
-    // Re-render with the same timer (e.g., different remaining seconds)
-    const moreExpired = makeExpiredCountdown({ remainingSeconds: -20 })
-    rerender({ t: timer, c: moreExpired })
-
-    // Should still only have been called once
-    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
-  })
-
-  it('fires notification again for a different timer (new timer.id)', () => {
-    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
-
-    const timer1 = makeTimer({ id: 'timer-1' })
-    const timer2 = makeTimer({ id: 'timer-2' })
-    const expired = makeExpiredCountdown()
-
-    const { rerender } = renderHook(
-      ({ t, c }) => useTimerNotification(t, c),
-      { initialProps: { t: timer1, c: expired } }
-    )
-
-    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
-
-    // Switch to a new timer that is also expired
-    rerender({ t: timer2, c: expired })
-
-    expect(mockNotificationConstructor).toHaveBeenCalledTimes(2)
-  })
-
-  it('does NOT fire notification when permission is denied', () => {
-    ;(window.Notification as unknown as { permission: string }).permission = 'denied'
-
-    const timer = makeTimer()
-    const expired = makeExpiredCountdown()
-
-    renderHook(
-      ({ t, c }) => useTimerNotification(t, c),
-      { initialProps: { t: timer, c: expired } }
-    )
-
-    expect(mockNotificationConstructor).not.toHaveBeenCalled()
-  })
-
-  it('does NOT fire notification when permission is default', () => {
-    const timer = makeTimer()
-    const expired = makeExpiredCountdown()
-
-    renderHook(
-      ({ t, c }) => useTimerNotification(t, c),
-      { initialProps: { t: timer, c: expired } }
-    )
-
-    expect(mockNotificationConstructor).not.toHaveBeenCalled()
-  })
-
-  it('does NOT fire notification when timer is paused', () => {
-    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
-
-    const timer = makeTimer({ status: 'paused' })
-    const pausedCountdown = makeCountdown({
-      remainingSeconds: -5,
-      isOvertime: true,
-      isPaused: true,
-      urgency: 'expired',
-    })
-
-    renderHook(
-      ({ t, c }) => useTimerNotification(t, c),
-      { initialProps: { t: timer, c: pausedCountdown } }
-    )
-
-    expect(mockNotificationConstructor).not.toHaveBeenCalled()
-  })
-
-  it('does NOT fire notification when countdown is null', () => {
-    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
-
-    const timer = makeTimer()
-
-    renderHook(
-      ({ t, c }) => useTimerNotification(t, c),
-      { initialProps: { t: timer as RoundTimer | null, c: null as CountdownState | null } }
-    )
-
-    expect(mockNotificationConstructor).not.toHaveBeenCalled()
-  })
-
-  it('handles Notification constructor throwing (iOS PWA fallback)', () => {
-    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
-    mockNotificationConstructor.mockImplementation(() => {
-      throw new Error('iOS PWA: Notification not supported')
-    })
-
-    const timer = makeTimer()
-    const expired = makeExpiredCountdown()
-
-    // Should not throw
-    expect(() => {
-      renderHook(
-        ({ t, c }) => useTimerNotification(t, c),
-        { initialProps: { t: timer, c: expired } }
-      )
-    }).not.toThrow()
   })
 
   it('returns isSupported=false and permission="unsupported" when Notification is not in window', () => {
@@ -327,145 +233,341 @@ describe('useTimerNotification', () => {
     expect(result.current.permission).toBe('unsupported')
   })
 
-  it('does NOT fire notification when timer is null but countdown is expired', () => {
-    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+  // ---------------------------------------------------------------------------
+  // Phase-transition notifications (TIMER-05)
+  // ---------------------------------------------------------------------------
 
-    const expired = makeExpiredCountdown()
+  it('does NOT fire on initial mount, even directly into overtime (prevPhase null)', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
 
     renderHook(
       ({ t, c }) => useTimerNotification(t, c),
-      { initialProps: { t: null as RoundTimer | null, c: expired as CountdownState | null } }
+      { initialProps: { t: makeTimer(), c: makeOvertimeCountdown() } }
     )
 
     expect(mockNotificationConstructor).not.toHaveBeenCalled()
   })
 
-  it('does NOT fire notification when countdown is cancelled (isPaused=false, isCancelled=true)', () => {
+  it('does NOT fire on initial mount directly into count-up (refresh-safe)', () => {
     ;(window.Notification as unknown as { permission: string }).permission = 'granted'
-
-    const timer = makeTimer()
-    const cancelledCountdown = makeCountdown({
-      remainingSeconds: -5,
-      isOvertime: true,
-      isPaused: false,
-      isCancelled: true,
-      urgency: 'expired',
-    })
 
     renderHook(
       ({ t, c }) => useTimerNotification(t, c),
-      { initialProps: { t: timer, c: cancelledCountdown } }
+      { initialProps: { t: makeTimer(), c: makeCountupCountdown() } }
     )
 
     expect(mockNotificationConstructor).not.toHaveBeenCalled()
   })
 
-  it('fires notification when remainingSeconds is exactly 0 and isOvertime is true', () => {
+  it("fires 'Overtime started' exactly once on the main->overtime boundary", () => {
     ;(window.Notification as unknown as { permission: string }).permission = 'granted'
 
     const timer = makeTimer()
-    const countdown = makeCountdown({
-      remainingSeconds: 0,
-      isOvertime: true,
-      isPaused: false,
-      isCancelled: false,
-      urgency: 'expired',
-    })
-
-    renderHook(
-      ({ t, c }) => useTimerNotification(t, c),
-      { initialProps: { t: timer, c: countdown } }
-    )
-
-    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
-  })
-
-  it('does NOT fire notification when remainingSeconds is 0 but isOvertime is false', () => {
-    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
-
-    const timer = makeTimer()
-    const countdown = makeCountdown({
-      remainingSeconds: 0,
-      isOvertime: false,
-      isPaused: false,
-      isCancelled: false,
-      urgency: 'expired',
-    })
-
-    renderHook(
-      ({ t, c }) => useTimerNotification(t, c),
-      { initialProps: { t: timer, c: countdown } }
-    )
-
-    expect(mockNotificationConstructor).not.toHaveBeenCalled()
-  })
-
-  it('does NOT fire notification when remainingSeconds > 0 but isOvertime is true (edge state)', () => {
-    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
-
-    const timer = makeTimer()
-    const countdown = makeCountdown({
-      remainingSeconds: 300,
-      isOvertime: true,
-      isPaused: false,
-      isCancelled: false,
-      urgency: 'danger',
-    })
-
-    renderHook(
-      ({ t, c }) => useTimerNotification(t, c),
-      { initialProps: { t: timer, c: countdown } }
-    )
-
-    expect(mockNotificationConstructor).not.toHaveBeenCalled()
-  })
-
-  it('does NOT fire again when timer object changes but timer.id is the same', () => {
-    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
-
-    const timer1 = makeTimer({ id: 'timer-1' })
-    const expired = makeExpiredCountdown()
 
     const { rerender } = renderHook(
       ({ t, c }) => useTimerNotification(t, c),
-      { initialProps: { t: timer1, c: expired } }
+      { initialProps: { t: timer, c: makeCountdown() } }
     )
 
-    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
+    // Mount in main: no fire
+    expect(mockNotificationConstructor).not.toHaveBeenCalled()
 
-    // Create a new timer object with the same id (e.g., re-fetch)
-    const timer1Again = makeTimer({ id: 'timer-1', duration_minutes: 90 })
-    rerender({ t: timer1Again, c: expired })
+    // Cross into overtime
+    rerender({ t: timer, c: makeOvertimeCountdown() })
 
-    // Should NOT fire again since timer.id is the same
     expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
+    expect(mockNotificationConstructor).toHaveBeenCalledWith('Round Timer', {
+      body: 'Overtime started',
+      icon: '/favicon.ico',
+      tag: 'timer-1:overtime',
+    })
   })
 
-  it('resets lastNotifiedTimerId when timer changes, allowing notification for new timer', () => {
+  it("fires 'Round over' exactly once on the overtime->count-up boundary", () => {
     ;(window.Notification as unknown as { permission: string }).permission = 'granted'
 
-    const timer1 = makeTimer({ id: 'timer-1' })
-    const expired = makeExpiredCountdown()
-    const notExpired = makeCountdown({ remainingSeconds: 300, isOvertime: false })
+    const timer = makeTimer()
 
     const { rerender } = renderHook(
       ({ t, c }) => useTimerNotification(t, c),
-      { initialProps: { t: timer1, c: expired } }
+      { initialProps: { t: timer, c: makeOvertimeCountdown() } }
     )
 
-    // First timer expired, notification fires
+    // Mount in overtime: no fire (prevPhase null)
+    expect(mockNotificationConstructor).not.toHaveBeenCalled()
+
+    // Cross into count-up
+    rerender({ t: timer, c: makeCountupCountdown() })
+
     expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
+    expect(mockNotificationConstructor).toHaveBeenCalledWith('Round Timer', {
+      body: 'Round over',
+      icon: '/favicon.ico',
+      tag: 'timer-1:countup',
+    })
+  })
 
-    // Switch to timer-2 that is NOT expired yet (this resets the lastNotifiedTimerId ref via the effect on line 66-68)
-    const timer2 = makeTimer({ id: 'timer-2' })
-    rerender({ t: timer2, c: notExpired })
+  it('fires both boundaries once each across main->overtime->count-up', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
 
-    // No new notification for non-expired timer
-    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
+    const timer = makeTimer()
 
-    // Now timer-2 expires - should fire because the ref was reset
-    rerender({ t: timer2, c: expired })
+    const { rerender } = renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer, c: makeCountdown() } }
+    )
+
+    rerender({ t: timer, c: makeOvertimeCountdown() })
+    rerender({ t: timer, c: makeCountupCountdown() })
 
     expect(mockNotificationConstructor).toHaveBeenCalledTimes(2)
+    expect(mockNotificationConstructor).toHaveBeenNthCalledWith(1, 'Round Timer', {
+      body: 'Overtime started',
+      icon: '/favicon.ico',
+      tag: 'timer-1:overtime',
+    })
+    expect(mockNotificationConstructor).toHaveBeenNthCalledWith(2, 'Round Timer', {
+      body: 'Round over',
+      icon: '/favicon.ico',
+      tag: 'timer-1:countup',
+    })
+  })
+
+  it('does NOT fire on a direct main->count-up transition (plain timer, overtime_seconds=0)', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    const timer = makeTimer()
+
+    const { rerender } = renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer, c: makeCountdown() } }
+    )
+
+    // Plain timer with no overtime jumps main -> count-up; only the overtime
+    // boundary ('main'->'overtime') and ('overtime'->'countup') notify.
+    rerender({ t: timer, c: makeCountupCountdown() })
+
+    expect(mockNotificationConstructor).not.toHaveBeenCalled()
+  })
+
+  it('does NOT fire on a same-phase re-render in main (Realtime churn)', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    const timer = makeTimer()
+
+    const { rerender } = renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer, c: makeCountdown({ remainingSeconds: 300 }) } }
+    )
+
+    rerender({ t: timer, c: makeCountdown({ remainingSeconds: 299 }) })
+
+    expect(mockNotificationConstructor).not.toHaveBeenCalled()
+  })
+
+  it('does NOT fire on a same-phase re-render in overtime (Realtime churn)', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    const timer = makeTimer()
+
+    const { rerender } = renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer, c: makeOvertimeCountdown() } }
+    )
+
+    // Already crossed overtime before mount (prevPhase null), churn stays overtime
+    rerender({ t: timer, c: makeOvertimeCountdown({ remainingSeconds: -301 }) })
+
+    expect(mockNotificationConstructor).not.toHaveBeenCalled()
+  })
+
+  it('de-dupes: two main->overtime crossings for the same timer fire only once', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    const timer = makeTimer()
+
+    const { rerender } = renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer, c: makeCountdown() } }
+    )
+
+    // main -> overtime (fires)
+    rerender({ t: timer, c: makeOvertimeCountdown() })
+    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
+
+    // overtime -> main (e.g. an extend pulled it back), no fire
+    rerender({ t: timer, c: makeCountdown() })
+
+    // main -> overtime AGAIN — Set dedup must suppress the second fire
+    rerender({ t: timer, c: makeOvertimeCountdown() })
+
+    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
+  })
+
+  it('resets dedup state for a new timer.id so its first boundary notifies fresh', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    const timer1 = makeTimer({ id: 'timer-1' })
+    const timer2 = makeTimer({ id: 'timer-2' })
+
+    const { rerender } = renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer1, c: makeCountdown() } }
+    )
+
+    // timer-1 crosses into overtime
+    rerender({ t: timer1, c: makeOvertimeCountdown() })
+    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
+
+    // Switch to a brand-new timer starting in main
+    rerender({ t: timer2, c: makeCountdown() })
+    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
+
+    // timer-2 crosses into overtime — fires fresh (Set was reset)
+    rerender({ t: timer2, c: makeOvertimeCountdown() })
+    expect(mockNotificationConstructor).toHaveBeenCalledTimes(2)
+    expect(mockNotificationConstructor).toHaveBeenLastCalledWith('Round Timer', {
+      body: 'Overtime started',
+      icon: '/favicon.ico',
+      tag: 'timer-2:overtime',
+    })
+  })
+
+  it('does NOT fire when switching to a timer already past the boundary (pre-switch crossing)', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    const timer1 = makeTimer({ id: 'timer-1' })
+    const timer2 = makeTimer({ id: 'timer-2' })
+
+    const { rerender } = renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer1, c: makeCountdown() } }
+    )
+
+    // Switch to a different timer that is ALREADY in overtime — boundary crossed before observing
+    rerender({ t: timer2, c: makeOvertimeCountdown() })
+
+    expect(mockNotificationConstructor).not.toHaveBeenCalled()
+  })
+
+  it('does NOT fire when timer object changes but timer.id is unchanged', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    const timer1 = makeTimer({ id: 'timer-1' })
+
+    const { rerender } = renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer1, c: makeCountdown() } }
+    )
+
+    rerender({ t: timer1, c: makeOvertimeCountdown() })
+    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
+
+    // New timer object, SAME id (re-fetch) — must not reset dedup, must not re-fire
+    const timer1Again = makeTimer({ id: 'timer-1', duration_minutes: 90 })
+    rerender({ t: timer1Again, c: makeOvertimeCountdown() })
+
+    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
+  })
+
+  it('does NOT fire when permission is denied during a real transition', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'denied'
+
+    const timer = makeTimer()
+
+    const { rerender } = renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer, c: makeCountdown() } }
+    )
+
+    rerender({ t: timer, c: makeOvertimeCountdown() })
+
+    expect(mockNotificationConstructor).not.toHaveBeenCalled()
+  })
+
+  it('does NOT fire when permission is default during a real transition', () => {
+    const timer = makeTimer()
+
+    const { rerender } = renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer, c: makeCountdown() } }
+    )
+
+    rerender({ t: timer, c: makeOvertimeCountdown() })
+
+    expect(mockNotificationConstructor).not.toHaveBeenCalled()
+  })
+
+  it('does NOT fire when the timer is paused across a phase change', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    const timer = makeTimer({ status: 'paused' })
+
+    const { rerender } = renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer, c: makeCountdown({ isPaused: true }) } }
+    )
+
+    rerender({ t: timer, c: makeOvertimeCountdown({ isPaused: true }) })
+
+    expect(mockNotificationConstructor).not.toHaveBeenCalled()
+  })
+
+  it('does NOT fire when the countdown is cancelled across a phase change', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    const timer = makeTimer()
+
+    const { rerender } = renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer, c: makeCountdown({ isCancelled: true }) } }
+    )
+
+    rerender({ t: timer, c: makeOvertimeCountdown({ isCancelled: true }) })
+
+    expect(mockNotificationConstructor).not.toHaveBeenCalled()
+  })
+
+  it('does NOT fire when countdown is null', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: makeTimer() as RoundTimer | null, c: null as CountdownState | null } }
+    )
+
+    expect(mockNotificationConstructor).not.toHaveBeenCalled()
+  })
+
+  it('does NOT fire when timer is null but countdown is in overtime', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+
+    renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: null as RoundTimer | null, c: makeOvertimeCountdown() as CountdownState | null } }
+    )
+
+    expect(mockNotificationConstructor).not.toHaveBeenCalled()
+  })
+
+  it('handles the Notification constructor throwing on a boundary (iOS PWA fallback)', () => {
+    ;(window.Notification as unknown as { permission: string }).permission = 'granted'
+    mockNotificationConstructor.mockImplementation(() => {
+      throw new Error('iOS PWA: Notification not supported')
+    })
+
+    const timer = makeTimer()
+
+    const { rerender } = renderHook(
+      ({ t, c }) => useTimerNotification(t, c),
+      { initialProps: { t: timer, c: makeCountdown() } }
+    )
+
+    expect(() => {
+      rerender({ t: timer, c: makeOvertimeCountdown() })
+    }).not.toThrow()
+
+    // It still attempted to construct the notification
+    expect(mockNotificationConstructor).toHaveBeenCalledTimes(1)
   })
 })

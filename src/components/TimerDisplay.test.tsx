@@ -35,6 +35,7 @@ function makeTimer(overrides: Partial<RoundTimer> = {}): RoundTimer {
     status: 'running',
     started_at: '2026-01-01T00:00:00Z',
     remaining_seconds: null,
+    overtime_seconds: 0,
     paused_at: null,
     expires_at: '2026-01-01T00:50:00Z',
     created_at: '2026-01-01T00:00:00Z',
@@ -49,6 +50,7 @@ function makeCountdown(overrides: Partial<{
   isPaused: boolean
   isCancelled: boolean
   urgency: 'normal' | 'warning' | 'danger' | 'expired'
+  phase: 'main' | 'overtime' | 'countup' | 'not-started'
 }> = {}) {
   return {
     remainingSeconds: 1200,
@@ -57,6 +59,7 @@ function makeCountdown(overrides: Partial<{
     isPaused: false,
     isCancelled: false,
     urgency: 'normal' as const,
+    phase: 'main' as const,
     ...overrides,
   }
 }
@@ -107,9 +110,9 @@ describe('TimerDisplay', () => {
     expect(screen.getByTestId('timer-status')).toHaveTextContent('PAUSED')
   })
 
-  it('shows "OVERTIME" status label when countdown.isOvertime is true', () => {
+  it('shows "OVERTIME" status label when phase is overtime', () => {
     mockUseCountdown.mockReturnValue(
-      makeCountdown({ isOvertime: true, isPaused: false })
+      makeCountdown({ phase: 'overtime', isOvertime: true, isPaused: false })
     )
 
     render(<TimerDisplay timer={makeTimer()} />)
@@ -117,14 +120,134 @@ describe('TimerDisplay', () => {
     expect(screen.getByTestId('timer-status')).toHaveTextContent('OVERTIME')
   })
 
-  it('shows "Round Timer" status label for normal countdown', () => {
+  it('shows "ROUND TIMER" status label for normal main-phase countdown', () => {
     mockUseCountdown.mockReturnValue(
-      makeCountdown({ isPaused: false, isOvertime: false })
+      makeCountdown({ phase: 'main', isPaused: false, isOvertime: false })
     )
 
     render(<TimerDisplay timer={makeTimer()} />)
 
-    expect(screen.getByTestId('timer-status')).toHaveTextContent('Round Timer')
+    expect(screen.getByTestId('timer-status')).toHaveTextContent('ROUND TIMER')
+  })
+
+  // --- Phase-first band selection (Phase 9 UI-SPEC) ---
+
+  it('main + normal: data-phase=main, ROUND TIMER, neutral band', () => {
+    mockUseCountdown.mockReturnValue(
+      makeCountdown({ phase: 'main', urgency: 'normal' })
+    )
+
+    render(<TimerDisplay timer={makeTimer()} />)
+
+    const el = screen.getByTestId('timer-display')
+    expect(el).toHaveAttribute('data-phase', 'main')
+    expect(screen.getByTestId('timer-status')).toHaveTextContent('ROUND TIMER')
+    expect(el.className).toContain('bg-surface-raised')
+  })
+
+  it('main + warning: keeps yellow urgency band (no regression)', () => {
+    mockUseCountdown.mockReturnValue(
+      makeCountdown({ phase: 'main', urgency: 'warning' })
+    )
+
+    render(<TimerDisplay timer={makeTimer()} />)
+
+    const el = screen.getByTestId('timer-display')
+    expect(el).toHaveAttribute('data-phase', 'main')
+    expect(el.className).toContain('bg-yellow-900/30')
+    expect(el.className).toContain('text-yellow-400')
+    expect(el.className).toContain('border-yellow-700')
+    expect(screen.getByTestId('timer-status')).toHaveTextContent('ROUND TIMER')
+  })
+
+  it('main + danger: keeps red urgency band (no regression)', () => {
+    mockUseCountdown.mockReturnValue(
+      makeCountdown({ phase: 'main', urgency: 'danger' })
+    )
+
+    render(<TimerDisplay timer={makeTimer()} />)
+
+    const el = screen.getByTestId('timer-display')
+    expect(el).toHaveAttribute('data-phase', 'main')
+    expect(el.className).toContain('bg-red-900/30')
+    expect(el.className).toContain('text-red-400')
+    expect(el.className).toContain('border-red-700')
+  })
+
+  it('overtime: data-phase=overtime, OVERTIME label, accent band', () => {
+    mockUseCountdown.mockReturnValue(
+      makeCountdown({ phase: 'overtime', urgency: 'danger', isOvertime: true })
+    )
+
+    render(<TimerDisplay timer={makeTimer()} />)
+
+    const el = screen.getByTestId('timer-display')
+    expect(el).toHaveAttribute('data-phase', 'overtime')
+    expect(screen.getByTestId('timer-status')).toHaveTextContent('OVERTIME')
+    expect(el.className).toContain('bg-accent/15')
+    expect(el.className).toContain('text-accent-bright')
+    expect(el.className).toContain('border-accent')
+  })
+
+  it('countup: data-phase=countup, OVERRUN label, pulsing red band', () => {
+    mockUseCountdown.mockReturnValue(
+      makeCountdown({ phase: 'countup', urgency: 'expired', isOvertime: true })
+    )
+
+    render(<TimerDisplay timer={makeTimer()} />)
+
+    const el = screen.getByTestId('timer-display')
+    expect(el).toHaveAttribute('data-phase', 'countup')
+    expect(screen.getByTestId('timer-status')).toHaveTextContent('OVERRUN')
+    expect(el.className).toContain('bg-red-900/50')
+    expect(el.className).toContain('text-red-300')
+    expect(el.className).toContain('border-red-500')
+    expect(el.className).toContain('animate-pulse')
+  })
+
+  it('not-started: data-phase=not-started, READY TO START, static 80:00', () => {
+    mockUseCountdown.mockReturnValue(
+      makeCountdown({ phase: 'not-started', display: '80:00', urgency: 'normal' })
+    )
+
+    render(<TimerDisplay timer={makeTimer({ status: 'pending', duration_minutes: 80 })} />)
+
+    const el = screen.getByTestId('timer-display')
+    expect(el).toHaveAttribute('data-phase', 'not-started')
+    expect(screen.getByTestId('timer-status')).toHaveTextContent('READY TO START')
+    expect(screen.getByTestId('timer-countdown')).toHaveTextContent('80:00')
+    expect(el.className).toContain('bg-surface-raised')
+    expect(el.className).toContain('text-text-secondary')
+    expect(el.className).toContain('border-border')
+  })
+
+  it('non-paused timer has no dim class and no stray fallback token', () => {
+    mockUseCountdown.mockReturnValue(
+      makeCountdown({ phase: 'main', urgency: 'normal', isPaused: false })
+    )
+
+    render(<TimerDisplay timer={makeTimer()} />)
+
+    const el = screen.getByTestId('timer-display')
+    expect(el.className).not.toContain('opacity-70')
+    // The dimmed slot is empty when not paused: the class list must end on the
+    // band's last token, never a stray fallback string.
+    expect(el.className.replace(/\s+/g, ' ').trim()).toBe(
+      'sticky top-0 z-40 w-full max-w-lg border rounded-xl p-4 text-center bg-surface-raised text-text-primary border-border'
+    )
+  })
+
+  it('paused (overtime phase): PAUSED label, keeps accent band, adds opacity-70', () => {
+    mockUseCountdown.mockReturnValue(
+      makeCountdown({ phase: 'overtime', isPaused: true })
+    )
+
+    render(<TimerDisplay timer={makeTimer()} />)
+
+    const el = screen.getByTestId('timer-display')
+    expect(screen.getByTestId('timer-status')).toHaveTextContent('PAUSED')
+    expect(el.className).toContain('bg-accent/15')
+    expect(el.className).toContain('opacity-70')
   })
 
   it('applies normal urgency classes', () => {

@@ -12,6 +12,7 @@ function makeTimer(overrides: Partial<RoundTimer> = {}): RoundTimer {
     status: 'running',
     started_at: '2026-01-01T00:00:00Z',
     remaining_seconds: null,
+    overtime_seconds: 0,
     paused_at: null,
     expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 min from now
     created_at: '2026-01-01T00:00:00Z',
@@ -372,5 +373,255 @@ describe('useCountdown', () => {
 
     // Verify it's tracking the latest timer (approximately 29 seconds remaining)
     expect(result.current!.remainingSeconds).toBeGreaterThanOrEqual(28)
+  })
+})
+
+describe('useCountdown three-phase derivation (80+20)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("derives phase 'main' with full main display when mainRemaining > 0 (75:00)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: 4500, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('main')
+    expect(result.current!.display).toBe('75:00')
+    expect(result.current!.remainingSeconds).toBe(4500)
+    expect(result.current!.isOvertime).toBe(false)
+  })
+
+  it("derives phase 'overtime' at the main boundary mainRemaining = 0 (20:00)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: 0, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('overtime')
+    expect(result.current!.display).toBe('20:00')
+    expect(result.current!.isOvertime).toBe(true)
+  })
+
+  it("derives phase 'main' at mainRemaining = 1 (kills > vs >= boundary mutant)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: 1, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('main')
+    expect(result.current!.display).toBe('0:01')
+  })
+
+  it("derives phase 'overtime' for a running timer at mainRemaining = -300 (15:00, kills + vs - mutant)", () => {
+    const expiresAt = new Date(Date.now() - 300 * 1000).toISOString()
+    const timer = makeTimer({ status: 'running', expires_at: expiresAt, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('overtime')
+    expect(result.current!.display).toBe('15:00')
+    expect(result.current!.remainingSeconds).toBe(-300)
+  })
+
+  it("derives phase 'countup' at overtimeRemaining = 0 (0:00, kills second boundary mutant)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: -1200, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('countup')
+    expect(result.current!.display).toBe('0:00')
+  })
+
+  it("derives phase 'overtime' at overtimeRemaining = 1 (0:01, kills second boundary mutant)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: -1199, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('overtime')
+    expect(result.current!.display).toBe('0:01')
+  })
+
+  it("derives phase 'countup' for a running timer at mainRemaining = -1320 (+2:00)", () => {
+    const expiresAt = new Date(Date.now() - 1320 * 1000).toISOString()
+    const timer = makeTimer({ status: 'running', expires_at: expiresAt, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('countup')
+    expect(result.current!.display).toBe('+2:00')
+  })
+
+  it("derives phase 'overtime' from signed paused remaining_seconds = -300 (15:00)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: -300, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('overtime')
+    expect(result.current!.display).toBe('15:00')
+    expect(result.current!.remainingSeconds).toBe(-300)
+    expect(result.current!.isOvertime).toBe(true)
+  })
+
+  it("derives phase 'countup' from signed paused remaining_seconds = -1320 (+2:00)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: -1320, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('countup')
+    expect(result.current!.display).toBe('+2:00')
+  })
+
+  it('backward compat: overtime_seconds = 0 reproduces single-phase count-up (+1:30)', () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: -90, overtime_seconds: 0 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('countup')
+    expect(result.current!.display).toBe('+1:30')
+    expect(result.current!.isOvertime).toBe(true)
+  })
+
+  it("maps urgency to 'danger' in the overtime phase (keeps 4-value union)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: -300, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('overtime')
+    expect(result.current!.urgency).toBe('danger')
+  })
+
+  it("maps urgency to 'expired' in the count-up phase (keeps 4-value union)", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: -1320, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('countup')
+    expect(result.current!.urgency).toBe('expired')
+  })
+
+  it("maps urgency via main-phase thresholds when phase is 'main'", () => {
+    const timer = makeTimer({ status: 'paused', remaining_seconds: 450, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('main')
+    expect(result.current!.urgency).toBe('warning')
+  })
+
+  it('recomputes phase each tick: main crosses into overtime as the clock advances', () => {
+    // 2 seconds left in main, 1200s overtime configured
+    const expiresAt = new Date(Date.now() + 2 * 1000).toISOString()
+    const timer = makeTimer({ status: 'running', expires_at: expiresAt, overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('main')
+    expect(result.current!.display).toBe('0:02')
+
+    act(() => {
+      vi.advanceTimersByTime(3000)
+    })
+
+    // mainRemaining is now -1 → overtime phase, display 1200 - 1 = 19:59
+    expect(result.current!.phase).toBe('overtime')
+    expect(result.current!.display).toBe('19:59')
+  })
+
+  it('does not start an interval for a paused timer (kills the running-only tick-guard mutant)', () => {
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval')
+    const timer = makeTimer({ status: 'paused', remaining_seconds: 500, overtime_seconds: 1200 })
+
+    renderHook(() => useCountdown(timer))
+
+    expect(setIntervalSpy).not.toHaveBeenCalled()
+    setIntervalSpy.mockRestore()
+  })
+
+  it('reports isPaused=false and isCancelled=false for a running timer', () => {
+    const timer = makeTimer({ status: 'running', overtime_seconds: 1200 })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.isPaused).toBe(false)
+    expect(result.current!.isCancelled).toBe(false)
+  })
+})
+
+describe('useCountdown not-started (pending) state', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("returns a static not-started state for a pending 80+20 timer (80:00)", () => {
+    const timer = makeTimer({
+      status: 'pending',
+      duration_minutes: 80,
+      overtime_seconds: 1200,
+    })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current).not.toBeNull()
+    expect(result.current!.phase).toBe('not-started')
+    expect(result.current!.display).toBe('80:00')
+    expect(result.current!.remainingSeconds).toBe(80 * 60)
+    expect(result.current!.isOvertime).toBe(false)
+    expect(result.current!.isPaused).toBe(false)
+    expect(result.current!.isCancelled).toBe(false)
+    expect(result.current!.urgency).toBe('normal')
+  })
+
+  it("derives the pending display from duration_minutes, not expires_at (60:00)", () => {
+    // expires_at is in the past — a pending timer must IGNORE it and show duration.
+    const timer = makeTimer({
+      status: 'pending',
+      duration_minutes: 60,
+      overtime_seconds: 0,
+      expires_at: new Date(Date.now() - 5000 * 1000).toISOString(),
+    })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('not-started')
+    expect(result.current!.display).toBe('60:00')
+    expect(result.current!.remainingSeconds).toBe(60 * 60)
+    expect(result.current!.isOvertime).toBe(false)
+  })
+
+  it("does NOT start a setInterval for a pending timer", () => {
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval')
+    const timer = makeTimer({
+      status: 'pending',
+      duration_minutes: 80,
+      overtime_seconds: 1200,
+    })
+
+    renderHook(() => useCountdown(timer))
+
+    expect(setIntervalSpy).not.toHaveBeenCalled()
+    setIntervalSpy.mockRestore()
+  })
+
+  it("static pending display does not change when fake timers advance", () => {
+    const timer = makeTimer({
+      status: 'pending',
+      duration_minutes: 80,
+      overtime_seconds: 1200,
+    })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.display).toBe('80:00')
+
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+
+    expect(result.current!.display).toBe('80:00')
+    expect(result.current!.remainingSeconds).toBe(80 * 60)
+  })
+
+  it("regression: a running 80+20 timer still derives main/overtime via derivePhase", () => {
+    // 75:00 of main remaining, 1200s overtime — must NOT be treated as not-started.
+    const timer = makeTimer({
+      status: 'running',
+      duration_minutes: 80,
+      overtime_seconds: 1200,
+      expires_at: new Date(Date.now() + 4500 * 1000).toISOString(),
+    })
+    const { result } = renderHook(() => useCountdown(timer))
+
+    expect(result.current!.phase).toBe('main')
+    expect(result.current!.display).toBe('75:00')
+    expect(result.current!.isOvertime).toBe(false)
   })
 })

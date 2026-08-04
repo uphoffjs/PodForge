@@ -1,567 +1,250 @@
-# Architecture Patterns
+# Architecture Research
 
-**Domain:** Real-time event management web app (MTG Commander pod pairing)
-**Researched:** 2026-02-20
-**Overall Confidence:** MEDIUM-HIGH (Supabase Realtime patterns verified via official docs; timer sync and passphrase patterns derived from multiple credible sources)
+**Domain:** v5.0 feature integration — 80+20 round-timer format + mid-event join UX (Commander Pod Pairer)
+**Researched:** 2026-06-27
+**Confidence:** HIGH (grounded entirely in current source: `00004_timer_system.sql`, `src/hooks/useCountdown.ts`, `useTimer.ts`, `useTimerNotification.ts`, `useGenerateRound.ts`, `useRounds.ts`, `src/components/TimerDisplay.tsx`, `PlayerItem.tsx`, `AdminControls.tsx`, `src/types/database.ts`)
 
-## Recommended Architecture
+## Executive Recommendation
+
+Both features integrate cleanly with the existing server-authoritative, pure-derivation architecture **without introducing any new server-side ticking, cron, or phase-transition writes.**
+
+- **80+20 timer:** Add **one** column (`overtime_seconds`) to `round_timers`. Keep `expires_at` meaning "end of main period." **Derive the phase (main → overtime → count-up) purely on the client** from `expires_at` + `overtime_seconds` + `Date.now()`. Do **not** add a `phase` column — phase is a function of time and storing it would require a server tick to keep current (redundant state, violates the existing zero-drift model).
+- **Mid-event join:** **Zero migration, zero new columns.** Derive "joined mid-event" on the client by comparing `player.created_at` against the `created_at` of the earliest round (`round_number = 1`). Both values already flow through existing queries (`useEventPlayers`, `useRounds`).
+
+The single most important insight: **`useCountdown` already counts up past zero** (negative `remainingSeconds`, `+M:SS` display, `isOvertime`). The only genuinely new timer concept is a *second, configurable countdown segment* that sits between the main countdown and the existing unbounded count-up.
+
+## Standard Architecture
+
+### System Overview — Timer data flow (after v5.0)
 
 ```
-+-------------------------------------------------------------+
-|                     Client (React SPA)                       |
-|                                                              |
-|  +------------------+  +------------------+  +----------+   |
-|  | Route Layer      |  | State Layer      |  | UI Layer |   |
-|  | (React Router)   |  | (React Query +   |  | (Tailwind|   |
-|  |                  |  |  Supabase RT)    |  |  + React)|   |
-|  | /               |  |                  |  |          |   |
-|  | /event/:id      |  | useQuery (reads) |  | EventView|   |
-|  | /event/:id/admin|  | useMutation (wrt)|  | PodCard  |   |
-|  +------------------+  | RT subscription  |  | Timer    |   |
-|                        | -> invalidation  |  | PlayerLst|   |
-|                        +------------------+  +----------+   |
-|                              |                               |
-+------------------------------|-------------------------------+
-                               | WebSocket + REST
-                               v
-+-------------------------------------------------------------+
-|                   Supabase Backend                           |
-|                                                              |
-|  +------------------+  +------------------+  +----------+   |
-|  | Realtime         |  | PostgREST API    |  | Postgres |   |
-|  | (WebSocket)      |  | (Auto-generated) |  | Database |   |
-|  |                  |  |                  |  |          |   |
-|  | postgres_changes |  | CRUD via anon key|  | events   |   |
-|  | per event_id     |  | RPC functions    |  | players  |   |
-|  | filter           |  | (admin actions)  |  | rounds   |   |
-|  +------------------+  +------------------+  | pods     |   |
-|                                              | pod_plyr |   |
-|                                              +----------+   |
-|                                              | RLS Policies |
-|                                              | (anon read,  |
-|                                              |  RPC write)  |
-|                                              +----------+   |
-+-------------------------------------------------------------+
+┌──────────────────────────────────────────────────────────────────────┐
+│  round_timers row (server-authoritative anchors)                       │
+│    expires_at        = end of MAIN period (existing, unchanged meaning) │
+│    overtime_seconds  = length of OVERTIME segment (NEW column)          │
+│    status            = running | paused | cancelled (unchanged)         │
+│    remaining_seconds = signed, on pause (semantics generalized)         │
+└───────────────────────────────┬────────────────────────────────────────┘
+                                 │ useTimer() query + Realtime invalidation
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  useCountdown(timer)  — PURE client derivation, recomputed every tick   │
+│                                                                         │
+│   t = now()                                                             │
+│   mainEnd     = expires_at                                              │
+│   overtimeEnd = expires_at + overtime_seconds                          │
+│                                                                         │
+│   if t <  mainEnd      → phase=main      remaining = mainEnd - t   (↓)  │
+│   if t <  overtimeEnd  → phase=overtime  remaining = overtimeEnd - t(↓) │
+│   else                 → phase=countup   elapsed   = t - overtimeEnd(↑) │
+└───────────────┬───────────────────────────────────┬────────────────────┘
+                ▼                                   ▼
+       TimerDisplay (phase label/styling)   useTimerNotification
+                                            (fires at BOTH zero crossings)
 ```
 
-### Component Boundaries
+Because every value derives from two absolute server quantities (`expires_at`, `overtime_seconds`) plus the client clock, **refresh and reconnect are automatically correct**: re-reading the row and recomputing yields the identical phase/value. The count-up segment needs no upper bound and no server write — it is just `now - overtimeEnd`. This preserves the existing "Server-authoritative timer (expires_at - now())" key decision verbatim.
 
-| Component | Responsibility | Communicates With |
-|-----------|---------------|-------------------|
-| **React Router (SPA)** | URL routing, code splitting by route | All UI components |
-| **Supabase Client** | Single shared client instance; REST queries + Realtime channels | Supabase backend |
-| **React Query Layer** | Caching, deduplication, background refetch of all DB reads | Supabase REST API |
-| **Realtime Subscription Manager** | One channel per event; listens to postgres_changes; triggers React Query invalidation | Supabase Realtime, React Query |
-| **Timer Engine** | Client-side countdown from server-stored state (started_at + duration); drift-resistant recalculation | Supabase (reads timer state), UI (renders countdown) |
-| **Admin Action Layer** | Passphrase validation via RPC; mutation calls for admin-only operations | Supabase RPC functions |
-| **Pod Algorithm** | Pure function: takes players + history, outputs pod assignments | Called by admin action layer |
-| **UI Components** | Render event state; mobile-first dark theme; glanceable pod cards | React Query data, Timer engine |
+### Component / module responsibilities (timer)
 
-### Data Flow
+| Module | Current responsibility | v5.0 change |
+|--------|------------------------|-------------|
+| `round_timers` table (`supabase/migrations/00004_timer_system.sql:8`) | Authoritative timer state | **+1 column** `overtime_seconds` |
+| `generate_round` RPC (`00004_timer_system.sql:47`) | Create round + optional timer | Accept `p_overtime_minutes`, persist `overtime_seconds` |
+| `pause_timer` RPC (`00004_timer_system.sql:145`) | Snapshot remaining on pause | Generalize: drop `GREATEST(0, …)` clamp so it stores *signed* remaining (preserves overtime/count-up position across pause) |
+| `resume_timer` / `extend_timer` / `cancel_timer` | Resume/extend/cancel | **No structural change** — they manipulate `expires_at`; `overtime_seconds` rides along as a constant offset |
+| `src/types/database.ts:37` `RoundTimer` | DB row type | **+1 field** `overtime_seconds: number` |
+| `src/hooks/useCountdown.ts` | Derive remaining/display/urgency/overtime | Add `phase` derivation + per-phase remaining; extend `CountdownState` |
+| `src/hooks/useTimerNotification.ts` | Fire once at zero | Fire at **two** boundaries (main→overtime, overtime→count-up) |
+| `src/components/TimerDisplay.tsx` | Render countdown + status | Phase-aware label (`MAIN` / `OVERTIME` / `OVERTIME ELAPSED`) + styling |
+| `src/components/AdminControls.tsx:179` | Timer duration picker (60/90/120) | Add an "80+20" format option |
+| `src/hooks/useGenerateRound.ts` | Call `generate_round` RPC | Pass `overtimeMinutes` |
+| `src/hooks/useTimer.ts` | Fetch active timer | **No change** — `.select('*')` already returns the new column |
+| `src/hooks/useEventChannel.ts` | Realtime invalidation | **No change** — `round_timers` already subscribed, `REPLICA IDENTITY FULL` already set |
 
-**Read path (player view):**
-```
-1. Player opens /event/:id
-2. React Query fetches event + players + current round + pods (REST)
-3. Supabase Realtime channel subscribes: postgres_changes on players/rounds/pods WHERE event_id = :id
-4. On realtime event -> queryClient.invalidateQueries(['event', eventId])
-5. React Query refetches stale data -> UI re-renders
-```
+### Component / module responsibilities (mid-event join)
 
-**Write path (admin action, e.g., "Generate Next Round"):**
-```
-1. Admin enters passphrase -> stored in sessionStorage
-2. Admin clicks "Generate Round"
-3. Client calls supabase.rpc('generate_round', { event_id, passphrase })
-4. Postgres function validates passphrase against events.passphrase_hash
-5. Function runs pod algorithm in SQL or returns player data for client-side computation
-6. New round/pods/pod_players rows inserted
-7. postgres_changes fires -> all subscribed clients invalidate + refetch
-```
+| Module | v5.0 change |
+|--------|-------------|
+| `src/lib/mid-event.ts` (**NEW** pure helper) | `isMidEventJoin(playerCreatedAt, firstRoundCreatedAt): boolean` — mirrors the `pod-algorithm.ts` "pure, exported, unit-tested" convention |
+| `src/pages/EventPage.tsx` | Compute earliest-round timestamp from `useRounds` data; build a `midEventPlayerIds` Set (mirrors existing `newPlayerIds` Set pattern) and pass down |
+| `src/components/PlayerList.tsx` | Thread the Set / flag through to each row |
+| `src/components/PlayerItem.tsx:3` | Accept `isMidEvent?: boolean`; render a persistent badge (distinct from the existing 400ms `isNew` flash) |
+| Migrations / RPCs / types | **None** — fully derived |
 
-**Timer flow:**
-```
-1. Admin starts timer -> supabase.rpc('start_timer', { event_id, duration_seconds, passphrase })
-2. Server stores: { started_at: now(), duration_seconds: 5400, paused_remaining: null }
-3. Clients read timer state via React Query
-4. Client computes: remaining = duration - (Date.now() - started_at) / 1000
-5. requestAnimationFrame loop updates display every second
-6. On pause: server stores paused_remaining, clears started_at
-7. On resume: server sets started_at = now(), duration_seconds = paused_remaining
-8. Timer state change triggers postgres_changes -> all clients recalculate
-```
+## Architectural Patterns
 
-## Patterns to Follow
+### Pattern 1: Minimal column + pure phase derivation (the core timer decision)
 
-### Pattern 1: Channel-Per-Event with postgres_changes Filter
-**What:** Create one Supabase Realtime channel per event, filtering postgres_changes by event_id. This scopes all real-time updates to the relevant event.
-**When:** Always -- every client viewing an event subscribes to exactly one channel.
-**Why:** Avoids receiving updates for unrelated events. The filter on event_id means Supabase only delivers relevant WAL changes. For this app's scale (8-16 players per event, a few concurrent events), postgres_changes is the correct choice over Broadcast -- the data is already in Postgres and RLS authorization is automatic.
-**Confidence:** HIGH (verified via Supabase official docs)
+**What:** Store only the *configurable, authoritative* fact the client cannot otherwise know — the overtime length — and derive everything time-dependent on the client.
 
+**Why store `overtime_seconds` at all (vs. a hardcoded client constant)?** Because it is per-timer configuration that must be part of the authoritative record and survive format changes. A client-side `const OVERTIME = 20*60` would not be server-authoritative and would silently misrender historical timers if the format ever changed. One column is the correct minimal cost.
+
+**Why NOT a `phase` column?** Phase is a deterministic function of `(now, expires_at, overtime_seconds)`. Persisting it would force a server-side tick/cron to advance `main → overtime → countup` at the boundaries — reintroducing the drift and liveness problems the `expires_at` model was specifically chosen to avoid. Derivation keeps the DB write-free between admin actions.
+
+**Trade-offs:** Inherits the existing client/server clock-skew characteristic (already present for the v2.0 countdown — no worse). Phase boundaries are evaluated on the 1s `setInterval`, so a transition is visible within ~1s of the true crossing.
+
+**Example:**
 ```typescript
-// src/hooks/useEventChannel.ts
-import { useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-
-export function useEventChannel(eventId: string) {
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    const channel = supabase
-      .channel(`event:${eventId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'players',
-          filter: `event_id=eq.${eventId}`,
-        },
-        () => queryClient.invalidateQueries({ queryKey: ['players', eventId] })
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'rounds',
-          filter: `event_id=eq.${eventId}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['rounds', eventId] });
-          queryClient.invalidateQueries({ queryKey: ['timer', eventId] });
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'pods',
-          filter: `round_id=eq.*`, // will need round-scoped or event-scoped approach
-        },
-        () => queryClient.invalidateQueries({ queryKey: ['pods', eventId] })
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [eventId, queryClient]);
-}
+// useCountdown.ts — replaces single computeRemaining for running timers
+const mainEnd = new Date(timer.expires_at).getTime()
+const overtimeEnd = mainEnd + timer.overtime_seconds * 1000
+const t = Date.now()
+let phase: 'main' | 'overtime' | 'countup'
+let value: number // seconds; signed for display
+if (t < mainEnd)         { phase = 'main';     value = Math.floor((mainEnd - t) / 1000) }
+else if (t < overtimeEnd){ phase = 'overtime'; value = Math.floor((overtimeEnd - t) / 1000) }
+else                     { phase = 'countup';  value = Math.floor((overtimeEnd - t) / 1000) } // negative → "+M:SS"
 ```
+A plain timer (no overtime) sets `overtime_seconds = 0`, so `overtimeEnd === mainEnd` and behavior is **identical to today** (main countdown straight into count-up) — backward compatible with all existing 60/90/120 timers.
 
-### Pattern 2: React Query as Primary State + Realtime as Invalidation Trigger
-**What:** Use TanStack React Query (v5) for all data fetching, caching, and UI state. Supabase Realtime subscriptions do NOT directly update state -- they invalidate queries, causing React Query to refetch.
-**When:** For all database-backed state (players, rounds, pods, timer state).
-**Why:** Supabase Realtime delivers change events (deltas), not full snapshots. Trying to merge deltas into local state is error-prone and creates consistency bugs. React Query's invalidation model is simple: real-time event arrives -> mark query stale -> refetch full state -> UI re-renders with consistent data. This is the pattern recommended by multiple sources including MakerKit and Supabase community discussions.
-**Confidence:** HIGH (multiple credible sources agree; official Supabase docs recommend this)
+### Pattern 2: Generalized pause snapshot (signed remaining)
 
+**What:** `pause_timer` currently does `remaining_seconds = GREATEST(0, EXTRACT(EPOCH FROM (expires_at - now())))` (`00004_timer_system.sql:185`). The `GREATEST(0, …)` clamp means pausing in overtime/count-up loses position (resumes at 0). For 80+20 this would silently discard overtime/count-up progress on a mid-overtime pause.
+
+**Recommendation:** Remove the clamp so `remaining_seconds` is **signed** (can be negative, meaning "already past main end"). `resume_timer` already does `expires_at = now() + (remaining * INTERVAL '1 second')` (`:233`), which is correct for negative values too — it places `expires_at` in the past, and `overtime_seconds` (constant) keeps overtime/count-up aligned. This is a one-line RPC change that also fixes the pre-existing "pause-in-overtime resets to zero" limitation for plain timers.
+
+**Trade-off:** `remaining_seconds` is no longer guaranteed non-negative; any client code reading it directly must tolerate negatives (today only `useCountdown` reads it, and only for `paused` status — route the paused value through the same phase math).
+
+### Pattern 3: Pure-derivation flag via timestamp comparison (mid-event)
+
+**What:** "Joined mid-event" = there is at least one round AND `player.created_at > earliestRound.created_at`. The earliest round is `round_number = 1`; `useRounds` returns rounds ordered `round_number` descending (`useRounds.ts:13`), so the earliest is the last element (or `Math.min` of `created_at`).
+
+**Why derive (vs. a stored `joined_round` column)?** It avoids redundant state that could drift, requires no migration, and is robust to drop→reactivate (reactivation does not change `created_at`). It also automatically matches the pairing algorithm's existing behavior (mid-joiners already get empty opponent history + 0 byes).
+
+**Edge cases handled:** Pre-first-round joiners have `created_at < round1.created_at` → not flagged. With zero rounds, nobody is mid-event (no baseline yet) → flag `false` for all. Removed-then-readded-by-admin players keep their original insert time.
+
+**Trade-off:** Relies on `created_at` accuracy of the `players` insert vs. the `rounds` insert — both are server `now()` defaults, so ordering is reliable. A player joining in the same second as round-1 generation is a negligible boundary case (treat `>` strictly = not mid-event).
+
+**Example:**
 ```typescript
-// src/hooks/useEventPlayers.ts
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-
-export function useEventPlayers(eventId: string) {
-  return useQuery({
-    queryKey: ['players', eventId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('players')
-        .select('*')
-        .eq('event_id', eventId)
-        .order('name');
-      if (error) throw error;
-      return data;
-    },
-    staleTime: 30_000, // 30s -- realtime invalidation handles freshness
-  });
+// src/lib/mid-event.ts (NEW, pure + unit-tested per pod-algorithm convention)
+export function isMidEventJoin(playerCreatedAt: string, firstRoundCreatedAt: string | null): boolean {
+  if (!firstRoundCreatedAt) return false               // no rounds yet
+  return new Date(playerCreatedAt).getTime() > new Date(firstRoundCreatedAt).getTime()
 }
 ```
 
-### Pattern 3: Server-Authoritative Timer with Client-Side Calculation
-**What:** Store timer state in the database as absolute values (started_at timestamp, duration_seconds integer, paused_remaining_seconds nullable integer). Clients calculate remaining time locally using `remaining = duration - (now - started_at)`. No countdown value is stored or transmitted -- each client computes it.
-**When:** For the round timer feature.
-**Why:** Eliminates drift between clients. Every client independently calculates from the same server-stored reference point. Even if a client's clock is slightly off, all clients converge because they recalculate on every render frame. Pausing is modeled as clearing started_at and storing remaining seconds; resuming sets a new started_at with the stored remaining as the new duration.
-**Confidence:** HIGH (well-established pattern verified by multiple web development sources)
+## Data Flow
 
-```typescript
-// src/hooks/useTimer.ts
-import { useState, useEffect, useCallback } from 'react';
+### 80+20 round creation
 
-interface TimerState {
-  started_at: string | null;  // ISO timestamp
-  duration_seconds: number;
-  paused_remaining: number | null;
-}
-
-export function useTimer(timerState: TimerState | null) {
-  const [remaining, setRemaining] = useState<number | null>(null);
-
-  const calculate = useCallback(() => {
-    if (!timerState) return null;
-    if (timerState.paused_remaining !== null) return timerState.paused_remaining;
-    if (!timerState.started_at) return null;
-
-    const elapsed = (Date.now() - new Date(timerState.started_at).getTime()) / 1000;
-    return Math.max(0, timerState.duration_seconds - elapsed);
-  }, [timerState]);
-
-  useEffect(() => {
-    setRemaining(calculate());
-
-    // Use requestAnimationFrame for smooth updates, throttled to ~1fps
-    let frameId: number;
-    let lastUpdate = 0;
-
-    const tick = (timestamp: number) => {
-      if (timestamp - lastUpdate >= 1000) {
-        setRemaining(calculate());
-        lastUpdate = timestamp;
-      }
-      frameId = requestAnimationFrame(tick);
-    };
-
-    if (timerState?.started_at && timerState.paused_remaining === null) {
-      frameId = requestAnimationFrame(tick);
-    }
-
-    return () => cancelAnimationFrame(frameId);
-  }, [timerState, calculate]);
-
-  return remaining;
-}
+```
+Admin picks "80+20" format in AdminControls (duration=80, overtimeMinutes=20)
+   ↓
+useGenerateRound.mutate({ ..., timerDurationMinutes: 80, overtimeMinutes: 20 })
+   ↓
+generate_round RPC → INSERT round_timers (duration_minutes=80, overtime_seconds=1200,
+                                          expires_at = now() + 80 min)
+   ↓
+Realtime round_timers change → useEventChannel invalidates ['timer', eventId]
+   ↓
+useTimer refetch → useCountdown derives phase every 1s → TimerDisplay + notifications
 ```
 
-### Pattern 4: Passphrase Validation via Supabase RPC (Not Client-Side Comparison)
-**What:** Admin actions call Supabase RPC functions that accept the passphrase as a parameter. The Postgres function compares the passphrase server-side against a hashed value stored in the events table. The client never reads the passphrase hash.
-**When:** For all admin-gated operations (generate round, remove player, start/pause timer, end event).
-**Why:** Sending the passphrase to an RPC function means the validation happens in Postgres. RLS policies on the events table can allow public SELECT on non-sensitive columns while hiding the passphrase_hash column entirely. The RPC function runs with SECURITY DEFINER to access the hash column that RLS hides from direct queries. This is more secure than client-side comparison and simpler than setting up Supabase Auth.
-**Confidence:** MEDIUM (pattern is sound and Supabase RPC docs confirm feasibility; no canonical example found for this exact use case)
+### The two zero crossings (notification)
 
-```sql
--- Database function for admin-gated actions
-CREATE OR REPLACE FUNCTION generate_round(
-  p_event_id UUID,
-  p_passphrase TEXT
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_event RECORD;
-BEGIN
-  SELECT * INTO v_event FROM events WHERE id = p_event_id;
+`useTimerNotification` currently fires once per `timer.id` when `isOvertime` (`useTimerNotification.ts:46`). For 80+20 there are **two** meaningful alerts:
+1. **main → overtime** ("Main time up — 20:00 overtime begins")
+2. **overtime → count-up** ("Overtime over — round running long")
 
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Event not found';
-  END IF;
+Track the **last-notified phase** per `timer.id` (not a single boolean), and fire on each forward phase transition. A plain timer (`overtime_seconds = 0`) collapses both crossings into one moment — guard against double-firing by only notifying `main→overtime` when `overtime_seconds > 0`, otherwise on the single `→countup` crossing.
 
-  -- Compare passphrase (use pgcrypto crypt() for hashed comparison)
-  IF v_event.passphrase_hash != crypt(p_passphrase, v_event.passphrase_hash) THEN
-    RAISE EXCEPTION 'Invalid passphrase';
-  END IF;
+## Migration / RPC Impact (explicit)
 
-  -- ... perform admin action ...
-  RETURN jsonb_build_object('success', true);
-END;
-$$;
-```
+**NEW migration `supabase/migrations/00005_timer_overtime.sql`:**
+- `ALTER TABLE round_timers ADD COLUMN overtime_seconds INTEGER NOT NULL DEFAULT 0;`
+  - Safe additive change. Table already has `REPLICA IDENTITY FULL` and is in `supabase_realtime`; adding a column is automatically included in Realtime payloads — **no re-publish needed**.
+- `CREATE OR REPLACE FUNCTION generate_round(...)` adding `p_overtime_minutes INTEGER DEFAULT 0`, persisting `overtime_seconds = p_overtime_minutes * 60` in the `INSERT round_timers` (`00004_timer_system.sql:110`). `DEFAULT 0` keeps existing callers valid.
+- `CREATE OR REPLACE FUNCTION pause_timer(...)` removing the `GREATEST(0, …)` clamp (signed remaining).
+- `resume_timer`, `extend_timer`, `cancel_timer`: **unchanged.**
 
-```typescript
-// Client-side admin action
-async function generateRound(eventId: string, passphrase: string) {
-  const { data, error } = await supabase.rpc('generate_round', {
-    p_event_id: eventId,
-    p_passphrase: passphrase,
-  });
-  if (error) throw error;
-  return data;
-}
-```
+**No migration for mid-event join.**
 
-### Pattern 5: Session-Stored Admin Passphrase
-**What:** After the first successful passphrase validation, store the passphrase in sessionStorage so the user does not need to re-enter it for subsequent admin actions. Re-validate on each RPC call (server-side) but avoid prompting the user repeatedly.
-**When:** After first admin action per browser session.
-**Why:** UX requirement from the spec. sessionStorage clears on tab close, which is appropriate security for a casual event. The passphrase is re-sent with every RPC call and re-validated server-side, so a stale session cannot perform actions after the event passphrase changes.
-**Confidence:** HIGH (standard web pattern)
+**Type change:** `src/types/database.ts` `RoundTimer` gains `overtime_seconds: number`. (Vitest 100% coverage gate applies to any new source file — `mid-event.ts` and any new hook need co-located tests; `database.ts` is excluded from coverage.)
 
-```typescript
-// src/hooks/useAdminAuth.ts
-import { useState, useCallback } from 'react';
+## Build Order (dependency-aware)
 
-export function useAdminAuth(eventId: string) {
-  const storageKey = `admin_passphrase_${eventId}`;
+The two features are **independent tracks** and can be separate phases or parallelized. Mid-event is the lower-risk/no-migration quick win; the timer is the headline and carries the migration.
 
-  const getPassphrase = useCallback(() => {
-    return sessionStorage.getItem(storageKey);
-  }, [storageKey]);
+**Track A — 80+20 timer (ordered; each step depends on the prior):**
+1. `00005_timer_overtime.sql` — column + `generate_round` param + `pause_timer` signed-remaining. *(Foundation: nothing client-side works without the column.)*
+2. `src/types/database.ts` — add `overtime_seconds`. *(Unblocks all TS.)*
+3. `src/hooks/useCountdown.ts` — phase derivation + per-phase remaining; extend `CountdownState` with `phase`. *(Core logic; fully unit-testable in isolation — no UI needed.)*
+4. `src/hooks/useTimerNotification.ts` — dual-boundary firing keyed on last-notified phase. *(Depends on step 3's `phase`.)*
+5. `src/components/TimerDisplay.tsx` — phase label + styling. *(Depends on 3/4.)*
+6. `src/hooks/useGenerateRound.ts` + `src/components/AdminControls.tsx` — 80+20 picker option, pass `overtimeMinutes`. *(Wires creation; depends on 1.)*
+7. E2E `cypress/e2e/timer.cy.js` + `cypress/fixtures/timer.json` — add `overtime_seconds`; use dynamic `expires_at` per the existing "dynamic expires_at in timer E2E fixtures" decision to exercise all three phases. Then Stryker on changed hooks (critical-path: 100% kill target per global rule).
 
-  const setPassphrase = useCallback((passphrase: string) => {
-    sessionStorage.setItem(storageKey, passphrase);
-  }, [storageKey]);
+**Track B — mid-event join (ordered):**
+1. `src/lib/mid-event.ts` (+ `mid-event.test.ts`) — pure `isMidEventJoin`. *(Foundation, no deps.)*
+2. `src/pages/EventPage.tsx` — derive earliest-round timestamp, build `midEventPlayerIds` Set. *(Depends on 1; reuses `useRounds` already fetched.)*
+3. `src/components/PlayerList.tsx` → `src/components/PlayerItem.tsx` — thread flag, render badge. *(Depends on 2.)*
+4. E2E (`cypress/e2e/player-join.cy.js` extension or new `mid-event.cy.js` + fixture) + Stryker on the new helper.
 
-  const clearPassphrase = useCallback(() => {
-    sessionStorage.removeItem(storageKey);
-  }, [storageKey]);
-
-  const requirePassphrase = useCallback(async (): Promise<string> => {
-    const stored = getPassphrase();
-    if (stored) return stored;
-    // Trigger modal/dialog for passphrase entry
-    // On success, store and return
-    throw new Error('Passphrase required');
-  }, [getPassphrase]);
-
-  return { getPassphrase, setPassphrase, clearPassphrase, requirePassphrase };
-}
-```
+**Recommended sequencing:** Track B first or in parallel (no migration, smaller blast radius), Track A second. If sequential, run Track A's migration early so the column exists before client work begins.
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Merging Realtime Deltas into Local State
-**What:** Listening to postgres_changes and directly updating a React state array (e.g., splicing a new player into a players list, removing a deleted one).
-**Why bad:** Creates inconsistency. You miss events during reconnection. INSERT gives you the new row but your local list may be stale. DELETE events with RLS enabled only give primary keys, not full records. You end up writing a mini database reconciliation engine in React.
-**Instead:** Let React Query own all data state. Realtime events trigger `queryClient.invalidateQueries()` which refetches the full, consistent dataset from Supabase.
+### Anti-Pattern 1: Storing `phase` (or `is_overtime`) on `round_timers`
+**What people do:** Add a `phase` column and flip it with a scheduled job at each boundary.
+**Why it's wrong:** Requires a server tick/cron, reintroduces drift, and creates redundant state that disagrees with the clock between updates — the exact problem `expires_at`-derivation was chosen to solve.
+**Do this instead:** Derive `phase` in `useCountdown` from `expires_at` + `overtime_seconds` + `now()`.
 
-### Anti-Pattern 2: Client-Side Timer Synchronization via WebSocket Messages
-**What:** Broadcasting a "tick" or "remaining seconds" value from admin client to all other clients via Supabase Broadcast.
-**Why bad:** Network latency creates visible drift between clients. If the admin's browser tabs out, requestAnimationFrame pauses and ticks stop. Every client shows a different time.
-**Instead:** Store the timer's reference state (started_at, duration) in the database. Each client independently calculates remaining time from these values. All clients converge on the same value because they use the same formula against the same stored data.
+### Anti-Pattern 2: A second timer row / separate "overtime timer"
+**What people do:** Create a new timer row when overtime begins.
+**Why it's wrong:** Needs a trigger/write at the boundary, breaks `useTimer`'s single-active-timer assumption (`useTimer.ts:13` `.limit(1)`), and complicates pause/resume.
+**Do this instead:** One row, one moving anchor (`expires_at` = main end), one constant offset (`overtime_seconds`).
 
-### Anti-Pattern 3: Storing Passphrase in Plain Text
-**What:** Storing the admin passphrase as-is in the events table.
-**Why bad:** Anyone with database access (or a SQL injection vector) gets all passphrases. Even though this is a casual app, it sets a bad pattern.
-**Instead:** Use pgcrypto's `crypt()` and `gen_salt('bf')` to store a bcrypt hash. The RPC function compares using `crypt(input, stored_hash) = stored_hash`.
+### Anti-Pattern 3: Keeping the `GREATEST(0, …)` pause clamp for 80+20
+**What people do:** Leave `pause_timer` as-is.
+**Why it's wrong:** Pausing during overtime/count-up snaps `remaining_seconds` to 0, discarding position on resume.
+**Do this instead:** Store signed remaining; `resume_timer` already handles negatives correctly.
 
-### Anti-Pattern 4: One Global Realtime Channel for All Events
-**What:** Subscribing to all changes on the players/rounds/pods tables without filtering by event_id.
-**Why bad:** Every client receives changes for every event. With multiple concurrent events, this wastes bandwidth and triggers unnecessary React Query invalidations.
-**Instead:** Use per-event channels with `filter: event_id=eq.${eventId}` on every postgres_changes subscription.
+### Anti-Pattern 4: A `joined_round` / `is_mid_event` column on `players`
+**What people do:** Persist the mid-event flag at insert time.
+**Why it's wrong:** Redundant state that can drift; needs a migration and write-path logic; the algorithm already derives the same notion implicitly.
+**Do this instead:** Derive from `player.created_at` vs. earliest round `created_at`.
 
-### Anti-Pattern 5: Using Zustand or Redux for Server State
-**What:** Creating a Zustand/Redux store to hold players, rounds, pods, and syncing it manually with Supabase.
-**Why bad:** Duplicates what React Query does better. You end up maintaining cache invalidation, loading states, error states, and stale-while-revalidate logic by hand.
-**Instead:** React Query for server state. Only use React state (useState/useContext) for purely client-side concerns: modal open/close, passphrase input, UI preferences.
+### Anti-Pattern 5: Reusing the `isNew` flash for the mid-event badge
+**What people do:** Overload `PlayerItem`'s 400ms `animate-flash` (`PlayerItem.tsx:11`) to mean "mid-event."
+**Why it's wrong:** `isNew` is a transient just-joined animation for *all* new players; mid-event is a *persistent* status for a subset. Conflating them makes both incorrect.
+**Do this instead:** Add a separate `isMidEvent` prop and a persistent badge element.
 
-## Component Architecture (Mobile-First)
+## Integration Points
 
-### Route Structure
-```
-/                       -> LandingPage (create event, join by code)
-/event/:eventId         -> EventView (main player view)
-/event/:eventId/admin   -> EventView with admin controls visible
-```
+### Internal boundaries
 
-Note: The admin route is not a separate page -- it is the same EventView with admin controls conditionally rendered based on validated passphrase in sessionStorage. The `/admin` suffix is optional and simply triggers the passphrase prompt on load.
+| Boundary | Communication | v5.0 note |
+|----------|---------------|-----------|
+| `round_timers` ↔ `useTimer` | `.select('*')` query | Auto-picks up `overtime_seconds`; no query change |
+| `round_timers` ↔ `useEventChannel` | Realtime `postgres_changes` | Already subscribed + `REPLICA IDENTITY FULL`; column ride-along, no change |
+| `useTimer` → `useCountdown` → `TimerDisplay`/`useTimerNotification` | props | Extend `CountdownState` with `phase`; consumers read it |
+| `useRounds` + `useEventPlayers` → `EventPage` → `PlayerList` → `PlayerItem` | props | Add derived `midEventPlayerIds` Set alongside existing `newPlayerIds` |
+| `AdminControls` → `useGenerateRound` → `generate_round` | RPC params | New `p_overtime_minutes` (defaulted, backward compatible) |
 
-### Component Hierarchy
-```
-App
-  LandingPage
-    CreateEventForm
-    JoinEventForm
-  EventView
-    EventInfoBar (name, QR, share link, player count, round #)
-      QRCodeExpander
-      ShareLinkCopier
-    TimerDisplay (countdown, color-coded urgency)
-    AdminControls (if passphrase validated)
-      GenerateRoundButton
-      TimerControls (start, pause, resume, +5min, cancel)
-      EndEventButton
-    PassphraseModal (shown on demand)
-    CurrentRound
-      PodCard[] (pod assignment with seat numbers)
-        PlayerSeat (name + seat number, highlighted if "you")
-      ByePod (players sitting out)
-    PreviousRounds (collapsible, most recent first)
-      RoundSection[]
-        PodCard[]
-    PlayerList
-      ActivePlayers[]
-      DroppedPlayers (collapsible)
-    PlayerActions
-      SelfDropButton
-    AdminPlayerActions (if admin)
-      RemovePlayerButton
-      ReactivatePlayerButton
-```
+### External services
 
-### Component Sizing and Layout Notes
-- **PodCard**: The most important UI element. Must be readable at arm's length on a phone. Large player names, clear seat numbers (1st-4th), high-contrast dark theme.
-- **TimerDisplay**: Sticky at top of viewport. Large digits (mm:ss). Color transitions: white (normal) -> yellow (10 min) -> red (5 min) -> flashing red (0:00).
-- **AdminControls**: Collapsed behind a toggle or at bottom of screen. Not the primary view.
-- **PlayerList**: Secondary info. Below pods. Active players shown by default, dropped players in collapsible section.
+| Service | Integration pattern | Gotcha |
+|---------|---------------------|--------|
+| Supabase Postgres | Additive migration `00005` | `ADD COLUMN ... DEFAULT 0` is safe; `CREATE OR REPLACE FUNCTION` for RPC edits |
+| Supabase Realtime | Existing publication on `round_timers` | No re-add; `REPLICA IDENTITY FULL` already set in `00004` |
+| Browser Notifications API | `useTimerNotification` | Now two alerts; keep the iOS-PWA `try/catch` swallow and `tag` dedupe (`useTimerNotification.ts:51`) |
 
-## Database Schema Design
+## Open Questions for Roadmapping
 
-```sql
--- Core tables with RLS
-CREATE TABLE events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  passphrase_hash TEXT NOT NULL,  -- bcrypt via pgcrypto
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'ended')),
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE players (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_id UUID REFERENCES events(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'dropped')),
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(event_id, name)  -- duplicate name prevention
-);
-
-CREATE TABLE rounds (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_id UUID REFERENCES events(id) ON DELETE CASCADE,
-  round_number INTEGER NOT NULL,
-  timer_duration_seconds INTEGER,       -- null = no timer
-  timer_started_at TIMESTAMPTZ,         -- null = not started or paused
-  timer_paused_remaining INTEGER,       -- null = running or no timer
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(event_id, round_number)
-);
-
-CREATE TABLE pods (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  round_id UUID REFERENCES rounds(id) ON DELETE CASCADE,
-  pod_number INTEGER NOT NULL,
-  is_bye BOOLEAN DEFAULT false
-);
-
-CREATE TABLE pod_players (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  pod_id UUID REFERENCES pods(id) ON DELETE CASCADE,
-  player_id UUID REFERENCES players(id) ON DELETE CASCADE,
-  seat_number INTEGER  -- null for bye pod
-);
-```
-
-### RLS Policies
-
-```sql
--- Events: anyone can read non-sensitive columns, nobody can direct-write
-ALTER TABLE events ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Public read events" ON events
-  FOR SELECT USING (true);
--- Note: passphrase_hash excluded via column-level security or view
-
--- Players: anyone can read, insert (join), and update own status (drop)
-ALTER TABLE players ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Public read players" ON players
-  FOR SELECT USING (true);
-
-CREATE POLICY "Public insert players" ON players
-  FOR INSERT WITH CHECK (status = 'active');
-
--- Self-drop: players can update their own status to 'dropped'
--- Implementation: use RPC function with player_id parameter
-
--- Rounds, Pods, Pod_Players: public read, admin-only write via RPC
-ALTER TABLE rounds ENABLE ROW LEVEL SECURITY;
-ALTER TABLE pods ENABLE ROW LEVEL SECURITY;
-ALTER TABLE pod_players ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Public read rounds" ON rounds FOR SELECT USING (true);
-CREATE POLICY "Public read pods" ON pods FOR SELECT USING (true);
-CREATE POLICY "Public read pod_players" ON pod_players FOR SELECT USING (true);
-
--- All writes go through SECURITY DEFINER RPC functions that validate passphrase
-```
-
-### Column-Level Security for Passphrase Hash
-
-```sql
--- Option 1: Use a view that excludes passphrase_hash
-CREATE VIEW public_events AS
-  SELECT id, name, status, created_at FROM events;
-
--- Option 2: Revoke column access from anon role
-REVOKE SELECT (passphrase_hash) ON events FROM anon;
-```
-
-## Suggested Build Order
-
-The build order follows data dependency chains. Each layer depends on the one before it.
-
-### Layer 1: Foundation (must be first)
-1. **Supabase project setup** - database, tables, RLS policies, RPC functions
-2. **Vite + React + Tailwind project scaffold** - routing, Supabase client, React Query provider
-3. **Event creation** - CreateEventForm -> calls RPC to insert event with hashed passphrase
-
-**Rationale:** Everything depends on the database schema and the client infrastructure. Event creation is the entry point for all other features.
-
-### Layer 2: Core Player Flow (depends on Layer 1)
-4. **Player join** - JoinEventForm or direct link -> inserts player row
-5. **Player list** - useEventPlayers hook, PlayerList component
-6. **Realtime subscription** - useEventChannel hook, query invalidation on player changes
-7. **Self-drop** - player status update
-
-**Rationale:** Player management is the foundation for pod generation. Realtime subscriptions should be wired up early so all subsequent features get live updates automatically.
-
-### Layer 3: Pod Generation (depends on Layer 2)
-8. **Pod algorithm** - pure TypeScript function, extensively unit-tested
-9. **Admin passphrase flow** - PassphraseModal, useAdminAuth, RPC validation
-10. **Generate round** - admin action -> pod algorithm -> write to DB -> realtime updates all clients
-11. **PodCard UI** - display pods, seats, bye assignments
-
-**Rationale:** The pod algorithm is the core differentiating logic. It should be a pure function with comprehensive unit tests before being wired into the admin flow. The passphrase system gates all admin actions and must work before any admin features ship.
-
-### Layer 4: Timer (depends on Layer 3)
-12. **Timer state in rounds table** - started_at, duration, paused_remaining
-13. **Timer display** - useTimer hook, TimerDisplay component with color transitions
-14. **Timer controls** - admin start, pause, resume, +5min, cancel
-15. **Browser notifications** - Notification API permission flow, fire at timer=0
-
-**Rationale:** Timer is a core feature but depends on rounds existing. Browser notification permission should be requested early (on first event view load) but notification firing depends on the timer being functional.
-
-### Layer 5: Polish and Edge Cases (depends on Layers 1-4)
-16. **Event info bar** - QR code, share link, player count, round number
-17. **Previous rounds** - collapsible history
-18. **Admin player management** - remove player, reactivate dropped player
-19. **End event** - read-only state
-20. **Mid-event join** - player joining with empty history
-
-### Layer 6: Testing and Deployment
-21. **Unit tests** - pod algorithm (critical), timer calculation, passphrase hashing
-22. **Integration tests** - full flows (create event -> join -> generate round -> see pods)
-23. **Deployment setup** - Vercel config, Supabase migration scripts, environment variables
-
-## Scalability Considerations
-
-| Concern | 1 Event / 8 Players (Target) | 10 Events / 100 Players | 100 Events / 1000 Players |
-|---------|------|------|------|
-| Realtime connections | Trivial (8 WebSockets) | Fine (100 connections, well within free tier) | Needs Supabase Pro; consider connection pooling |
-| postgres_changes load | Negligible | Fine -- per-event filters limit broadcasts | May need Broadcast pattern instead of postgres_changes for high-change tables |
-| Timer precision | Perfect -- 8 clients calculating locally | Fine | Fine -- timer is pure client-side math |
-| Pod algorithm | Instant for 8 players | <100ms for 20 players per event | N/A -- events are independent |
-| Database size | Tiny | Small | Needs event cleanup/archival strategy |
-
-For this project's target scale (8-16 players, a few concurrent events), every architectural choice is well within comfortable limits. The postgres_changes + React Query invalidation pattern handles this scale trivially.
+- **80+20 as a preset vs. configurable overtime length?** Recommend shipping a single "80+20" preset button in `AdminControls` first (matches the requirement); the schema (`overtime_seconds`) is already general enough for arbitrary values later — no future migration needed to generalize.
+- **Admin confirmation for mid-event joiners?** PROJECT.md mentions "any admin confirmation." The badge is the core deliverable; an optional admin toast/confirm is a thin add on top of the same derived Set. Recommend scoping the badge as required, confirmation as optional stretch.
+- **Notification copy at the two boundaries** is a UX detail, not architectural — defer to phase planning.
 
 ## Sources
 
-- [Supabase Realtime Overview](https://supabase.com/docs/guides/realtime) - Official docs, three subscription types (HIGH confidence)
-- [Supabase Postgres Changes](https://supabase.com/docs/guides/realtime/postgres-changes) - Filter syntax, RLS interaction, performance notes (HIGH confidence)
-- [Supabase Broadcast](https://supabase.com/docs/guides/realtime/broadcast) - When to use over postgres_changes (HIGH confidence)
-- [Supabase Realtime Concepts](https://supabase.com/docs/guides/realtime/concepts) - Channels, topics, connection pools (HIGH confidence)
-- [Supabase Securing API](https://supabase.com/docs/guides/api/securing-your-api) - check_request function, anon key, RLS without auth (HIGH confidence)
-- [Supabase Anonymous Sign-Ins](https://supabase.com/docs/guides/auth/auth-anonymous) - Confirmed NOT needed for this use case (HIGH confidence)
-- [Supabase RPC Docs](https://supabase.com/docs/reference/javascript/rpc) - Function call syntax (HIGH confidence)
-- [Supabase Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security) - Policy patterns (HIGH confidence)
-- [Timer Modelling for Browsers](https://boopathi.blog/modelling-timers-for-the-browser) - Target datetime pattern, NTP sync (MEDIUM confidence)
-- [Syncing Countdown Timers Across Clients](https://medium.com/@flowersayo/syncing-countdown-timers-across-multiple-clients-a-subtle-but-critical-challenge-384ba5fbef9a) - Diff-based polling approach (MEDIUM confidence)
-- [TanStack Query + Supabase Pattern](https://makerkit.dev/blog/saas/supabase-react-query) - Invalidation-based integration (MEDIUM confidence)
-- [React Architecture 2025](https://launchdarkly.com/docs/blog/react-architecture-2025) - Component organization patterns (MEDIUM confidence)
-- [React Folder Structure 2025](https://www.robinwieruch.de/react-folder-structure/) - Project organization (MEDIUM confidence)
-- [Supabase RLS Complete Guide 2026](https://designrevision.com/blog/supabase-row-level-security) - Modern RLS patterns (MEDIUM confidence)
-- [Building Scalable Real-Time Systems with Supabase](https://medium.com/@ansh91627/building-scalable-real-time-systems-a-deep-dive-into-supabase-realtime-architecture-and-eccb01852f2b) - Optimistic UI, architecture decisions (LOW confidence, single source)
+- `supabase/migrations/00004_timer_system.sql` (round_timers schema + all timer RPCs) — HIGH
+- `src/hooks/useCountdown.ts`, `useTimer.ts`, `useTimerNotification.ts`, `useGenerateRound.ts`, `useRounds.ts` — HIGH
+- `src/components/TimerDisplay.tsx`, `AdminControls.tsx`, `PlayerItem.tsx` — HIGH
+- `src/types/database.ts` — HIGH
+- `.planning/codebase/ARCHITECTURE.md`, `STRUCTURE.md`, `INTEGRATIONS.md`, `.planning/PROJECT.md` — HIGH
+
+---
+*Architecture research for: v5.0 timer + mid-event integration*
+*Researched: 2026-06-27*

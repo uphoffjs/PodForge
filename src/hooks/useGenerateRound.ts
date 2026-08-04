@@ -12,18 +12,20 @@ interface GenerateRoundParams {
   passphrase: string
   podAssignments: PodAssignment[]
   timerDurationMinutes?: number
+  overtimeMinutes?: number
 }
 
 export function useGenerateRound(eventId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ passphrase, podAssignments, timerDurationMinutes }: GenerateRoundParams) => {
+    mutationFn: async ({ passphrase, podAssignments, timerDurationMinutes, overtimeMinutes }: GenerateRoundParams) => {
       const { data, error } = await supabase.rpc('generate_round', {
         p_event_id: eventId,
         p_passphrase: passphrase,
         p_pod_assignments: podAssignments,
         p_timer_duration_minutes: timerDurationMinutes ?? null,
+        p_overtime_minutes: overtimeMinutes ?? 0,
       })
 
       if (error) throw error

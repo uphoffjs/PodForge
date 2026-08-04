@@ -1,246 +1,165 @@
 # Feature Research
 
-**Domain:** Casual MTG Commander event pod-pairing web app
-**Researched:** 2026-02-20
-**Confidence:** MEDIUM-HIGH
+**Domain:** Live event / tournament management UX — round timers and mid-event participant flow (MTG Commander pod pairer)
+**Researched:** 2026-06-27
+**Confidence:** MEDIUM (timer conventions HIGH from MTG tournament rules + tabletop timer apps; mid-event-join indicator patterns MEDIUM — no single canonical reference, synthesized from tournament-software behavior and general live-event UX)
 
-## Competitive Landscape Summary
+> Scope note: This is a v5.0 subsequent-milestone research pass. Only the two new v5.0 features are analyzed: **mid-event join UX** and the **80+20 round-timer format**. Existing shipped features (event creation, join, pod generation, single-period timer with 60/90/120 presets, admin controls) are treated as fixed substrate and referenced only where the new work depends on them.
 
-The Commander pod-pairing space has a clear gap. Existing tools fall into two categories:
-
-1. **Full tournament platforms** (TopDeck.gg, Melee.gg, MTGEvent.com) -- built for competitive play with Swiss pairings, scoring systems, standings, registration flows, and account requirements. Overkill for "8 friends at a game store" casual nights.
-2. **Official WotC tools** (Companion app / EventLink) -- limited to 8 players without a Wizards account, primarily 1v1 focused, Commander pod support still in development and tightly coupled to the WPN store ecosystem.
-
-Neither category serves the specific use case: a casual playgroup organizer who wants to say "scan this QR code, we'll pair pods, go play." That is the gap this app fills.
+---
 
 ## Feature Landscape
 
 ### Table Stakes (Users Expect These)
 
-Features users assume exist. Missing these = product feels incomplete or unusable.
-
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| **Event creation with shareable link** | Every event tool has this; it's how players join | LOW | Event name + passphrase, generates unique URL |
-| **QR code for event join** | Standard pattern in every event app (TopDeck, EventLink, WPN all use QR); players expect to scan and go | LOW | Client-side generation with `qrcode.react`; must be large enough to scan from a phone held at arm's length |
-| **Player self-registration (name entry only)** | No-friction join is the core value; TopDeck takes 30 seconds, this should take 10 | LOW | No accounts, just name + event association |
-| **Duplicate name prevention** | Without it, two "Jake"s cause confusion that breaks pod assignments | LOW | Unique constraint on (event_id, name); friendly error message |
-| **Real-time player list** | Every competitor shows who's in the event; players need to see their group | LOW | Supabase Realtime subscription; shows active + dropped |
-| **Pod generation (4-player pods)** | The entire point of the app; TopDeck, EDH Tournament app, and Companion all do this | HIGH | Greedy algorithm minimizing repeat opponents via history matrix; handle remainders with byes |
-| **Random seat assignment (1st-4th)** | Seat order eliminates "who goes first?" arguments; TopDeck assigns table positions | LOW | Random shuffle per pod; display clearly on pod cards |
-| **Bye handling for odd player counts** | Every serious pairing tool handles byes; without it, leftover players are stranded | MEDIUM | Prioritize players with fewest byes; ties broken randomly; bye players see "Bye" not a pod |
-| **Round history (previous rounds visible)** | Players want to check who they played; every tournament app shows round history | LOW | Collapsible sections, most recent first |
-| **Player self-drop** | TopDeck supports drop/re-entry; players need to leave mid-event without bugging the admin | LOW | Marks inactive; keeps current round visible; player enters pool for next round if re-activated |
-| **Admin passphrase protection** | Without access control, any player can generate rounds or remove people; every tournament tool gates admin actions | LOW | Per-event passphrase; session-stored after first entry; no user accounts needed |
-| **Real-time updates (pod assignments push to all phones)** | This is the core promise -- "every player instantly sees their pod assignment." TopDeck pushes pairings to phones; MTGEvent updates in real time | HIGH | Supabase Realtime channels; must handle reconnection gracefully |
-| **Mobile-first responsive design** | TopDeck has native apps; MTGEvent is fully responsive; 90%+ of users will be on phones at an event | MEDIUM | Dark theme, large touch targets, pod cards readable at arm's length |
+| **Persistent "joined mid-event" indicator on player row** | When someone shows up at round 2, every other player/admin glances at the list and expects to see *who is new* — a transient flash isn't enough; it must persist until at least the next round. | LOW | Extend `PlayerItem`/`PlayerList`. App already has a 400ms "new player" CSS flash (`EventPage.tsx` `prevPlayerIdsRef`) — that is presence-change feedback, NOT a join-phase badge. Needs a real persistent badge ("New" / "Joined R3"). Requires knowing the round-at-join (see dependencies). |
+| **80-min main period counts down (mm:ss)** | This is the existing countdown behavior at a new duration. Players expect a normal glanceable countdown. | LOW | Reuse `useCountdown` + `TimerDisplay`. New 80-min value is trivial; the format change is the multi-phase chaining below. |
+| **Automatic transition main → overtime → count-up with no admin action** | Real MTG rounds flow timed-period → fixed additional turns → "finish the current turn" without anyone restarting a clock. Users expect the single timer to roll through all three phases server-authoritatively. | MEDIUM | Core of the feature. `round_timers` must encode phase boundaries so `expires_at`-style math yields the right phase. Must remain zero-drift / server-authoritative like the existing timer. |
+| **Distinct visual treatment per phase (main vs overtime vs overrun)** | A player glancing at the phone must instantly know "are we in normal time, overtime, or already over?" without reading a label. Color/urgency cues are the primary signal. | MEDIUM | Existing urgency ladder (normal/warning/danger/expired) is single-period. Overtime needs its own identity (amber "OVERTIME") separate from main-period danger red, and overrun needs a clearly "past" red + `+` prefix. |
+| **Notification at end of main period AND end of overtime** | Time-call moments are the actionable beats in a real round ("time is called, finish this turn cycle" / "round is over"). The existing single 0:00 notification maps to TWO distinct beats now. | MEDIUM | `useTimerNotification` currently fires once at zero. Must fire at two boundaries and not double-fire. De-dupe by phase, not by a single fired-flag. |
+| **Count-up overrun display with `+` prefix** | Tabletop timer apps (EventTimer, Shared Board Game Timer) universally show count-up as elapsed-from-zero. A leading `+` (e.g. `+1:23`) is the readable convention for "this much past the deadline." | LOW | App already "counts up past zero" in the expired state per PROJECT.md — formalize the label/prefix and make it unbounded. |
+| **Admin pause/resume/extend/cancel still work in every phase** | Admins expect their existing controls to keep working when a round is in overtime or overrun — a control that silently no-ops during overtime feels broken. | MEDIUM | `TimerControls` + RPCs must define what extend/pause mean per phase (see Timer Spec). Most subtle part of the feature. |
 
 ### Differentiators (Competitive Advantage)
 
-Features that set this app apart from TopDeck/Companion/MTGEvent. Not required, but these are why someone would choose this over alternatives.
-
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Zero-account, zero-install access** | TopDeck requires account creation + app install. MTGEvent requires accounts for self-signup. Companion requires Wizards account for >8 players. This app: scan QR, type name, done. The lowest friction entry in the space. | LOW | This is an architecture decision, not a feature to build -- it's the absence of auth that differentiates |
-| **Shared round timer with visual countdown** | TopDeck has timers but they're admin-side. Commander Clock is per-device. No competitor has a shared, server-synced timer that every player sees simultaneously on their phone with color-coded urgency states (green/yellow/red). | MEDIUM | Server-side timer state (duration, started_at, paused_remaining); clients calculate independently; color changes at 10min/5min/0:00 |
-| **Browser notifications on timer expiry** | No casual Commander tool sends push notifications when time runs out. Players background the app during games -- they need to know when time is up without watching the screen. | MEDIUM | Notification API permission flow; must handle iOS Safari limitations (requires PWA install on iOS 16.4+); graceful degradation to in-app visual alert |
-| **Admin timer controls (pause/resume/+5min)** | Games run long. Pods finish at different times. No casual tool gives the organizer granular timer control that syncs to all phones. | LOW | Pause stores remaining time; resume recalculates started_at; +5 adjusts duration; all broadcast via Realtime |
-| **Opponent history tracking across rounds** | TopDeck's Swiss algorithm does this for competitive play. No casual tool tracks who you've already played and avoids repeat matchups. For a 4-round night with 12 players, avoiding repeats matters. | MEDIUM | Opponent history matrix; stored per-event; feeds pod generation algorithm |
-| **Instant pod visibility (glanceable cards)** | TopDeck buries pairings in tournament structure. This app's pod cards should be the hero UI -- big names, clear seat numbers, visible from across a table. Designed for the "hold up phone to check" moment. | LOW | UI/UX priority, not technical complexity; large fonts, high contrast, minimal chrome |
-| **Multiple simultaneous admins** | Game stores often have multiple staff running events. No casual tool explicitly supports this -- most assume single organizer. | LOW | Any client with the correct passphrase gets admin controls; no admin "session" to conflict |
-| **Mid-event player joins** | Players arrive late to casual events constantly. TopDeck handles late registration but it's buried in settings. This should be seamless -- new player joins, gets paired next round with empty history and 0 bye count. | LOW | Insert player with null history; algorithm treats them as having played nobody |
+| **80+20 as a selectable preset alongside 60/90/120** | Matches a real tabletop round shape (timed round + fixed overtime) in one click — most generic timers can't express a two-phase round. This is the headline v5.0 timer value. | LOW–MEDIUM | Add to the duration picker in `AdminControls`. Picker currently emits a single minutes value; now must emit a format descriptor (main+overtime) — a small but real data-model change. |
+| **"Joined R{N}" round-scoped badge (not just generic "new")** | Tells everyone *when* the player entered, which contextualizes their empty opponent history and 0-bye fairness — players intuitively understand "of course they have no repeats, they joined this round." | LOW | One extra field (round-at-join). Higher signal than a plain "New" pill at near-zero extra cost. |
+| **Overtime phase labeled with semantic text, not just color** | "OVERTIME" / "FINAL TURNS" / "OVER BY +1:23" text removes ambiguity for colorblind users and on glance — stronger than color alone and cheap to add. | LOW | Accessibility win; pairs with the per-phase color states. |
+| **Mid-event-join "event in progress" notice on the join form** | A player joining late gets a one-line heads-up ("Round 2 is underway — you'll be paired next round") so they aren't confused about why they're not in a pod yet. | LOW | Small conditional in `JoinEventForm`/`EventPage` keyed on whether a round exists. Sets expectations, reduces "why am I not in a pod?" confusion. |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
-Features that seem good but create problems for a casual Commander pod pairer.
-
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| **User accounts / authentication** | "Track my history across events" | Adds friction to the join flow which is the #1 value prop; requires password management, forgot-password flows, GDPR compliance; casual players don't want another account. TopDeck needs accounts because they track competitive records -- we don't. | Each event is standalone. Players type a name and play. No persistence needed. |
-| **Point tracking / standings / leaderboards** | "Make it competitive" | Commander is inherently casual for this app's audience. Point systems create toxic incentives in multiplayer (kingmaking, spite plays, salt). TopDeck's point modes exist for competitive REL -- our users aren't playing competitive REL. The WPN guide explicitly recommends participation rewards over competitive scoring for casual events. | If users want competitive Commander, TopDeck.gg exists and does it well. This app is for casual pod assignment only. |
-| **Deck registration / power level brackets** | "Match similar power levels" | Requires deck database integration (Moxfield/Archidekt API), power level is subjective and contentious, self-reported brackets are unreliable. WotC's bracket system is still in beta and controversial. This is a pairing app, not a deck management app. | Let the playgroup self-organize power levels socially. The app pairs pods; the humans handle deck selection. |
-| **Chat / messaging / social features** | "Coordinate with my pod" | Players are physically together at the event -- they can talk. Adding chat means moderation, abuse potential, notification spam, and feature bloat. Every tournament app that added chat regretted the moderation burden. | Players communicate in person. The app shows who's in your pod -- go find them. |
-| **Player profile persistence across events** | "Remember my name next time" | Requires device-local storage or accounts; creates confusion when multiple people use the same phone; adds complexity for a feature that saves typing 5 characters once per event. | Type your name each event. It takes 3 seconds. |
-| **Sound alerts on timer expiry** | "I need an audio notification" | Mobile browsers have aggressive autoplay policies; sounds fail silently on many devices; sounds in a game store are obnoxious and overlap with other noise. Multiple phones blaring simultaneously creates chaos. | Browser notification (vibration + banner) + visual color change on the timer. These work when the app is backgrounded, which is the actual use case. |
-| **Spectator mode / stream overlay** | "Let viewers watch the bracket" | No spectators at casual Commander night. This is 8-16 friends, not a streamed tournament. Spectator features add read-only view complexity for zero users. | The event page is already publicly viewable -- anyone with the link can see pods and rounds. |
-| **Swiss-style competitive pairings (by record)** | "Pair winners vs winners" | Swiss pairings make sense for 1v1 competitive formats. In casual 4-player Commander, there's no meaningful "record" -- one winner per pod of 4 means 75% of players "lose" each round. Swiss creates feel-bad pairings where the 0-3 player is stuck in the "losers pod." | Random pairing with repeat-opponent avoidance. Everyone gets varied opponents regardless of how their games went. |
-| **Online/remote play support** | "What about remote players?" | SpellTable already handles remote Commander play with webcam support and matchmaking. Building video/audio into a pairing app is scope explosion. This app is for in-person events. | If remote players want to play, they use SpellTable. This app is for people physically present at the same location. |
+| **Admin must approve every mid-event join before the player appears** | Feels "controlled" / prevents trolls. | Breaks the app's whole "show up and play, no gatekeeping" model; adds a pending-state machine (`pending`/`approved`), a new admin queue UI, and Realtime states — high cost for a casual playgroup that already has admin remove-player. Creates a blocking dependency where none existed. | Keep open join. Surface the join clearly via the persistent badge; rely on existing **admin remove-player** as the corrective tool. (Optional: a *non-blocking* "needs confirm" flag could be a future toggle, but not default.) |
+| **Auto-inserting a mid-round joiner into an already-generated pod** | "They're here, put them in a game." | Destabilizes an in-progress round (a pod becomes 5, seats shift, opponent-history is polluted mid-game). The algorithm already cleanly handles them *next* round with empty history + 0 byes. | Do nothing to the current round; badge them and pair them on the next "Generate Round." This is already the algorithm's designed behavior. |
+| **Configurable arbitrary N-phase timer builder (custom periods)** | "Let me define any sequence of periods." | Massive UI + data-model surface for a casual tool; 80+20 and the existing flat presets cover real MTG round shapes. YAGNI. | Ship 80+20 as a named preset. If more shapes are ever needed, add named presets, not a builder. |
+| **Hard auto-stop / auto-advance when overtime hits zero** | "End the round automatically." | Real tables need to *finish the current turn cycle* past zero — that's exactly why count-up exists. Auto-stopping hides how far over the table is running and removes admin judgment. | Count UP indefinitely after overtime; let the admin decide when to Generate Next Round (which supersedes the timer). |
+| **Sound alarm at phase boundaries** | "We won't notice silently." | Explicitly out of scope per PROJECT.md (visual + browser notification only); sound is intrusive in a shared room of multiple pods. | Browser notification + distinct color flip at each boundary (already the established pattern). |
+
+---
+
+## Timer Specification — 80+20 Count-Down → Count-Down → Count-Up (FULL)
+
+The single round timer progresses through three sequential phases. It remains **server-authoritative** (phase + remaining derived from stored timestamps, not client clocks) exactly like today's timer.
+
+```
+PHASE 1  MAIN          PHASE 2  OVERTIME        PHASE 3  OVERRUN
+80:00 ───────► 0:00    20:00 ───────► 0:00      0:00 ───────► +∞
+counts DOWN            counts DOWN              counts UP
+```
+
+| Phase | Range | Direction | Display | Suggested label | Color / urgency cue |
+|-------|-------|-----------|---------|-----------------|----------------------|
+| **1. Main** | 80:00 → 0:00 | down | `mm:ss` | (none, or "Round") | Reuse existing ladder within this phase: normal (>10m) → warning (~10–5m) → danger (<5m, red). |
+| **2. Overtime** | 20:00 → 0:00 | down | `mm:ss` | **"OVERTIME"** (amber/orange `#f59e0b`) | Its OWN identity, visually distinct from Phase-1 danger so a glance distinguishes "almost out of main time" vs "in overtime." Amber matches the app accent; can re-run a mini warning/danger sub-ladder inside OT if desired. |
+| **3. Overrun** | 0:00 → unbounded | **up** | `+mm:ss` (leading `+`) | **"OVER BY"** / "FINAL TURN" | Strong "past deadline" red, optionally subtle pulse. No upper bound; never auto-stops. |
+
+**Boundary events (notifications):**
+1. **Main → Overtime (main hits 0:00):** browser notification — e.g. *"Time called — overtime (20 min) has begun."* Display flips to the OVERTIME treatment.
+2. **Overtime → Overrun (overtime hits 0:00):** browser notification — e.g. *"Round over — finish the current turn."* Display flips to the OVERRUN `+` count-up.
+   - Must de-duplicate **per boundary** (each fires once), not via a single global fired-flag. Backgrounded-tab catch-up (`useVisibilityRefetch`) should not re-fire an already-passed boundary.
+
+**Admin controls per phase (all phases unless noted):**
+- **Pause / Resume:** freeze/continue the *current* phase's remaining (or elapsed, in overrun). Same server-stored-remaining model as today.
+- **Extend (+5 min):** adds time to the **current phase**. In Main → pushes main 0:00 later. In Overtime → extends overtime. In Overrun → semantics decision needed: simplest is "re-enter a 5-min count-down" (effectively more overtime), or disable/relabel extend in overrun. **Recommend:** extend adds to the current phase; in overrun, extend re-opens a 5-min count-down. Document the chosen rule and test it.
+- **Cancel:** clears the timer entirely in any phase (existing behavior).
+- Generating the next round supersedes/clears the timer (existing behavior) — the normal way an admin ends an overrun.
+
+**Data-model implication (server-authoritative):** `round_timers` must encode enough to compute *which phase and how much remaining/elapsed* from server time alone. Two clean options:
+- (A) Store `main_duration`, `overtime_duration`, and a single `phase1_started_at` (+ paused-accumulation) — derive phase by elapsed vs cumulative boundaries. **Preferred** — one source of truth, survives pause/extend with accumulator math.
+- (B) Store successive `expires_at` per phase. Simpler per-phase math but more columns and trickier pause semantics.
+
+Either way `useCountdown` must return `{ phase, label, value, direction }` rather than a single signed number. Flat 60/90/120 timers map to "main only, no overtime/overrun phase."
+
+---
 
 ## Feature Dependencies
 
 ```
-[Event Creation]
-    |-- requires --> [Admin Passphrase System]
-    |-- enables  --> [Shareable Link / QR Code]
-    |-- enables  --> [Player Self-Registration]
+80+20 Timer Format
+    ├──requires──> round_timers schema: phase model (main + overtime durations)   [DB migration]
+    ├──requires──> useCountdown returns {phase, direction, value}                  [hook change]
+    ├──requires──> TimerDisplay multi-phase rendering + "+" prefix + labels        [component]
+    ├──requires──> useTimerNotification fires at TWO boundaries (per-phase dedupe) [hook change]
+    ├──requires──> AdminControls duration picker emits format (not bare minutes)   [component + RPC arg]
+    └──affects───> TimerControls extend/pause semantics per phase                  [component + RPCs]
 
-[Player Self-Registration]
-    |-- requires --> [Real-time Player List]
-    |-- requires --> [Duplicate Name Prevention]
-    |-- enables  --> [Player Self-Drop]
-    |-- enables  --> [Pod Generation]
+Mid-Event Join Indicator
+    ├──requires──> round-at-join knowledge (new players column OR created_at vs round start)  [DB/derivation]
+    ├──requires──> PlayerItem/PlayerList persistent badge                          [component]
+    ├──enhances──> JoinEventForm "event in progress" notice                        [component]
+    └──independent of──> pod algorithm (already handles empty history + 0 byes — NO change)
 
-[Pod Generation Algorithm]
-    |-- requires --> [Player List (min 4 active)]
-    |-- requires --> [Opponent History Matrix]
-    |-- produces --> [Pod Assignments with Seat Order]
-    |-- produces --> [Bye Assignments]
-    |-- enables  --> [Round History]
-
-[Real-time Updates (Supabase Realtime)]
-    |-- required by --> [Real-time Player List]
-    |-- required by --> [Pod Assignment Push]
-    |-- required by --> [Shared Timer Sync]
-    |-- required by --> [Player Drop/Remove Notifications]
-
-[Shared Round Timer]
-    |-- requires --> [Real-time Updates]
-    |-- requires --> [Admin Timer Controls]
-    |-- enables  --> [Browser Notifications on Expiry]
-
-[Admin Passphrase System]
-    |-- gates --> [Pod Generation]
-    |-- gates --> [Timer Controls]
-    |-- gates --> [Player Removal]
-    |-- gates --> [Player Re-activation]
-    |-- gates --> [Event Ending]
-
-[Browser Notifications]
-    |-- requires --> [Shared Round Timer]
-    |-- requires --> [Notification API Permission Flow]
-    |-- degrades to --> [In-app Visual Alert]
+Mid-Event Join  ─conflicts─  Admin-approval-gated join (anti-feature; do NOT combine)
+80+20 Timer     ─builds on─  existing single-period timer (60/90/120) — keep both
 ```
 
 ### Dependency Notes
+- **80+20 requires a `round_timers` schema/migration:** today's row models one period; phases need a main+overtime representation. This is the critical-path, highest-risk piece — touches DB, RPCs (`pause/resume/extend_timer`), `useCountdown`, `TimerDisplay`, `useTimerNotification`. Flag for deeper phase-level design.
+- **Mid-event badge requires round-at-join:** cheapest reliable approach is a nullable `joined_round_number` (or `joined_at_round_id`) stamped at insert in `useJoinEvent`/`useAddPlayer`; deriving from `created_at` vs round timestamps is possible but fragile around round boundaries. Prefer the explicit column.
+- **Mid-event join is independent of the pod algorithm:** PROJECT.md confirms the algorithm already gives mid-joiners empty opponent history + 0 byes. v5.0 work is **display only** for joins — no algorithm change.
+- **Two timer formats coexist:** 80+20 is an additional preset, not a replacement. Existing 60/90/120 flat timers must keep working; the data model must represent "no overtime phase" for them.
 
-- **Real-time Updates is foundational:** Nearly every user-facing feature depends on Supabase Realtime working correctly. This must be rock-solid before building features on top of it.
-- **Pod Generation requires Player Registration:** Cannot generate pods without a player list. Registration flow must be complete and tested before algorithm work.
-- **Timer requires Real-time:** The shared timer is meaningless without synchronized state across all clients. Timer work should come after Realtime is proven.
-- **Browser Notifications have platform constraints:** iOS Safari requires PWA installation (iOS 16.4+); Android Chrome works directly; must build graceful fallback for unsupported browsers.
-- **Admin Passphrase gates all admin actions:** This is a security boundary. Must be implemented before any admin action is exposed in the UI.
+---
 
-## MVP Definition
+## MVP Definition (this milestone)
 
-### Launch With (v1)
+### Launch With (v5.0 core)
+- [ ] **80+20 three-phase timer** (main count-down → overtime count-down → overrun count-up) with per-phase visuals + two boundary notifications — the headline feature.
+- [ ] **80+20 preset** in the admin duration picker.
+- [ ] **Persistent mid-event-join badge** on player rows ("New" / "Joined R{N}").
+- [ ] **Admin controls (pause/resume/extend/cancel) defined and working across all three phases.**
 
-Minimum viable product -- what's needed to run one casual Commander night successfully.
+### Add After Validation (v5.x)
+- [ ] **"Event in progress" notice on the join form** for late joiners — set expectations.
+- [ ] Sub-urgency ladder *within* overtime (warning at OT <5m).
 
-- [ ] **Event creation with name + passphrase** -- without this, nothing works
-- [ ] **Shareable link + QR code** -- the primary join mechanism
-- [ ] **Player self-registration (name only)** -- zero-friction entry
-- [ ] **Duplicate name prevention** -- avoid confusion
-- [ ] **Real-time player list** -- everyone sees who's joined
-- [ ] **Pod generation with repeat-opponent avoidance** -- the core algorithm
-- [ ] **Random seat assignment (1st-4th)** -- eliminates arguments
-- [ ] **Bye handling** -- odd player counts are inevitable
-- [ ] **Player self-drop** -- players leave mid-event
-- [ ] **Round history** -- check previous pods
-- [ ] **Admin passphrase protection** -- gate destructive actions
-- [ ] **Real-time pod assignment push** -- the moment of delight
-- [ ] **Shared round timer with visual countdown** -- the key differentiator
-- [ ] **Admin timer controls (pause/resume/+5min)** -- practical necessity
-- [ ] **Browser notifications on timer expiry** -- critical for backgrounded phones
-- [ ] **Mobile-first dark theme** -- 90%+ of users on phones
-- [ ] **Admin: remove player, re-activate dropped player, end event** -- basic admin toolkit
-
-### Add After Validation (v1.x)
-
-Features to add once the core loop is proven at real events.
-
-- [ ] **Event history / read-only mode for ended events** -- triggered when users ask "what were the pods last week?"
-- [ ] **Multiple concurrent events** -- triggered when more than one group wants to use the app at the same time (e.g., game store running two pods simultaneously)
-- [ ] **Improved pod algorithm (configurable pod sizes, 3-player pods option)** -- triggered when users report edge cases the greedy algorithm handles poorly
-- [ ] **Event info bar with expandable QR, player count, round number** -- polish pass after core UX is validated
-
-### Future Consideration (v2+)
-
-Features to defer until product-market fit is established.
-
-- [ ] **PWA install prompt** -- makes browser notifications work on iOS; defer until user volume justifies the added UX flow
-- [ ] **Event templates / presets** -- for game stores running the same event weekly; defer until repeat organizers ask for it
-- [ ] **Accessibility audit (WCAG 2.2)** -- important but defer deep audit until UI is stable
-- [ ] **Analytics dashboard for organizers** -- how many players per event, average rounds, popular time slots; defer until organizers express interest
-- [ ] **Custom pod sizes (3-player, 5-player, 6-player)** -- defer until requested; 4-player is the Commander standard
+### Future Consideration (v6+)
+- [ ] Optional, admin-toggleable **non-blocking** "confirm new join" flag (NOT default; only if abuse is observed).
+- [ ] Named custom presets beyond 80+20 (only if real demand; avoid the period-builder anti-feature).
 
 ## Feature Prioritization Matrix
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Event creation + shareable link + QR | HIGH | LOW | P1 |
-| Player self-registration (name only) | HIGH | LOW | P1 |
-| Real-time player list | HIGH | MEDIUM | P1 |
-| Pod generation algorithm | HIGH | HIGH | P1 |
-| Random seat assignment | HIGH | LOW | P1 |
-| Bye handling | HIGH | MEDIUM | P1 |
-| Real-time pod push to all clients | HIGH | MEDIUM | P1 |
-| Admin passphrase system | HIGH | LOW | P1 |
-| Player self-drop | MEDIUM | LOW | P1 |
-| Round history (collapsible) | MEDIUM | LOW | P1 |
-| Shared round timer | HIGH | MEDIUM | P1 |
-| Admin timer controls | HIGH | LOW | P1 |
-| Browser notifications (timer expiry) | HIGH | MEDIUM | P1 |
-| Mobile-first dark theme | HIGH | MEDIUM | P1 |
-| Admin player management (remove/reactivate) | MEDIUM | LOW | P1 |
-| Event ending (read-only mode) | MEDIUM | LOW | P1 |
-| Duplicate name prevention | MEDIUM | LOW | P1 |
-| Mid-event player joins | MEDIUM | LOW | P1 |
-| Multiple simultaneous admins | LOW | LOW | P2 |
-| Multiple concurrent events | MEDIUM | LOW | P2 |
-| PWA install flow | MEDIUM | MEDIUM | P3 |
-| Event templates | LOW | MEDIUM | P3 |
+| 80+20 three-phase timer (display + phase engine) | HIGH | MEDIUM–HIGH | P1 |
+| Two boundary notifications (per-phase dedupe) | HIGH | MEDIUM | P1 |
+| 80+20 preset in admin picker | HIGH | LOW | P1 |
+| Persistent mid-event-join badge | HIGH | LOW | P1 |
+| Admin controls across all phases (extend semantics) | MEDIUM | MEDIUM | P1 |
+| "Joined R{N}" round-scoped wording | MEDIUM | LOW | P2 |
+| "Event in progress" join-form notice | MEDIUM | LOW | P2 |
+| Sub-urgency ladder inside overtime | LOW | LOW | P3 |
+| Admin-approval-gated join | LOW (negative) | HIGH | Anti — do not build |
 
-**Priority key:**
-- P1: Must have for launch -- the app cannot run a Commander night without these
-- P2: Should have, add when possible -- enhances the experience but not blocking
-- P3: Nice to have, future consideration -- only build when validated by user demand
+## Competitor / Convention Analysis
 
-## Competitor Feature Analysis
+| Concern | Real MTG tournament rules | Tabletop timer apps | Our v5.0 approach |
+|---------|---------------------------|---------------------|-------------------|
+| Round + overtime shape | Timed round, then a fixed *N additional turns* (5 turns; 3 in team play), then draw | Single configurable count-down or count-up | **Time-based 80+20** (fixed-minute overtime, not turn-counted) — simpler to automate than counting turns, fits a server clock |
+| Past-deadline behavior | Players finish the current turn cycle | Count-UP from zero (EventTimer, Shared Board Game Timer) | Count UP with `+mm:ss`, unbounded; admin ends via next round |
+| Boundary signaling | Judge calls "time" | Audio alert / presentation mode | Browser notification + distinct color flip (no sound, per scope) |
+| Late player | TO adds late registrations manually mid-event | n/a | Open self-join + **persistent badge**; admin remove-player as corrective |
 
-| Feature | TopDeck.gg | MTG Companion | MTGEvent.com | EDH Tournament App | **Pod Pairer (Ours)** |
-|---------|-----------|---------------|--------------|-------------------|----------------------|
-| Account required | Yes (free) | Yes (Wizards) | Yes | No | **No** |
-| App install required | Yes (iOS/Android) | Yes (iOS/Android) | No (web) | Yes (Android) | **No (web)** |
-| Commander pod pairing | Yes (5 algorithms) | Limited (8 players max without account) | Yes (basic) | Yes (Swiss) | **Yes (greedy anti-repeat)** |
-| Casual vs competitive focus | Competitive | Mixed | Competitive | Competitive | **Casual only** |
-| Shared synced timer | Admin-side only | No | No | No | **Yes (all clients)** |
-| Browser notifications | No (push via app) | No (push via app) | No | No | **Yes** |
-| QR code join | Yes | Yes (via EventLink) | No | No | **Yes** |
-| Zero-friction player join | No (account needed) | No (account needed) | No (account needed) | Manual entry by admin | **Yes (name only)** |
-| Seat assignment | Table assignment | No | No | No | **Yes (1st-4th)** |
-| Player self-drop | Yes | Yes | Unknown | No (admin only) | **Yes** |
-| Repeat opponent avoidance | Yes (Swiss) | Basic | Basic | Yes (Swiss) | **Yes (history matrix)** |
-| Price | Free tier + paid plans | Free | Free | Free | **Free** |
-| Offline support | Yes | Partial | No | Yes (local only) | **No (requires internet)** |
-
-### Competitive Positioning
-
-Our app is NOT competing with TopDeck.gg. TopDeck serves competitive Commander tournaments with Swiss pairings, scoring, top cuts, and Discord integration. That is a different product for a different audience.
-
-Our app competes with "the group chat" -- the current solution for casual Commander nights where someone texts "who's coming Saturday?" and then manually assigns pods with pen and paper or a spreadsheet. The competitors are:
-
-1. **Pen and paper** -- no repeat tracking, slow, error-prone
-2. **Random name picker websites** -- no pod-of-4 logic, no persistence, no timer
-3. **MTG Companion Home Tournament Organizer** -- limited to 8 players, requires Wizards account, 1v1 focused
-4. **A spreadsheet** -- functional but not real-time, not mobile-friendly, no timer
-
-We win by being faster to start, requiring nothing to install, and providing a shared timer that every phone displays simultaneously.
+---
 
 ## Sources
 
-- [TopDeck.gg Tournament Operations Features](https://topdeck.gg/features/tournament-operations) -- MEDIUM confidence (official product page)
-- [TopDeck.gg Player Experience Features](https://topdeck.gg/features/player-experience) -- MEDIUM confidence (official product page)
-- [TopDeck.gg Running Commander Tournaments](https://topdeck.gg/help/running-commander-tournament) -- MEDIUM confidence (official help docs)
-- [MTG Companion App - App Store](https://apps.apple.com/us/app/magic-the-gathering-companion/id1455161962) -- MEDIUM confidence (official listing)
-- [MTG Companion App - Magic: The Gathering](https://magic.wizards.com/en/products/companion-app) -- MEDIUM confidence (official product page)
-- [MTGEvent.com Tournament Software](https://www.mtgevent.com/mtg-tournament-software/) -- MEDIUM confidence (official product page)
-- [EDH Tournament App - Google Play](https://play.google.com/store/apps/details?id=com.lucaswmolin.edhtournament) -- LOW confidence (third-party app listing)
-- [Melee.gg Tournament Platform](https://melee.gg/) -- MEDIUM confidence (official product page)
-- [WPN: How to Run Successful Commander Events](https://wpn.wizards.com/en/news/how-to-run-successful-commander-events-and-grow-your-community) -- HIGH confidence (official WotC guidance)
-- [SpellTable - Remote Magic](https://spelltable.wizards.com/) -- MEDIUM confidence (official product)
-- [WPN EventLink Pod Pairing Updates](https://wpn.wizards.com/en/news/eventlink-beta-updates-15-october-2020-within-pod-pairing-and-more) -- MEDIUM confidence (official WPN blog)
-- [NN/g QR Code Usability Guidelines](https://www.nngroup.com/articles/qr-code-guidelines/) -- HIGH confidence (authoritative UX research)
-- [PWA Push Notification Best Practices](https://www.magicbell.com/blog/using-push-notifications-in-pwas) -- MEDIUM confidence (technical guide)
+- [MTR Appendix B — Time Limits (Magic Judges)](https://blogs.magicjudges.org/rules/mtr-appendix-b/) — HIGH (official round/overtime structure)
+- [MTR 2.4 End-of-Match Procedure (Magic Judges)](https://blogs.magicjudges.org/rules/mtr2-4/) — HIGH (additional-turns / end-of-round)
+- [Multiplayer Addendum to the MTR](https://juizes-mtg-portugal.github.io/multiplayer-addendum-mtr) — MEDIUM (multiplayer/Commander overtime turns)
+- [WotC Magic Tournament Rules (Apr 21, 2025 PDF)](https://media.wizards.com/ContentResources/WPN/MTG_MTR_2025_Apr%2021_EN.pdf) — HIGH (current tournament rules)
+- [EventTimer — Game Timer (count-up + count-down)](https://www.eventtimer.io/tools/game-timer) — MEDIUM (count-up convention)
+- [Shared Board Game Timer (features)](https://sharedgametimer.com/features) — MEDIUM (admin timer, rounds, pause, presentation mode)
+- [GoTimer — Board Game Turn Timer](https://gotimer.org/board-games/turn-timer) — LOW (count-down → advance behavior)
+- [TopDeck.gg — Tournament Operations](https://topdeck.gg/features/tournament-operations) — MEDIUM (late-player add / drop / re-entry as standard TO function)
+- Internal: `.planning/PROJECT.md`, `.planning/codebase/ARCHITECTURE.md` — HIGH (existing timer states, components, join flow)
 
 ---
-*Feature research for: Casual MTG Commander event pod-pairing web app*
-*Researched: 2026-02-20*
+*Feature research for: live-event timer + mid-event participant UX (v5.0)*
+*Researched: 2026-06-27*

@@ -14,6 +14,8 @@ export interface CountdownState {
   isCancelled: boolean
   /** Urgency level for styling */
   urgency: 'normal' | 'warning' | 'danger' | 'expired'
+  /** Current timer phase (source of truth for three-phase 80+20 timers) */
+  phase: 'main' | 'overtime' | 'countup' | 'not-started'
 }
 
 function computeRemaining(timer: RoundTimer): number {
@@ -24,10 +26,38 @@ function computeRemaining(timer: RoundTimer): number {
   return Math.floor((new Date(timer.expires_at).getTime() - Date.now()) / 1000)
 }
 
+// Only called for the main phase, where mainRemaining > 0 is guaranteed by
+// derivePhase. Overtime → 'danger' and count-up → 'expired' are mapped in
+// phaseUrgency, so this never needs to handle remaining <= 0.
 function computeUrgency(remaining: number): CountdownState['urgency'] {
   if (remaining > 600) return 'normal'
   if (remaining > 300) return 'warning'
-  if (remaining > 0) return 'danger'
+  return 'danger'
+}
+
+/**
+ * Derive the current phase and the seconds to display from the signed main
+ * remaining plus the configured overtime length. The whole three-phase model
+ * collapses to: overtimeRemaining = mainRemaining + overtimeSeconds.
+ */
+function derivePhase(
+  mainRemaining: number,
+  overtimeSeconds: number
+): { phase: CountdownState['phase']; displaySeconds: number } {
+  const overtimeRemaining = mainRemaining + overtimeSeconds
+  if (mainRemaining > 0) {
+    return { phase: 'main', displaySeconds: mainRemaining }
+  }
+  if (overtimeRemaining > 0) {
+    return { phase: 'overtime', displaySeconds: overtimeRemaining }
+  }
+  return { phase: 'countup', displaySeconds: overtimeRemaining }
+}
+
+/** Map a phase to the existing 4-value urgency union (Phase 9 owns distinct styling). */
+function phaseUrgency(phase: CountdownState['phase'], mainRemaining: number): CountdownState['urgency'] {
+  if (phase === 'main') return computeUrgency(mainRemaining)
+  if (phase === 'overtime') return 'danger'
   return 'expired'
 }
 
@@ -48,6 +78,10 @@ export function useCountdown(timer: RoundTimer | null): CountdownState | null {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
+    // Stryker disable next-line ConditionalExpression: the `=== 'cancelled'` branch here is an
+    // equivalent mutant — the render guard below returns null for cancelled timers regardless, and a
+    // cancelled timer (status !== 'running') never starts an interval, so skipping vs. running this
+    // effect has no observable effect. The user-facing guard is the one at the bottom of the hook.
     if (!timer || timer.status === 'cancelled') {
       return
     }
@@ -76,12 +110,35 @@ export function useCountdown(timer: RoundTimer | null): CountdownState | null {
     return null
   }
 
+  // Not-started (pending) timer: a generated-but-not-yet-started 80+20 round.
+  // Return a static state straight from duration_minutes BEFORE derivePhase so
+  // the three-phase engine (derivePhase/phaseUrgency) stays exhaustive and
+  // 100%-Stryker-covered. The running-only tick guard above never starts an
+  // interval for pending, so this display never ticks.
+  if (timer.status === 'pending') {
+    return {
+      remainingSeconds: timer.duration_minutes * 60,
+      display: `${timer.duration_minutes}:00`,
+      isOvertime: false,
+      isPaused: false,
+      isCancelled: false,
+      urgency: 'normal',
+      phase: 'not-started',
+    }
+  }
+
+  // remainingSeconds holds the signed mainRemaining (see computeRemaining); the
+  // per-tick effect keeps it fresh, so phase/display recompute every second.
+  // overtime_seconds is NOT NULL (0 for plain timers) per the RoundTimer type.
+  const { phase, displaySeconds } = derivePhase(remainingSeconds, timer.overtime_seconds)
+
   return {
     remainingSeconds,
-    display: formatDisplay(remainingSeconds),
+    display: formatDisplay(displaySeconds),
     isOvertime: remainingSeconds <= 0,
     isPaused: timer.status === 'paused',
     isCancelled: false,
-    urgency: computeUrgency(remainingSeconds),
+    urgency: phaseUrgency(phase, remainingSeconds),
+    phase,
   }
 }

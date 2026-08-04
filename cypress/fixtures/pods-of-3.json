@@ -1,0 +1,109 @@
+[
+  {
+    "id": "pod-1",
+    "round_id": "round-1",
+    "pod_number": 1,
+    "is_bye": false,
+    "pod_players": [
+      {
+        "id": "pp-1",
+        "pod_id": "pod-1",
+        "player_id": "player-1",
+        "seat_number": 1,
+        "players": {
+          "id": "player-1",
+          "event_id": "test-uuid",
+          "name": "Alice",
+          "status": "active",
+          "created_at": "2026-01-01T00:01:00Z"
+        }
+      },
+      {
+        "id": "pp-2",
+        "pod_id": "pod-1",
+        "player_id": "player-2",
+        "seat_number": 2,
+        "players": {
+          "id": "player-2",
+          "event_id": "test-uuid",
+          "name": "Bob",
+          "status": "active",
+          "created_at": "2026-01-01T00:02:00Z"
+        }
+      },
+      {
+        "id": "pp-3",
+        "pod_id": "pod-1",
+        "player_id": "player-3",
+        "seat_number": 3,
+        "players": {
+          "id": "player-3",
+          "event_id": "test-uuid",
+          "name": "Charlie",
+          "status": "active",
+          "created_at": "2026-01-01T00:03:00Z"
+        }
+      },
+      {
+        "id": "pp-4",
+        "pod_id": "pod-1",
+        "player_id": "player-4",
+        "seat_number": 4,
+        "players": {
+          "id": "player-4",
+          "event_id": "test-uuid",
+          "name": "Dave",
+          "status": "active",
+          "created_at": "2026-01-01T00:04:00Z"
+        }
+      }
+    ]
+  },
+  {
+    "id": "pod-2",
+    "round_id": "round-1",
+    "pod_number": 2,
+    "is_bye": false,
+    "pod_players": [
+      {
+        "id": "pp-5",
+        "pod_id": "pod-2",
+        "player_id": "player-5",
+        "seat_number": 1,
+        "players": {
+          "id": "player-5",
+          "event_id": "test-uuid",
+          "name": "Eve",
+          "status": "active",
+          "created_at": "2026-01-01T00:05:00Z"
+        }
+      },
+      {
+        "id": "pp-6",
+        "pod_id": "pod-2",
+        "player_id": "player-6",
+        "seat_number": 2,
+        "players": {
+          "id": "player-6",
+          "event_id": "test-uuid",
+          "name": "Frank",
+          "status": "active",
+          "created_at": "2026-01-01T00:06:00Z"
+        }
+      },
+      {
+        "id": "pp-7",
+        "pod_id": "pod-2",
+        "player_id": "player-7",
+        "seat_number": 3,
+        "players": {
+          "id": "player-7",
+          "event_id": "test-uuid",
+          "name": "Grace",
+          "status": "active",
+          "created_at": "2026-01-01T00:07:00Z"
+        }
+      }
+    ]
+  }
+]

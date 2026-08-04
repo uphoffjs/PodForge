@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
 import { AdminControls } from './AdminControls'
+import { INVALID_PASSPHRASE_RETRY_MESSAGE } from '@/lib/passphrase-error'
 import type { Player } from '@/types/database'
 
 // Mock generatePods to capture its input
@@ -514,6 +515,79 @@ describe('AdminControls', () => {
     )
   })
 
+  it('renders the 80+20 preset chip alongside 60/90/120', () => {
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    const chip = screen.getByTestId('timer-duration-80-20')
+    expect(chip).toBeInTheDocument()
+    expect(chip).toHaveTextContent('80+20')
+    expect(screen.getByTestId('timer-duration-60')).toBeInTheDocument()
+    expect(screen.getByTestId('timer-duration-90')).toBeInTheDocument()
+    expect(screen.getByTestId('timer-duration-120')).toBeInTheDocument()
+  })
+
+  it('selecting the 80+20 chip applies the accent style; re-clicking deselects', async () => {
+    const user = userEvent.setup()
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    const chip = screen.getByTestId('timer-duration-80-20')
+    expect(chip.className).toContain('bg-surface')
+
+    await user.click(chip)
+    expect(chip.className).toContain('bg-accent')
+
+    await user.click(chip)
+    expect(chip.className).toContain('bg-surface')
+  })
+
+  it('passes timerDurationMinutes=80 and overtimeMinutes=20 when 80+20 is selected', async () => {
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({ assignments: [{ playerIds: ['p1', 'p2', 'p3', 'p4'], isBye: false }], warnings: [] })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('timer-duration-80-20'))
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(mockMutate).toHaveBeenCalledTimes(1)
+    expect(mockMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ timerDurationMinutes: 80, overtimeMinutes: 20 }),
+      expect.any(Object)
+    )
+  })
+
+  it('passes overtimeMinutes=0 for a plain 90 preset', async () => {
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({ assignments: [{ playerIds: ['p1', 'p2', 'p3', 'p4'], isBye: false }], warnings: [] })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('timer-duration-90'))
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(mockMutate).toHaveBeenCalledTimes(1)
+    expect(mockMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ timerDurationMinutes: 90, overtimeMinutes: 0 }),
+      expect.any(Object)
+    )
+  })
+
+  it('passes overtimeMinutes=0 when no preset is selected', async () => {
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(mockMutate).toHaveBeenCalledTimes(1)
+    expect(mockMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ timerDurationMinutes: undefined, overtimeMinutes: 0 }),
+      expect.any(Object)
+    )
+  })
+
   // --- Generate round success/error callbacks ---
 
   it('onSuccess callback shows toast, resets isGenerating, and resets selectedDuration', async () => {
@@ -731,5 +805,203 @@ describe('AdminControls', () => {
     render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
 
     expect(screen.getByTestId('end-event-btn')).toHaveTextContent('Ending...')
+  })
+
+  // --- Allow pods of 3 checkbox ---
+
+  it('renders pods-of-3 checkbox when event is not ended', () => {
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    expect(screen.getByTestId('pods-of-3-checkbox')).toBeInTheDocument()
+  })
+
+  it('hides pods-of-3 checkbox when event is ended', () => {
+    render(
+      <AdminControls {...defaultProps} isEventEnded={true} />,
+      { wrapper: createWrapper() }
+    )
+
+    expect(screen.queryByTestId('pods-of-3-checkbox')).not.toBeInTheDocument()
+  })
+
+  it('clicking pods-of-3 checkbox toggles its checked state', async () => {
+    const user = userEvent.setup()
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    const checkbox = screen.getByTestId('pods-of-3-checkbox') as HTMLInputElement
+    expect(checkbox.checked).toBe(false)
+
+    await user.click(checkbox)
+    expect(checkbox.checked).toBe(true)
+
+    await user.click(checkbox)
+    expect(checkbox.checked).toBe(false)
+  })
+
+  it('passes allowPodsOf3=true to generatePods when checkbox is checked', async () => {
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('pods-of-3-checkbox'))
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(mockGeneratePods).toHaveBeenCalledTimes(1)
+    const [, , allowPodsOf3] = mockGeneratePods.mock.calls[0]
+    expect(allowPodsOf3).toBe(true)
+  })
+
+  it('passes allowPodsOf3=false to generatePods when checkbox is unchecked', async () => {
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(mockGeneratePods).toHaveBeenCalledTimes(1)
+    const [, , allowPodsOf3] = mockGeneratePods.mock.calls[0]
+    expect(allowPodsOf3).toBe(false)
+  })
+
+  it('resets pods-of-3 checkbox to unchecked after successful generation', async () => {
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
+    mockMutate.mockImplementation(
+      (_params: unknown, options: { onSuccess?: () => void }) => {
+        options.onSuccess?.()
+      }
+    )
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    // Check the checkbox
+    const checkbox = screen.getByTestId('pods-of-3-checkbox') as HTMLInputElement
+    await user.click(checkbox)
+    expect(checkbox.checked).toBe(true)
+
+    // Generate round
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    // Checkbox should be reset to unchecked
+    expect(checkbox.checked).toBe(false)
+  })
+
+  it('error handling still works with pods-of-3 checkbox enabled', async () => {
+    const { toast } = await import('sonner')
+    const user = userEvent.setup()
+    mockGeneratePods.mockImplementation(() => {
+      throw new Error('Not enough players for pods of 3')
+    })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('pods-of-3-checkbox'))
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(toast.error).toHaveBeenCalledWith('Not enough players for pods of 3')
+    expect(mockMutate).not.toHaveBeenCalled()
+  })
+
+  it('algorithm warnings display via toast.warning with pods-of-3 enabled', async () => {
+    const { toast } = await import('sonner')
+    const user = userEvent.setup()
+    mockGeneratePods.mockReturnValue({
+      assignments: [],
+      warnings: ['5 players: 1 pod of 4 + 1 bye (no valid 3-player split)'],
+    })
+
+    render(<AdminControls {...defaultProps} />, { wrapper: createWrapper() })
+
+    await user.click(screen.getByTestId('pods-of-3-checkbox'))
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(toast.warning).toHaveBeenCalledWith('5 players: 1 pod of 4 + 1 bye (no valid 3-player split)')
+  })
+
+  // --- Passphrase feedback loop (invalid passphrase re-opens modal) ---
+
+  it('generate round onError re-opens passphrase modal on invalid passphrase', async () => {
+    const user = userEvent.setup()
+    const onPassphraseNeeded = vi.fn()
+    mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
+    mockMutate.mockImplementation(
+      (_params: unknown, options: { onError?: (e: unknown) => void }) => {
+        options.onError?.(new Error('invalid passphrase provided'))
+      }
+    )
+
+    render(
+      <AdminControls {...defaultProps} onPassphraseNeeded={onPassphraseNeeded} />,
+      { wrapper: createWrapper() }
+    )
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(onPassphraseNeeded).toHaveBeenCalledTimes(1)
+    expect(onPassphraseNeeded).toHaveBeenCalledWith(INVALID_PASSPHRASE_RETRY_MESSAGE)
+  })
+
+  it('generate round onError does NOT re-open modal on a non-passphrase error', async () => {
+    const user = userEvent.setup()
+    const onPassphraseNeeded = vi.fn()
+    mockGeneratePods.mockReturnValue({ assignments: [], warnings: [] })
+    mockMutate.mockImplementation(
+      (_params: unknown, options: { onError?: (e: unknown) => void }) => {
+        options.onError?.(new Error('event has ended'))
+      }
+    )
+
+    render(
+      <AdminControls {...defaultProps} onPassphraseNeeded={onPassphraseNeeded} />,
+      { wrapper: createWrapper() }
+    )
+
+    await user.click(screen.getByTestId('generate-round-btn'))
+
+    expect(onPassphraseNeeded).not.toHaveBeenCalled()
+  })
+
+  it('end event onError re-opens passphrase modal on invalid passphrase', async () => {
+    const user = userEvent.setup()
+    const onPassphraseNeeded = vi.fn()
+    mockEndMutate.mockImplementation(
+      (_params: unknown, options: { onError?: (e: unknown) => void }) => {
+        options.onError?.(new Error('invalid passphrase provided'))
+      }
+    )
+
+    render(
+      <AdminControls {...defaultProps} onPassphraseNeeded={onPassphraseNeeded} />,
+      { wrapper: createWrapper() }
+    )
+
+    await user.click(screen.getByTestId('end-event-btn'))
+    await user.click(screen.getByTestId('confirm-dialog-confirm-btn'))
+
+    expect(onPassphraseNeeded).toHaveBeenCalledTimes(1)
+    expect(onPassphraseNeeded).toHaveBeenCalledWith(INVALID_PASSPHRASE_RETRY_MESSAGE)
+  })
+
+  it('end event onError does NOT re-open modal on a non-passphrase error', async () => {
+    const user = userEvent.setup()
+    const onPassphraseNeeded = vi.fn()
+    mockEndMutate.mockImplementation(
+      (_params: unknown, options: { onError?: (e: unknown) => void }) => {
+        options.onError?.(new Error('something else failed'))
+      }
+    )
+
+    render(
+      <AdminControls {...defaultProps} onPassphraseNeeded={onPassphraseNeeded} />,
+      { wrapper: createWrapper() }
+    )
+
+    await user.click(screen.getByTestId('end-event-btn'))
+    await user.click(screen.getByTestId('confirm-dialog-confirm-btn'))
+
+    expect(onPassphraseNeeded).not.toHaveBeenCalled()
   })
 })

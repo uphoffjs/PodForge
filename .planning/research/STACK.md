@@ -1,227 +1,189 @@
-# Stack Research
+# Stack Research — v5.0 Mid-Event Flow & Round Formats
 
-**Domain:** Real-time event management web app (MTG Commander pod pairing)
-**Researched:** 2026-02-20
+**Domain:** MTG Commander pod-pairing web app (subsequent milestone — additive features only)
+**Researched:** 2026-06-27
 **Confidence:** HIGH
 
-## Recommended Stack
+> Supersedes the v4.0 STACK.md. The existing stack (React 19, Vite, Supabase, Tailwind CSS v4,
+> TypeScript, TanStack Query, Vitest, Cypress, Stryker) is already validated and in production.
+> This research covers ONLY what is new for v5.0.
 
-### Core Technologies
+## Verdict (read this first)
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| React | ^19.2.4 | UI framework | Current stable. React 19 includes use() hook for async data, improved Suspense, and better concurrent features. No SSR/RSC needed for this SPA. |
-| Vite | ^7.3.1 | Build tool + dev server | Standard for React SPAs in 2026. Sub-second HMR, native ESM, built-in TypeScript support. Requires Node.js 20.19+ or 22.12+. |
-| TypeScript | ^5.9.3 | Type safety | Current stable. TS 6.0 is in beta (Feb 2026) -- do not use beta for production. 5.9 is mature and well-supported. |
-| Supabase JS | ^2.95.2 | Backend-as-a-service client | Provides Postgres database, Realtime subscriptions (Postgres Changes, Broadcast, Presence), and Row Level Security. No need for a custom backend. |
-| Tailwind CSS | ^4.2.0 | Utility-first CSS | v4 is a ground-up rewrite: 5x faster full builds, CSS-first config via @theme directive (no tailwind.config.js needed), automatic content detection. |
-| @tailwindcss/vite | ^4.2.0 | Tailwind Vite integration | First-party Vite plugin. Replaces the old PostCSS plugin approach. Zero config -- just add to vite.config.ts and `@import "tailwindcss"` in CSS. |
+**No new runtime dependencies are required for any v5.0 feature.** All three features
+(mid-event join UX, 80+20 timer format, fault-injection E2E campaign) are expressible with the
+libraries already in `package.json` and the existing server-authoritative timer model.
 
-### Database & Backend
+The only backend change worth considering is **one nullable schema column** on `round_timers`
+(`overtime_minutes`) plus a new migration `00005`, to keep the overtime length
+server-authoritative. Everything else is application code (display logic, UI, tests) on top of
+the current stack.
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| Supabase (hosted) | Latest | Postgres + Realtime + Auth infrastructure | Managed Postgres with built-in Realtime via WebSockets. Free tier supports up to 500 concurrent connections. Perfect for this scale (8-16 players per event). |
-| Supabase Realtime | (bundled) | Live updates for pod assignments, player joins/drops, timer state | Postgres Changes subscription pattern: `supabase.channel().on('postgres_changes', {...}).subscribe()`. Supports INSERT/UPDATE/DELETE filtering by table and column values. |
+| Feature | New npm dep? | New schema? | New RPC? | Notes |
+|---------|--------------|-------------|----------|-------|
+| Mid-event join UX | No | No (reuse `players.created_at` / `round_number`) | No | Pure UI + existing Realtime on `players` |
+| 80+20 timer format | No | **1 nullable column** (recommended) | Modify `generate_round` only | Count-up already implemented |
+| Fault-injection E2E | No | No | No | Cypress 15.10 already configured |
 
-### Routing
+## Existing Capabilities That Already Cover v5.0
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| React Router | ^7.13.0 | Client-side routing | v7 in Library Mode (not Framework Mode). Use `createBrowserRouter` + `RouterProvider` for SPA routing. Import everything from `react-router` -- `react-router-dom` package is no longer needed in v7. |
+Verified by reading source, not assumed:
+
+| Need | Already exists | Where | Evidence |
+|------|----------------|-------|----------|
+| Count UP past zero ("how far over") | Yes | `src/hooks/useCountdown.ts` | `formatDisplay()` returns `+M:SS` for negative remaining; `isOvertime = remainingSeconds <= 0` |
+| Server-authoritative countdown (zero drift) | Yes | `useCountdown.ts` + `00004_timer_system.sql` | Each tick recomputes `(expires_at - now) / 1000`; never trusts client clock |
+| OVERTIME label + flashing-at-zero UI | Yes | `src/components/TimerDisplay.tsx` | `urgency: 'expired'` → `animate-pulse`; `statusLabel` switches to `OVERTIME` |
+| Realtime push of timer changes to all clients | Yes | `src/hooks/useEventChannel.ts` | `round_timers` subscribed, `event_id` filtered, `REPLICA IDENTITY FULL` set |
+| Pause / resume / extend / cancel | Yes | `pause_timer`/`resume_timer`/`extend_timer`/`cancel_timer` RPCs | `00004_timer_system.sql` |
+| Player join + Realtime list refresh | Yes | `src/hooks/useJoinEvent.ts`, `useEventChannel.ts` | `players` insert + `['players', eventId]` invalidation |
+| Round number / join ordering for "joined mid-event" flag | Yes | `rounds.round_number`, `players.created_at` | Existing columns; no new storage to detect post-round-1 joins |
+
+## Recommended Stack (v5.0 delta)
+
+There are **no additions to the dependency stack.** Versions below confirmed against
+`package.json` (2026-06-27).
+
+### Core Technologies (reused, no change)
+
+| Technology | Version | Purpose for v5.0 | Why no change needed |
+|------------|---------|------------------|----------------------|
+| `@supabase/supabase-js` | ^2.97.0 | Timer RPC + Realtime for overtime/join | Existing RPC + `round_timers` channel already carry the data |
+| `@tanstack/react-query` | ^5.90.21 | `['timer', eventId]` cache, 5s staleTime | Already drives `useTimer`; a new column rides the existing query |
+| `react` / `react-dom` | ^19.2.0 | Timer display + join-indicator UI | Native `setInterval` tick already in `useCountdown` |
+| `tailwindcss` / `@tailwindcss/vite` | ^4.2.1 | Segment/OVERTIME styling, "joined this round" badge | `animate-pulse` + urgency classes already present |
+| `lucide-react` | ^0.575.0 | Any new icon (join indicator / overtime glyph) | Already vendored; reuse an existing icon |
+| `sonner` | ^2.0.7 | Mid-event join confirmation toast | Already the standard feedback mechanism |
+| `cypress` | ^15.10.0 | Fault-injection E2E campaign | Framework + `eslint-plugin-cypress` ^6.1.0 already configured |
 
 ### Supporting Libraries
 
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| qrcode.react | ^4.2.0 | QR code generation | Renders QR codes as SVG or Canvas. Peer deps include React 19. Use for event join links displayed on the event info bar. |
-| bcryptjs | ^3.0.3 | Client-side passphrase hashing | Pure JS bcrypt implementation that works in browsers. Use to hash admin passphrases before storing in Supabase, and to compare input against stored hash. Max input: 72 bytes. |
-| sonner | ^2.x | Toast notifications | 2-3KB, no hooks required, works from anywhere. Use for "Player joined", "Round generated", error messages, and copy-to-clipboard confirmations. |
-| lucide-react | ^0.575.0 | Icons | Tree-shakeable SVG icons. Each icon imported individually -- only used icons in bundle. Use for UI chrome: timer, copy, QR expand, admin controls. |
+None to add. The 80+20 segmented countdown needs **no date/time library** and **no
+timer/hook library** — see "What NOT to Use."
 
-### Testing Stack
+### Development Tools (reused, no change)
 
-| Library | Version | Purpose | Why Recommended |
-|---------|---------|---------|-----------------|
-| Vitest | ^4.0.18 | Test runner | Native Vite integration -- shares your vite.config.ts, no separate config. Jest-compatible API. Fastest option for Vite projects. |
-| @testing-library/react | ^16.3.2 | Component testing | User-centric testing: queries by role, text, label. Requires @testing-library/dom as peer dep. |
-| @testing-library/dom | ^10.x | DOM testing utilities | Required peer dependency for @testing-library/react v16+. |
-| @testing-library/jest-dom | ^6.9.1 | DOM assertion matchers | Provides `.toBeInTheDocument()`, `.toHaveTextContent()`, etc. Import `@testing-library/jest-dom/vitest` in setup file for Vitest compatibility. |
-| @testing-library/user-event | ^14.6.1 | User interaction simulation | Simulates real user events (click, type, tab). Prefer over `fireEvent` for realistic behavior. |
-| jsdom | latest | Browser environment simulation | Use as Vitest environment (`environment: 'jsdom'`). More complete browser API than happy-dom. Choose jsdom over happy-dom because this project uses Notifications API and other browser APIs that happy-dom may not support. |
-
-### Development Tools
-
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| ESLint | Linting | Use flat config (eslint.config.mjs). Include: @eslint/js, typescript-eslint, eslint-plugin-react-hooks, eslint-plugin-react-refresh. Vite template includes a working config. |
-| Prettier | Code formatting | Pair with eslint-config-prettier to avoid conflicts. Use .prettierrc for consistency. |
-| typescript-eslint | TS-aware linting | Provides type-checked rules. Use `tseslint.configs.recommended` for sensible defaults. |
+| Tool | Purpose for v5.0 | Notes |
+|------|------------------|-------|
+| Vitest ^4.0.18 + @vitest/coverage-v8 | Unit-test new segment math in `useCountdown` | 100% coverage threshold enforced — every new branch needs a test |
+| Stryker ^9.5.1 | Mutation-test the overtime/segment-boundary logic | Timer logic is a "critical hook"; match the established ~100% kill rate |
+| Cypress ^15.10.0 + eslint-plugin-cypress ^6.1.0 | Fault-injection specs (`cypress/e2e/*.cy.js`) | Reuse existing dynamic `expires_at` fixtures to avoid wall-clock flake |
 
 ## Installation
 
 ```bash
-# Scaffold project
-npm create vite@latest pod-pairer -- --template react-swc-ts
-
-# Core dependencies
-npm install react react-dom @supabase/supabase-js react-router qrcode.react bcryptjs sonner lucide-react
-
-# Tailwind CSS v4
-npm install tailwindcss @tailwindcss/vite
-
-# Dev dependencies -- testing
-npm install -D vitest @testing-library/react @testing-library/dom @testing-library/jest-dom @testing-library/user-event jsdom
-
-# Dev dependencies -- types
-npm install -D @types/bcryptjs
-
-# Dev dependencies -- linting (included by Vite template, verify versions)
-npm install -D eslint @eslint/js typescript-eslint eslint-plugin-react-hooks eslint-plugin-react-refresh
+# Nothing to install. No new dependencies for v5.0.
 ```
 
-## Key Configuration
+## The 80+20 Timer Model — How It Maps to Existing Schema
 
-### vite.config.ts
+The existing `round_timers` row already holds everything except the overtime length:
 
-```typescript
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react-swc'
-import tailwindcss from '@tailwindcss/vite'
-
-export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-  ],
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: './src/test/setup.ts',
-  },
-})
+```
+round_timers (
+  duration_minutes,    -- = 80 (the main segment)
+  started_at,
+  expires_at,          -- = started_at + 80 min  (END of main segment; current semantics)
+  remaining_seconds,   -- pause snapshot
+  paused_at, status
+)
 ```
 
-### src/test/setup.ts
+Three display phases, all derivable client-side once the overtime length is known:
 
-```typescript
-import '@testing-library/jest-dom/vitest'
-```
+| Phase | Condition | Display | Label | Source |
+|-------|-----------|---------|-------|--------|
+| Main | `now < expires_at` | `expires_at - now` counts 80:00 → 0:00 | "Round Timer" | existing `computeRemaining` |
+| Overtime | `expires_at <= now < expires_at + overtime` | `(expires_at + overtime) - now` counts 20:00 → 0:00 | "OVERTIME" | new branch |
+| Over | `now >= expires_at + overtime` | `now - (expires_at + overtime)` counts up `+M:SS` | "OVERTIME" / "OVER" | existing `formatDisplay` negative path |
 
-### src/app.css (Tailwind v4 -- no config file needed)
+**Where does the 20 come from?** Two viable options:
 
-```css
-@import "tailwindcss";
+1. **Recommended — one nullable column** `overtime_minutes INTEGER` on `round_timers`
+   (NULL = classic single-segment behavior; `20` = 80+20 format). Add via new migration
+   `supabase/migrations/00005_timer_overtime.sql` and pass it through a modified `generate_round`
+   (add `p_overtime_minutes INTEGER DEFAULT NULL`, mirroring how `p_timer_duration_minutes` was
+   added in `00004`). Keeps overtime length **server-authoritative** and configurable, needs
+   **no new RPC** and **no Realtime/publication change** (the column rides the existing
+   `round_timers` channel; `REPLICA IDENTITY FULL` already set).
 
-@theme {
-  --color-pod-1: #3b82f6;
-  --color-pod-2: #10b981;
-  --color-pod-3: #f59e0b;
-  --color-pod-4: #ef4444;
-  --color-timer-warning: #f59e0b;
-  --color-timer-danger: #ef4444;
-}
-```
+2. **Zero-schema fallback** — treat overtime as a fixed client constant (20 min) gated by a
+   format flag inferred from `duration_minutes === 80`. Avoids a migration but couples the format
+   to a magic number and breaks the server-authoritative principle. **Not recommended.**
 
-### tsconfig.json additions
+### Integration points (for roadmap)
 
-```json
-{
-  "compilerOptions": {
-    "types": ["vitest/globals", "@testing-library/jest-dom"]
-  }
-}
-```
+- **Type:** extend `RoundTimer` in `src/types/database.ts` with `overtime_minutes: number | null`.
+- **Display logic:** add the overtime-segment branch in `src/hooks/useCountdown.ts`
+  (`computeRemaining` / `computeUrgency` / `formatDisplay` / `CountdownState`). Highest-value
+  change; needs the most unit + mutation coverage.
+- **Write path:** `generate_round` RPC (`00004` → new `00005`) + `src/hooks/useGenerateRound.ts`
+  (`GenerateRoundParams` already has `timerDurationMinutes?`; add `overtimeMinutes?`).
+- **UI:** a timer-format picker wherever round-duration presets live today (the 60/90/120 picker
+  in the round-generation UI), plus segment-aware labeling in `TimerDisplay.tsx`.
+
+### Pause/resume caveat (flag for the implementing phase, not a stack item)
+
+`pause_timer` snapshots `remaining_seconds = GREATEST(0, expires_at - now)` — it floors at 0, so
+pausing **during overtime** loses the overtime position. The 80+20 work must decide whether
+overtime is pausable and, if so, adjust the snapshot to allow negative remaining (or store an
+overtime-relative offset). This is application/migration logic, not a dependency choice.
+
+## Mid-Event Join UX — Stack Notes
+
+No new tech. Detecting "joined after round 1" uses existing data: compare a player's `created_at`
+(or the first round they appear in `pod_players`) against the current `round_number`. The
+indicator is a Tailwind badge on the existing `PlayerList`/`PlayerItem`, refreshed by the
+already-subscribed `players` Realtime channel. `lucide-react` supplies any icon; `sonner` supplies
+any confirmation toast. The pairing algorithm already tolerates empty opponent history and 0 byes
+(validated in v2.0/v4.0), so there is no algorithm dependency.
+
+## Fault-Injection E2E Campaign — Stack Notes
+
+Tooling only. Cypress 15.10 and `eslint-plugin-cypress` 6.1 are installed. Continue the
+established conventions: `.cy.js` specs, `data-testid` selectors, `cy.intercept()` for fault
+injection (force `round_timers` / `players` / RPC responses into error states), dynamic
+`expires_at` fixtures for timer faults, and no arbitrary `cy.wait(ms)`. No new packages. Note: the
+existing dead `createRealEvent` Cypress command needs `SUPABASE_URL` / `SUPABASE_ANON_KEY` wired
+into both `cypress.config.js` and `cypress.yml` if any new fault spec requires a real backend —
+add those only if real-backend faults are in scope.
 
 ## Alternatives Considered
 
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| React Router (Library Mode) | TanStack Router | If you want file-based routing or type-safe route params. Overkill for this project's simple URL structure (/event/:id). |
-| bcryptjs | Web Crypto PBKDF2 | Never for password hashing. PBKDF2 via SubtleCrypto is not suitable -- it lacks bcrypt/scrypt's resistance to GPU/ASIC attacks. |
-| bcryptjs | Supabase Edge Function | If you want server-side hashing. Adds complexity (Edge Function deployment) for a casual app where client-side hashing of a shared passphrase is acceptable. |
-| Sonner | React Hot Toast | If you prefer a different API style. Sonner is smaller (2-3KB) and doesn't require hooks. Both are fine choices. |
-| jsdom | happy-dom | If test speed is critical and you don't use advanced browser APIs. happy-dom is faster but less complete. This project needs Notification API mocking, favoring jsdom. |
-| Vitest | Jest | Never for a Vite project. Jest requires separate config, slower startup, no native ESM. Vitest shares Vite's config and transform pipeline. |
-| qrcode.react | react-qr-code | Either works. qrcode.react has explicit React 19 peer dep support (v4.2.0), wider adoption (1188+ dependents), and renders both SVG and Canvas. |
-| Zustand | React Context + useReducer | For this project, React Context is likely sufficient. Zustand only needed if state management becomes complex. Start with Context, add Zustand if pain emerges. |
-| Lucide React | Heroicons, React Icons | Heroicons if using Tailwind UI. React Icons bundles everything (large). Lucide is tree-shakeable and actively maintained. |
-| Tailwind CSS v4 | Tailwind CSS v3 | Never. v3 is legacy. v4 is faster, simpler config, and the only actively developed version. |
+| Recommended | Alternative | When the alternative would make sense |
+|-------------|-------------|----------------------------------------|
+| Native `Date` + `setInterval` recompute (existing) | `date-fns` / `dayjs` / `luxon` | Only if you needed timezone math or human-readable durations — neither applies; display is `M:SS` arithmetic |
+| Extend `useCountdown` for segments | `react-timer-hook` / `use-timer` / `react-countdown` | Only if you wanted client-owned timer state — would break the server-authoritative, zero-drift model that already works |
+| One nullable `overtime_minutes` column | `timer_format` enum + lookup table | Overkill for a single 80+20 format; revisit only if many named formats emerge |
+| Modify `generate_round` | New `set_timer_format` RPC | Only if format must change after a round is generated (not a v5.0 requirement) |
 
-## What NOT to Use
+## What NOT to Add
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| Next.js | This is a pure client-side SPA with no SSR/SSG needs. Next.js adds server complexity, deployment constraints, and unnecessary abstraction for a Supabase-backed SPA. | Vite + React + React Router |
-| Redux / Redux Toolkit | Massive overkill for this project's state needs. Event data lives in Supabase; local state is minimal (current view, admin auth status, timer display). | React Context + useState, or Zustand if needed |
-| Supabase Auth | The spec explicitly requires no user accounts. Supabase Auth is for user registration/login flows. This project uses per-event passphrases, not user auth. | bcryptjs for client-side passphrase hash comparison |
-| Firebase / Firestore | Supabase is prescribed. Firebase lacks Postgres, RLS, and the SQL-based data model defined in the spec. | Supabase |
-| Create React App (CRA) | Deprecated and unmaintained since 2023. | Vite |
-| CSS Modules / styled-components | Tailwind CSS is prescribed. Adding a second styling system creates confusion. | Tailwind CSS v4 |
-| Moment.js | Deprecated. For timer countdown display (mm:ss), raw Date arithmetic or a tiny helper function is sufficient. No date library needed. | Native Date/Math for mm:ss countdown |
-| Socket.IO | Supabase Realtime uses WebSockets internally. Adding Socket.IO creates a parallel real-time system with no benefit. | Supabase Realtime (Postgres Changes) |
-| TypeScript 6.0 beta | Currently in beta (announced Feb 11, 2026). Not stable. TS 7.0 (Go-based rewrite) is the future, but 5.9 is the correct production choice today. | TypeScript 5.9.3 |
-
-## Stack Patterns
-
-**Passphrase verification pattern (client-side):**
-- On event creation: hash passphrase with `bcryptjs.hash(passphrase, 10)`, store hash in `events.admin_passphrase_hash`
-- On admin action: prompt for passphrase, compare with `bcryptjs.compare(input, storedHash)`
-- On success: store verification flag in `sessionStorage` (per-event key) so user isn't re-prompted
-- Security note: This is a casual shared passphrase for a game night app, not a bank. Client-side hashing is appropriate for this threat model.
-
-**Realtime subscription pattern:**
-- Subscribe to Postgres Changes on mount via `useEffect`
-- Filter by `event_id` column to scope updates to current event
-- Unsubscribe in cleanup: `supabase.removeChannel(channel)`
-- Tables to watch: `players` (joins/drops), `rounds` (new rounds), `pods` + `pod_players` (assignments), `events` (timer state changes)
-
-**Timer pattern (no library needed):**
-- Store `timer_duration`, `timer_started_at`, `timer_paused_remaining` in `events` table
-- Client calculates remaining time: `duration - (now - started_at)` or uses `paused_remaining` when paused
-- Update display every second with `setInterval` in `useEffect`
-- Color thresholds: normal (> 10min), warning (5-10min), danger (< 5min), expired (0:00)
+| Any date/time library (`date-fns`, `dayjs`, `luxon`, `moment`) | Adds a dependency for arithmetic the code already does; no tz/calendar needs | Native `Date` math in `useCountdown.ts` (already present) |
+| Timer/countdown hook libraries (`react-timer-hook`, `use-timer`, `react-countdown`) | Moves state to the client and reintroduces drift; duplicates working logic | Existing `useCountdown` recompute-from-`expires_at` pattern |
+| A separate `overtime_timers` table or a second `round_timers` row | Splits one logical timer across rows; complicates Realtime, pause/resume, and cancel | One row + `overtime_minutes` column; derive segments client-side |
+| Client-only overtime constant with no schema | Breaks server-authoritative consistency; magic-number coupling to `duration_minutes === 80` | Nullable `overtime_minutes` column (Option 1) |
+| New Realtime channel / publication change for overtime | Unnecessary; the new column rides the existing `round_timers` subscription | Existing `useEventChannel` `round_timers` filter |
 
 ## Version Compatibility
 
-| Package | Compatible With | Notes |
-|---------|-----------------|-------|
-| Vite 7.3.x | Node.js 20.19+ or 22.12+ | Node 18 dropped. Ensure CI uses Node 20 or 22. |
-| React 19.2.x | @testing-library/react 16.x | RTL 16 requires React 18+, works with 19. |
-| qrcode.react 4.2.0 | React 16.8 - 19.x | Explicit React 19 peer dep added in 4.2.0. |
-| Tailwind CSS 4.2.x | Vite 7.x via @tailwindcss/vite | No PostCSS plugin needed. Direct Vite plugin. |
-| Vitest 4.0.x | Vite 7.x | Vitest 4 designed for Vite 7. Same config file. |
-| TypeScript 5.9.x | All above packages | Stable, well-tested. Do not use 6.0 beta. |
-| @supabase/supabase-js 2.95.x | React 19, Vite 7 | Framework-agnostic. No peer dep conflicts. |
-| bcryptjs 3.0.x | Browser + Node | Pure JS, no native deps. Works in Vite bundle. |
+All versions confirmed against `package.json` (2026-06-27). No upgrades required and no new
+packages introduced, so there are no new compatibility surfaces. Adding a nullable column to
+`round_timers` is backward compatible with the deployed `00004` migration and with existing
+`RoundTimer` consumers (column defaults to NULL → current single-segment behavior preserved).
 
 ## Sources
 
-- [Vite 7.0 announcement](https://vite.dev/blog/announcing-vite7) -- verified Node.js requirements, version 7.3.1 current (HIGH confidence)
-- [Vite releases](https://vite.dev/releases) -- version history (HIGH confidence)
-- [React versions](https://react.dev/versions) -- React 19.2.4 current stable (HIGH confidence)
-- [Supabase JS releases](https://github.com/supabase/supabase-js/releases) -- v2.95.2 current (HIGH confidence)
-- [Supabase Realtime Postgres Changes docs](https://supabase.com/docs/guides/realtime/postgres-changes) -- subscription API patterns (HIGH confidence)
-- [Tailwind CSS v4.0 blog](https://tailwindcss.com/blog/tailwindcss-v4) -- v4 architecture, CSS-first config (HIGH confidence)
-- [Tailwind CSS v4 Vite installation](https://tailwindcss.com/docs) -- @tailwindcss/vite plugin setup (HIGH confidence)
-- [Vitest npm](https://www.npmjs.com/package/vitest) -- v4.0.18 current (HIGH confidence)
-- [Vitest 4.0 announcement](https://vitest.dev/blog/vitest-4) -- Vite 7 compatibility (HIGH confidence)
-- [React Router npm](https://www.npmjs.com/package/react-router) -- v7.13.0, Library Mode docs (HIGH confidence)
-- [React Router modes](https://reactrouter.com/start/modes) -- Library Mode vs Framework Mode (HIGH confidence)
-- [qrcode.react npm](https://www.npmjs.com/package/qrcode.react) -- v4.2.0, React 19 peer dep (HIGH confidence)
-- [qrcode.react React 19 support](https://github.com/zpao/qrcode.react/compare/v4.1.0...v4.2.0) -- peer dep change confirmed (HIGH confidence)
-- [bcryptjs npm](https://www.npmjs.com/package/bcryptjs) -- v3.0.3, browser support (HIGH confidence)
-- [Web Crypto API limitations for password hashing](https://gist.github.com/chrisveness/770ee96945ec12ac84f134bf538d89fb) -- PBKDF2 not suitable vs bcrypt/scrypt (MEDIUM confidence)
-- [TypeScript npm](https://www.npmjs.com/package/typescript) -- 5.9.3 stable, 6.0 beta (HIGH confidence)
-- [TypeScript 6.0 Beta announcement](https://devblogs.microsoft.com/typescript/announcing-typescript-6-0-beta/) -- not production-ready (HIGH confidence)
-- [@testing-library/react npm](https://www.npmjs.com/package/@testing-library/react) -- v16.3.2 (HIGH confidence)
-- [@testing-library/jest-dom npm](https://www.npmjs.com/package/@testing-library/jest-dom) -- v6.9.1, Vitest integration (HIGH confidence)
-- [@testing-library/user-event npm](https://www.npmjs.com/package/@testing-library/user-event) -- v14.6.1 (HIGH confidence)
-- [jsdom vs happy-dom discussion](https://github.com/vitest-dev/vitest/discussions/1607) -- completeness vs speed tradeoff (MEDIUM confidence)
-- [Sonner npm](https://www.npmjs.com/package/sonner) -- toast library, 2-3KB (MEDIUM confidence)
-- [Lucide React npm](https://www.npmjs.com/package/lucide-react) -- v0.575.0, tree-shakeable (HIGH confidence)
-- [ESLint flat config](https://eslint.org/blog/2025/03/flat-config-extends-define-config-global-ignores/) -- flat config standard in 2026 (HIGH confidence)
+- `package.json` — exact installed versions (HIGH, first-party)
+- `src/hooks/useCountdown.ts` — confirmed count-up/overtime already implemented (HIGH, first-party)
+- `src/components/TimerDisplay.tsx` — confirmed OVERTIME label + flashing-at-zero UI (HIGH, first-party)
+- `src/hooks/useTimer.ts`, `src/hooks/useGenerateRound.ts` — query/mutation wiring (HIGH, first-party)
+- `supabase/migrations/00004_timer_system.sql` — `round_timers` schema, RPCs, Realtime/replica identity (HIGH, first-party)
+- `src/types/database.ts` — `RoundTimer` shape (HIGH, first-party)
+- `.planning/codebase/STACK.md`, `.planning/codebase/INTEGRATIONS.md` — existing inventory cross-check (HIGH, first-party)
 
 ---
-*Stack research for: Commander Pod Pairer -- real-time event management SPA*
-*Researched: 2026-02-20*
+*Stack research for: Commander Pod Pairer v5.0 — mid-event flow & round formats milestone*
+*Researched: 2026-06-27*

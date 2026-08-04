@@ -8,13 +8,26 @@ import { useRounds } from '@/hooks/useRounds'
 import { useAllRoundsPods } from '@/hooks/useAllRoundsPods'
 import type { PodWithPlayers } from '@/hooks/usePods'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import {
+  isInvalidPassphraseError,
+  INVALID_PASSPHRASE_RETRY_MESSAGE,
+} from '@/lib/passphrase-error'
 import type { Player, Round } from '@/types/database'
+
+// Timer duration presets. Each preset carries its overtime so the 80+20 chip
+// can thread overtimeMinutes=20 into generate_round; plain presets send 0.
+const PRESETS = [
+  { id: 60, label: '60 min', duration: 60, overtime: 0 },
+  { id: 90, label: '90 min', duration: 90, overtime: 0 },
+  { id: 120, label: '120 min', duration: 120, overtime: 0 },
+  { id: '80-20', label: '80+20', duration: 80, overtime: 20 },
+] as const
 
 interface AdminControlsProps {
   eventId: string
   isAdmin: boolean
   passphrase: string | null
-  onPassphraseNeeded: () => void
+  onPassphraseNeeded: (error?: string) => void
   players: Player[]
   isEventEnded: boolean
 }
@@ -49,7 +62,10 @@ export function AdminControls({
 }: AdminControlsProps) {
   const [isGenerating, setIsGenerating] = useState(false)
   const [showEndConfirm, setShowEndConfirm] = useState(false)
-  const [selectedDuration, setSelectedDuration] = useState<number | null>(null)
+  const [selectedPreset, setSelectedPreset] = useState<
+    (typeof PRESETS)[number] | null
+  >(null)
+  const [allowPodsOf3, setAllowPodsOf3] = useState(false)
 
   const generateRound = useGenerateRound(eventId)
   const endEvent = useEndEvent(eventId)
@@ -90,7 +106,7 @@ export function AdminControls({
     }
 
     try {
-      const result = generatePods(activePlayers, previousRounds)
+      const result = generatePods(activePlayers, previousRounds, allowPodsOf3)
 
       // Show algorithm warnings
       for (const warning of result.warnings) {
@@ -102,15 +118,24 @@ export function AdminControls({
 
       setIsGenerating(true)
       generateRound.mutate(
-        { passphrase, podAssignments, timerDurationMinutes: selectedDuration ?? undefined },
+        {
+          passphrase,
+          podAssignments,
+          timerDurationMinutes: selectedPreset?.duration,
+          overtimeMinutes: selectedPreset?.overtime ?? 0,
+        },
         {
           onSuccess: () => {
             toast.success(`Round ${roundCount + 1} generated!`)
             setIsGenerating(false)
-            setSelectedDuration(null)
+            setSelectedPreset(null)
+            setAllowPodsOf3(false)
           },
-          onError: () => {
+          onError: (error) => {
             setIsGenerating(false)
+            if (isInvalidPassphraseError(error)) {
+              onPassphraseNeeded(INVALID_PASSPHRASE_RETRY_MESSAGE)
+            }
           },
         },
       )
@@ -141,8 +166,11 @@ export function AdminControls({
         onSuccess: () => {
           setShowEndConfirm(false)
         },
-        onError: () => {
+        onError: (error) => {
           setShowEndConfirm(false)
+          if (isInvalidPassphraseError(error)) {
+            onPassphraseNeeded(INVALID_PASSPHRASE_RETRY_MESSAGE)
+          }
         },
       },
     )
@@ -168,24 +196,38 @@ export function AdminControls({
       {!isEventEnded && (
         <div className="flex items-center gap-2 mb-3">
           <span className="text-sm text-text-secondary whitespace-nowrap">Timer:</span>
-          {[60, 90, 120].map((duration) => (
+          {PRESETS.map((preset) => (
             <button
-              key={duration}
+              key={preset.id}
               type="button"
               onClick={() =>
-                setSelectedDuration((prev) => (prev === duration ? null : duration))
+                setSelectedPreset((prev) => (prev?.id === preset.id ? null : preset))
               }
-              data-testid={`timer-duration-${duration}`}
+              data-testid={`timer-duration-${preset.id}`}
               className={`flex-1 rounded-lg py-2 px-3 text-sm font-medium transition-colors min-h-[36px] ${
-                selectedDuration === duration
+                selectedPreset?.id === preset.id
                   ? 'bg-accent text-surface border border-accent'
                   : 'bg-surface border border-border text-text-secondary hover:border-border-bright'
               }`}
             >
-              {duration} min
+              {preset.label}
             </button>
           ))}
         </div>
+      )}
+
+      {/* Allow pods of 3 toggle */}
+      {!isEventEnded && (
+        <label className="flex items-center gap-2 mb-3 cursor-pointer" data-testid="pods-of-3-toggle">
+          <input
+            type="checkbox"
+            checked={allowPodsOf3}
+            onChange={(e) => setAllowPodsOf3(e.target.checked)}
+            data-testid="pods-of-3-checkbox"
+            className="w-4 h-4 rounded border-border bg-surface-raised text-accent cursor-pointer"
+          />
+          <span className="text-sm text-text-secondary">Allow pods of 3</span>
+        </label>
       )}
 
       <button

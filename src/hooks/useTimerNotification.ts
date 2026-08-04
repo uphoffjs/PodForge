@@ -15,9 +15,14 @@ export function useTimerNotification(
   timer: RoundTimer | null,
   countdown: CountdownState | null
 ): UseTimerNotificationReturn {
-  const isSupported = typeof window !== 'undefined' && 'Notification' in window
+  // Client-only SPA (no SSR): `window` is always defined where this hook runs.
+  const isSupported = 'Notification' in window
 
   const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>(() => {
+    // Stryker disable next-line ConditionalExpression: equivalent mutant — when
+    // Notification is absent (!isSupported), the try/catch below also yields
+    // 'unsupported' (bare `Notification` throws), so removing this fast-path
+    // guard does not change the returned value.
     if (!isSupported) return 'unsupported'
     try {
       return Notification.permission
@@ -26,7 +31,14 @@ export function useTimerNotification(
     }
   })
 
-  const lastNotifiedTimerIdRef = useRef<string | null>(null)
+  // Per-boundary dedup keyed by `${timer.id}:overtime` / `${timer.id}:countup`.
+  // Keying on the id (not the timer object reference) survives Realtime row churn.
+  const notifiedRef = useRef<Set<string>>(new Set())
+  // Last observed phase for the current timer; null = no baseline yet (fresh
+  // mount or a just-switched timer.id) so a boundary crossed before we observed
+  // it is never re-announced (refresh/reconnect safe — TIMER-06).
+  const prevPhaseRef = useRef<string | null>(null)
+  const prevTimerIdRef = useRef<string | null>(null)
 
   const requestPermission = useCallback(async () => {
     if (!isSupported) return
@@ -38,35 +50,53 @@ export function useTimerNotification(
     }
   }, [isSupported])
 
-  // Fire notification when timer reaches zero
+  // Fire a browser notification exactly once at each forward phase boundary
+  // (main->overtime, overtime->count-up), deduped per boundary.
   useEffect(() => {
     if (!countdown || !timer) return
     if (countdown.isPaused || countdown.isCancelled) return
 
-    if (countdown.remainingSeconds <= 0 && countdown.isOvertime) {
-      if (lastNotifiedTimerIdRef.current !== timer.id) {
-        lastNotifiedTimerIdRef.current = timer.id
-        if (permission === 'granted') {
-          try {
-            new Notification("Time's Up!", {
-              body: 'Round timer has expired',
-              icon: '/favicon.ico',
-              tag: 'timer-expired',
-            })
-          } catch {
-            // iOS PWA: Notification constructor may throw — silently fail
-          }
-        }
+    // A new timer.id resets dedup + phase tracking. The first phase we observe
+    // for a timer is a baseline, never a crossing — so switching into a timer
+    // already past a boundary does not spuriously fire.
+    if (prevTimerIdRef.current !== timer.id) {
+      prevTimerIdRef.current = timer.id
+      notifiedRef.current.clear()
+      prevPhaseRef.current = null
+    }
+
+    const phase = countdown.phase
+    const prev = prevPhaseRef.current
+    prevPhaseRef.current = phase
+
+    // Stryker disable next-line ConditionalExpression: equivalent mutant — the
+    // boundary checks below require prev === 'main' / 'overtime', which a null
+    // baseline can never satisfy, so this guard never changes whether a
+    // notification fires. It is kept as documentary refresh/reconnect safety.
+    if (prev === null) return
+    if (permission !== 'granted') return
+
+    const fireOnce = (key: string, body: string) => {
+      if (notifiedRef.current.has(key)) return
+      notifiedRef.current.add(key)
+      try {
+        new Notification('Round Timer', {
+          body,
+          icon: '/favicon.ico',
+          tag: key,
+        })
+      } catch {
+        // iOS PWA: Notification constructor may throw — silently fail
       }
     }
-  }, [countdown, timer, permission])
 
-  // Reset lastNotifiedTimerId when timer changes to a new one
-  useEffect(() => {
-    if (timer && lastNotifiedTimerIdRef.current !== null && lastNotifiedTimerIdRef.current !== timer.id) {
-      lastNotifiedTimerIdRef.current = null
+    if (prev === 'main' && phase === 'overtime') {
+      fireOnce(`${timer.id}:overtime`, 'Overtime started')
     }
-  }, [timer?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (prev === 'overtime' && phase === 'countup') {
+      fireOnce(`${timer.id}:countup`, 'Round over')
+    }
+  }, [countdown, timer, permission])
 
   return {
     isSupported,

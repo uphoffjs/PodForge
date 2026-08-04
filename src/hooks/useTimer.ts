@@ -10,7 +10,7 @@ export function useTimer(eventId: string) {
         .from('round_timers')
         .select('*')
         .eq('event_id', eventId)
-        .in('status', ['running', 'paused'])
+        .in('status', ['running', 'paused', 'pending'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()

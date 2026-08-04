@@ -327,4 +327,96 @@ describe('PodCard', () => {
       expect(listItems[2]).toHaveTextContent('Bob')
     })
   })
+
+  describe('3-player pod rendering', () => {
+    it('renders all 3 player names in a 3-player pod', () => {
+      const players = [
+        makePlayer({ playerId: 'p1', playerName: 'Alice', seatNumber: 1 }),
+        makePlayer({ playerId: 'p2', playerName: 'Bob', seatNumber: 2 }),
+        makePlayer({ playerId: 'p3', playerName: 'Charlie', seatNumber: 3 }),
+      ]
+
+      render(
+        <PodCard
+          podNumber={1}
+          isBye={false}
+          players={players}
+          currentPlayerId={null}
+        />
+      )
+
+      expect(screen.getByTestId('pod-player-p1')).toHaveTextContent('Alice')
+      expect(screen.getByTestId('pod-player-p2')).toHaveTextContent('Bob')
+      expect(screen.getByTestId('pod-player-p3')).toHaveTextContent('Charlie')
+    })
+
+    it('shows seat labels 1st, 2nd, 3rd for a 3-player pod', () => {
+      const players = [
+        makePlayer({ playerId: 'p1', playerName: 'Alice', seatNumber: 1 }),
+        makePlayer({ playerId: 'p2', playerName: 'Bob', seatNumber: 2 }),
+        makePlayer({ playerId: 'p3', playerName: 'Charlie', seatNumber: 3 }),
+      ]
+
+      render(
+        <PodCard
+          podNumber={1}
+          isBye={false}
+          players={players}
+          currentPlayerId={null}
+        />
+      )
+
+      expect(screen.getByTestId('pod-seat-1')).toHaveTextContent('1st')
+      expect(screen.getByTestId('pod-seat-2')).toHaveTextContent('2nd')
+      expect(screen.getByTestId('pod-seat-3')).toHaveTextContent('3rd')
+    })
+
+    it('does NOT render a phantom 4th seat in a 3-player pod', () => {
+      const players = [
+        makePlayer({ playerId: 'p1', playerName: 'Alice', seatNumber: 1 }),
+        makePlayer({ playerId: 'p2', playerName: 'Bob', seatNumber: 2 }),
+        makePlayer({ playerId: 'p3', playerName: 'Charlie', seatNumber: 3 }),
+      ]
+
+      render(
+        <PodCard
+          podNumber={1}
+          isBye={false}
+          players={players}
+          currentPlayerId={null}
+        />
+      )
+
+      // No 4th seat should exist
+      expect(screen.queryByTestId('pod-seat-4')).not.toBeInTheDocument()
+      // Exactly 3 list items
+      const listItems = screen.getByTestId('pod-card-1').querySelectorAll('li')
+      expect(listItems).toHaveLength(3)
+    })
+
+    it('4-player pod still renders correctly (regression check)', () => {
+      const players = [
+        makePlayer({ playerId: 'p1', playerName: 'Alice', seatNumber: 1 }),
+        makePlayer({ playerId: 'p2', playerName: 'Bob', seatNumber: 2 }),
+        makePlayer({ playerId: 'p3', playerName: 'Charlie', seatNumber: 3 }),
+        makePlayer({ playerId: 'p4', playerName: 'Diana', seatNumber: 4 }),
+      ]
+
+      render(
+        <PodCard
+          podNumber={1}
+          isBye={false}
+          players={players}
+          currentPlayerId={null}
+        />
+      )
+
+      expect(screen.getByTestId('pod-seat-1')).toHaveTextContent('1st')
+      expect(screen.getByTestId('pod-seat-2')).toHaveTextContent('2nd')
+      expect(screen.getByTestId('pod-seat-3')).toHaveTextContent('3rd')
+      expect(screen.getByTestId('pod-seat-4')).toHaveTextContent('4th')
+      const listItems = screen.getByTestId('pod-card-1').querySelectorAll('li')
+      expect(listItems).toHaveLength(4)
+    })
+  })
 })
